@@ -1,7 +1,7 @@
 # Architecture and runtime topology
 
 <p align="center">
-  <strong>English</strong> · <a href="architecture.ko.md">한국어</a>
+  <strong>English</strong> · <a href="architecture.ko.md">한국어</a> · <a href="architecture.zh-CN.md">简体中文</a> · <a href="architecture.ja.md">日本語</a>
 </p>
 
 ## Terminology first
@@ -237,6 +237,10 @@ B, and C without a central network service.
 
 ```text
 Calando/
+├── README.*                    concise public entry points in four languages
+├── bootstrap.*                 stable one-line release installer
+├── install.* + power.* + uninstall.* v0.2.0-compatible maintenance entrypoints
+├── Cargo.toml + Cargo.lock     Rust package and pinned dependency graph
 ├── src/
 │   ├── main.rs + lib.rs        one binary, subcommand and alias routing
 │   ├── config.rs               defaults, overrides, notification configuration
@@ -252,24 +256,30 @@ Calando/
 │   └── storage.rs              private directories and atomic/bounded file I/O
 ├── SKILL.md                    shared Claude Code/Codex operating skill
 ├── agents/                     Codex skill presentation metadata
-├── commands/                   Claude and Codex in-CLI status shortcuts
-├── hooks/ + adapters/          fail-open wrappers and compatibility templates
-├── bin/                        command launchers
-├── bootstrap.*                 public release source and binary install/update
-├── install.* + power.* + uninstall.* transactional lifecycle and persistent power control
-├── notify/                     default private-notification template and wrapper
-├── scripts/                    release source packaging and artifact verification
+├── integrations/
+│   ├── claude/                 hook template and in-CLI status command
+│   └── codex/                  hook template, adapter notes, and status command
+├── packaging/
+│   ├── install.*               transactional runtime, service, skill, and hook setup
+│   ├── power.* + uninstall.*   persistent power control and owned removal
+│   └── release/                source packaging and artifact verification
+├── runtime/
+│   ├── bin/                    compatibility command launchers
+│   ├── hooks/                  fail-open hook wrappers
+│   └── notifications/          default private-notification template and wrapper
 ├── docs/
+│   ├── detailed-guide.*        complete four-language product guide
 │   ├── guides/                 installation, usage, security, and architecture guides
 │   └── testing/                public test coverage and reproducible results
 ├── tests/                      Rust, install, platform, and contract tests
-├── .github/workflows/         Linux/Windows/Apple Silicon test matrix
-└── Cargo.toml + Cargo.lock     Rust package and pinned dependency graph
+└── .github/                    community documents and cross-platform test matrix
 ```
 
-Installer-generated hooks call `memory-supervisor gate <event>` directly. `hooks/` and `adapters/`
-hold fail-open contracts, compatibility, and tests; they are not another
-resident daemon.
+Installer-generated hooks call `memory-supervisor gate <event>` directly. `runtime/hooks/` and
+`integrations/` hold fail-open contracts, compatibility, and tests; they are not another resident
+daemon. The short maintenance files at the repository root preserve v0.2.0 checkout paths and
+delegate to `packaging/`; new runtime code prefers the grouped paths and falls back to the legacy
+layout during an update.
 
 ## Installed file and process layout
 

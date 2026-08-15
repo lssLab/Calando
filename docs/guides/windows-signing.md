@@ -1,7 +1,7 @@
 # Windows executable trust
 
 <p align="center">
-  <strong>English</strong> · <a href="windows-signing.ko.md">한국어</a>
+  <strong>English</strong> · <a href="windows-signing.ko.md">한국어</a> · <a href="windows-signing.zh-CN.md">简体中文</a> · <a href="windows-signing.ja.md">日本語</a>
 </p>
 
 The Windows executable is currently under open-source code-signing review by

@@ -1,7 +1,7 @@
 # Codex Desktop App 감독 방식
 
 <p align="center">
-  <a href="codex-app.md">English</a> · <strong>한국어</strong>
+  <a href="codex-app.md">English</a> · <strong>한국어</strong> · <a href="codex-app.zh-CN.md">简体中文</a> · <a href="codex-app.ja.md">日本語</a>
 </p>
 
 Codex Desktop App은 Codex CLI와 같은 보호 정책을 사용하지만 프로세스 구조는 다릅니다. 이 문서는

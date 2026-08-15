@@ -1,7 +1,7 @@
 # Documentation
 
 <p align="center">
-  <strong>English</strong> · <a href="README.ko.md">한국어</a>
+  <strong>English</strong> · <a href="README.ko.md">한국어</a> · <a href="README.zh-CN.md">简体中文</a> · <a href="README.ja.md">日本語</a>
 </p>
 
 You do not need to read every document. Start with the one of these three that matches what you
@@ -14,7 +14,7 @@ want to do.
 | [Operations, notifications, and recovery](guides/operations.md) | Use status and control commands, configure notifications, or handle a paused process and recovery |
 
 To read the original detailed README continuously from beginning to end, use the
-[detailed guide](../README.full.md).
+[detailed guide](detailed-guide.md).
 
 <details>
 <summary><strong>Show every specialist reference</strong></summary>
@@ -43,4 +43,5 @@ To read the original detailed README continuously from beginning to end, use the
 
 </details>
 
-Every public document is provided as a Korean `.ko.md` and English `.md` pair.
+Every public document is provided in English `.md`, Korean `.ko.md`, Simplified Chinese
+`.zh-CN.md`, and Japanese `.ja.md`.

@@ -1,7 +1,7 @@
 # Adaptive stopping distance
 
 <p align="center">
-  <strong>English</strong> · <a href="stopping-distance.ko.md">한국어</a>
+  <strong>English</strong> · <a href="stopping-distance.ko.md">한국어</a> · <a href="stopping-distance.zh-CN.md">简体中文</a> · <a href="stopping-distance.ja.md">日本語</a>
 </p>
 
 Memory Supervisor is not designed to keep memory use low. Existing work remains unrestricted while
@@ -46,7 +46,7 @@ fall receives the larger stopping distance demanded by its measured speed.
 | Capacity detected by the tested kernel | 7,941 MiB |
 | Swap | 16 GiB |
 | AI tools | Claude Code 2.1.217 and Codex CLI 0.145.0 |
-| Supervisor | Rust `0.2.0-alpha.1`, one-second sensor interval, user memory cap off |
+| Supervisor | Rust measurement build, one-second sensor interval, user memory cap off |
 
 A bounded allocator outside the AI process trees touched real memory at about 64 MiB/s, slowed to
 about 32 MiB/s below 1 GiB available, stopped at 350 MiB, held for 20 seconds, and released all of

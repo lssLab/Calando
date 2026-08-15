@@ -1,7 +1,7 @@
 # 적응형 제동거리
 
 <p align="center">
-  <a href="stopping-distance.md">English</a> · <strong>한국어</strong>
+  <a href="stopping-distance.md">English</a> · <strong>한국어</strong> · <a href="stopping-distance.zh-CN.md">简体中文</a> · <a href="stopping-distance.ja.md">日本語</a>
 </p>
 
 Memory Supervisor의 목적은 메모리 사용량을 낮게 유지하는 것이 아닙니다. 메모리 여유가 줄어도
@@ -45,7 +45,7 @@ Memory Supervisor의 목적은 메모리 사용량을 낮게 유지하는 것이
 | 테스트 커널이 감지한 용량 | 7,941 MiB |
 | Swap | 16 GiB |
 | AI 도구 | Claude Code 2.1.217, Codex CLI 0.145.0 |
-| Supervisor | Rust `0.2.0-alpha.1`, 1초 센서 주기, 사용자 메모리 상한 꺼짐 |
+| Supervisor | Rust 실측 빌드, 1초 센서 주기, 사용자 메모리 상한 꺼짐 |
 
 AI 프로세스 밖의 제한된 메모리 할당기가 실제 메모리를 약 64 MiB/s로 사용하다가 여유가 1 GiB
 아래로 내려가면 약 32 MiB/s로 낮췄습니다. 350 MiB에서 증가를 멈추고 20초 뒤 전부 반환했습니다.

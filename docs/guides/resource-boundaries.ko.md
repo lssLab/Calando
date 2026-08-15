@@ -1,7 +1,7 @@
 # 세션 탐지·용량 감지·메모리 경계
 
 <p align="center">
-  <a href="resource-boundaries.md">English</a> · <strong>한국어</strong>
+  <a href="resource-boundaries.md">English</a> · <strong>한국어</strong> · <a href="resource-boundaries.zh-CN.md">简体中文</a> · <a href="resource-boundaries.ja.md">日本語</a>
 </p>
 
 이 문서는 설치 한 번이 어디까지 볼 수 있는지, wrapper 없이 모든 터미널 세션을 어떻게 찾는지,

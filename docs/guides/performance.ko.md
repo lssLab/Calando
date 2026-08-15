@@ -1,7 +1,7 @@
 # 성능과 상주 메모리
 
 <p align="center">
-  <a href="performance.md">English</a> · <strong>한국어</strong>
+  <a href="performance.md">English</a> · <strong>한국어</strong> · <a href="performance.zh-CN.md">简体中文</a> · <a href="performance.ja.md">日本語</a>
 </p>
 
 Memory Supervisor는 동기식 Rust 실행 파일 하나를 사용합니다. 백그라운드 측정이나 hook 판단을

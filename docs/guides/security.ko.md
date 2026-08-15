@@ -1,7 +1,7 @@
 # 보안과 데이터·제어 경계
 
 <p align="center">
-  <a href="security.md">English</a> · <strong>한국어</strong>
+  <a href="security.md">English</a> · <strong>한국어</strong> · <a href="security.zh-CN.md">简体中文</a> · <a href="security.ja.md">日本語</a>
 </p>
 
 이 문서는 Memory Supervisor가 확인하는 정보, 로컬에 저장하는 정보, 같은 컴퓨터 안에서

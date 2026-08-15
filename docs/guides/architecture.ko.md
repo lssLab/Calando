@@ -1,7 +1,7 @@
 # 아키텍처와 실행 구조
 
 <p align="center">
-  <a href="architecture.md">English</a> · <strong>한국어</strong>
+  <a href="architecture.md">English</a> · <strong>한국어</strong> · <a href="architecture.zh-CN.md">简体中文</a> · <a href="architecture.ja.md">日本語</a>
 </p>
 
 ## 먼저 용어부터 명확히 구분합니다
@@ -234,6 +234,10 @@ sequenceDiagram
 
 ```text
 Calando/
+├── README.*                    4개 언어 공개용 핵심 안내
+├── bootstrap.*                 주소가 유지되는 한 줄 release 설치 진입점
+├── install.* + power.* + uninstall.* v0.2.0 호환 유지보수 진입점
+├── Cargo.toml + Cargo.lock     Rust package와 고정 dependency graph
 ├── src/
 │   ├── main.rs + lib.rs        단일 바이너리의 subcommand·별칭 routing
 │   ├── config.rs               기본값, override, 알림 설정
@@ -249,23 +253,29 @@ Calando/
 │   └── storage.rs              비공개 폴더와 원자적·크기 제한 파일 I/O
 ├── SKILL.md                    Claude Code·Codex가 공유하는 운영 스킬
 ├── agents/                     Codex skill 표시 정보
-├── commands/                   각 AI CLI 내부의 상태 확인 단축 명령
-├── hooks/ + adapters/          fail-open wrapper와 호환용 template
-├── bin/                        명령 launcher
-├── bootstrap.*                 공개 release source·binary 설치와 update
-├── install.* + power.* + uninstall.* runtime·service·skill·hook의 transaction 생명주기와 지속형 전원
-├── notify/                     비공개 알림 기본 template와 wrapper
-├── scripts/                    release source 묶음과 artifact 검증
+├── integrations/
+│   ├── claude/                 훅 template와 CLI 내부 상태 명령
+│   └── codex/                  훅 template·adapter 설명·상태 명령
+├── packaging/
+│   ├── install.*               runtime·service·skill·hook의 transaction 설치
+│   ├── power.* + uninstall.*   지속형 전원 제어와 소유 항목 제거
+│   └── release/                release source 묶음과 artifact 검증
+├── runtime/
+│   ├── bin/                    호환 명령 launcher
+│   ├── hooks/                  fail-open hook wrapper
+│   └── notifications/          비공개 알림 기본 template와 wrapper
 ├── docs/
+│   ├── detailed-guide.*        4개 언어 전체 상세 안내
 │   ├── guides/                 설치·사용·보안·아키텍처 안내
 │   └── testing/                공개 테스트 범위와 재현 가능한 결과
 ├── tests/                      Rust·설치·플랫폼·계약 test
-├── .github/workflows/         Linux/Windows/Apple Silicon 테스트 matrix
-└── Cargo.toml + Cargo.lock     Rust package와 고정 dependency graph
+└── .github/                    커뮤니티 문서와 운영체제별 테스트 matrix
 ```
 
-설치기가 생성한 훅은 `memory-supervisor gate <event>`를 직접 실행합니다. `hooks/`와 `adapters/`는
-fail-open 계약·호환성·test용이며 또 하나의 상주 데몬이 아닙니다.
+설치기가 생성한 훅은 `memory-supervisor gate <event>`를 직접 실행합니다. `runtime/hooks/`와
+`integrations/`는 fail-open 계약·호환성·test용이며 또 하나의 상주 데몬이 아닙니다. 저장소
+루트의 짧은 유지보수 파일은 v0.2.0 checkout 경로를 보존하면서 `packaging/`으로 연결합니다.
+새 실행 파일은 정리된 경로를 먼저 사용하고 업데이트 중에는 기존 평면 경로로 자동 fallback합니다.
 
 ## 설치 후 파일과 프로세스 구조
 

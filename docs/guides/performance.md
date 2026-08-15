@@ -1,7 +1,7 @@
 # Performance and resident memory
 
 <p align="center">
-  <strong>English</strong> · <a href="performance.ko.md">한국어</a>
+  <strong>English</strong> · <a href="performance.ko.md">한국어</a> · <a href="performance.zh-CN.md">简体中文</a> · <a href="performance.ja.md">日本語</a>
 </p>
 
 Memory Supervisor uses one synchronous Rust executable. It does not start a separate language

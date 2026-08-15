@@ -1,7 +1,7 @@
 # Codex Desktop App supervision
 
 <p align="center">
-  <strong>English</strong> · <a href="codex-app.ko.md">한국어</a>
+  <strong>English</strong> · <a href="codex-app.ko.md">한국어</a> · <a href="codex-app.zh-CN.md">简体中文</a> · <a href="codex-app.ja.md">日本語</a>
 </p>
 
 Codex Desktop App uses the same protection policy as Codex CLI, but its process structure is

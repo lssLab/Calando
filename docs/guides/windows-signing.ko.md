@@ -1,7 +1,7 @@
 # Windows 실행 파일 신뢰
 
 <p align="center">
-  <a href="windows-signing.md">English</a> · <strong>한국어</strong>
+  <a href="windows-signing.md">English</a> · <strong>한국어</strong> · <a href="windows-signing.zh-CN.md">简体中文</a> · <a href="windows-signing.ja.md">日本語</a>
 </p>
 
 Windows용 실행 파일은 현재 [SignPath Foundation](https://signpath.org/)의 오픈소스 코드 서명

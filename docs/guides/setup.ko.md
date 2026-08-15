@@ -1,7 +1,7 @@
 # 설치·연결·지원 환경
 
 <p align="center">
-  <a href="setup.md">English</a> · <strong>한국어</strong>
+  <a href="setup.md">English</a> · <strong>한국어</strong> · <a href="setup.zh-CN.md">简体中文</a> · <a href="setup.ja.md">日本語</a>
 </p>
 
 ## 설치 방법

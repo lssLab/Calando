@@ -1,12 +1,12 @@
 # Claude Code 사용 안내
 
 <p align="center">
-  <a href="usage-claude.md">English</a> · <strong>한국어</strong>
+  <a href="usage-claude.md">English</a> · <strong>한국어</strong> · <a href="usage-claude.zh-CN.md">简体中文</a> · <a href="usage-claude.ja.md">日本語</a>
 </p>
 
 ## 지원 기준
 
-Memory Supervisor `0.2.0`은 Claude Code **2.1.217 이상**을 지원합니다. 이 버전은
+Memory Supervisor `0.2.1`은 Claude Code **2.1.217 이상**을 지원합니다. 이 버전은
 단계적 논리 제어 계약을 적용하는 최소 기준입니다. 그보다 오래된 버전에 축소된 matcher나 별도
 호환 정책을 적용하지는 않습니다.
 
@@ -108,7 +108,7 @@ exit 0으로 바꾸므로 내부 오류가 Claude Code의 exit code 2 프롬프�
 bash tests/run.sh
 memory-status --connections
 memory-status
-printf '{}' | hooks/gate.sh SessionStart
+printf '{}' | runtime/hooks/gate.sh SessionStart
 ```
 
 기준 문서:
@@ -121,7 +121,7 @@ printf '{}' | hooks/gate.sh SessionStart
 Windows에서는 다음 명령을 사용합니다.
 
 ```powershell
-'{}' | powershell -File .\hooks\gate.ps1 SessionStart
+'{}' | powershell -File .\runtime\hooks\gate.ps1 SessionStart
 ```
 
 개인 Skill은 `~/.claude/skills/memory-supervisor`에 연결됩니다. 최상위 `skills` 폴더가 처음 만들어진
@@ -138,7 +138,7 @@ Windows에서는 다음 명령을 사용합니다.
 막힌 세션 안에서 활성 Hook을 계속 수정하지 말고 별도 터미널에서 다음 순서로 확인합니다.
 
 1. `~/.claude/settings.json`과 현재 Supervisor 소스 폴더를 백업합니다.
-2. `printf '{}' | hooks/gate.sh UserPromptSubmit`을 실행합니다. 안전한 결과는 유효한 JSON 또는 출력
+2. `printf '{}' | runtime/hooks/gate.sh UserPromptSubmit`을 실행합니다. 안전한 결과는 유효한 JSON 또는 출력
    없음이며, 항상 exit code 0이어야 합니다.
 3. `bash tests/run.sh`를 실행합니다.
 4. `memory-supervisor update`로 Supervisor 소유 Hook 항목만 원자적으로 교체하고 서비스를 다시

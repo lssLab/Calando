@@ -457,7 +457,7 @@ fn shell_green_lease_is_exact_and_every_invalid_lease_uses_rust() {
         &fake,
         "#!/bin/sh\nprintf 'invoked\\n' >> \"$GATE_MARKER\"\nprintf '{\"slow\":true}'\n",
     );
-    let hook = Path::new(env!("CARGO_MANIFEST_DIR")).join("hooks/gate.sh");
+    let hook = Path::new(env!("CARGO_MANIFEST_DIR")).join("runtime/hooks/gate.sh");
     let lease = sandbox.state.join("admission-green.lease");
     fs::write(
         &lease,
@@ -549,7 +549,7 @@ fn expired_green_lease_cannot_hide_a_red_peer_from_the_real_rust_gate() {
     )
     .unwrap();
 
-    let hook = Path::new(env!("CARGO_MANIFEST_DIR")).join("hooks/gate.sh");
+    let hook = Path::new(env!("CARGO_MANIFEST_DIR")).join("runtime/hooks/gate.sh");
     let mut command = Command::new("/bin/sh");
     command
         .arg(hook)

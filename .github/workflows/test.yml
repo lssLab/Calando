@@ -57,7 +57,7 @@ jobs:
           mkdir -p artifacts
           cp target/release/memory-supervisor artifacts/memory-supervisor-x86_64-unknown-linux-gnu
           (cd artifacts && sha256sum memory-supervisor-x86_64-unknown-linux-gnu > memory-supervisor-x86_64-unknown-linux-gnu.sha256)
-          scripts/package-release-source.sh artifacts HEAD
+          packaging/release/package-release-source.sh artifacts HEAD
 
       - name: Measure native Linux footprint
         shell: bash

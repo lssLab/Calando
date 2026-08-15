@@ -1,7 +1,7 @@
 # 운영·알림·복구
 
 <p align="center">
-  <a href="operations.md">English</a> · <strong>한국어</strong>
+  <a href="operations.md">English</a> · <strong>한국어</strong> · <a href="operations.zh-CN.md">简体中文</a> · <a href="operations.ja.md">日本語</a>
 </p>
 
 ## 알림

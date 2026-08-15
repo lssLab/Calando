@@ -6,7 +6,8 @@ cargo clippy --manifest-path "$ROOT/Cargo.toml" --all-targets --locked -- -D war
 cargo test --manifest-path "$ROOT/Cargo.toml" --all-targets --locked
 cargo build --manifest-path "$ROOT/Cargo.toml" --release --locked
 for file in \
-  "$ROOT"/*.sh "$ROOT"/hooks/*.sh "$ROOT"/notify/*.sh \
-  "$ROOT"/bin/memory-status "$ROOT"/bin/memory-supervisor; do
+  "$ROOT"/*.sh "$ROOT"/packaging/*.sh "$ROOT"/packaging/release/*.sh \
+  "$ROOT"/runtime/hooks/*.sh "$ROOT"/runtime/notifications/*.sh \
+  "$ROOT"/runtime/bin/memory-status "$ROOT"/runtime/bin/memory-supervisor; do
   /bin/sh -n "$file"
 done

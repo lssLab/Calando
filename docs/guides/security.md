@@ -1,7 +1,7 @@
 # Security and data/control boundaries
 
 <p align="center">
-  <strong>English</strong> · <a href="security.ko.md">한국어</a>
+  <strong>English</strong> · <a href="security.ko.md">한국어</a> · <a href="security.zh-CN.md">简体中文</a> · <a href="security.ja.md">日本語</a>
 </p>
 
 This document lists every category of information Memory Supervisor reads,

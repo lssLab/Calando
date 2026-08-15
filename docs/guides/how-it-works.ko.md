@@ -1,7 +1,7 @@
 # 작동 원리와 아키텍처
 
 <p align="center">
-  <a href="how-it-works.md">English</a> · <strong>한국어</strong>
+  <a href="how-it-works.md">English</a> · <strong>한국어</strong> · <a href="how-it-works.zh-CN.md">简体中文</a> · <a href="how-it-works.ja.md">日本語</a>
 </p>
 
 ## 작동 방식

@@ -163,7 +163,17 @@ fn public_tree_uses_only_product_documentation_directories() {
         let allowed = if entry.path().is_dir() {
             matches!(name, "guides" | "testing")
         } else {
-            matches!(name, "README.md" | "README.ko.md")
+            matches!(
+                name,
+                "README.md"
+                    | "README.ko.md"
+                    | "README.zh-CN.md"
+                    | "README.ja.md"
+                    | "detailed-guide.md"
+                    | "detailed-guide.ko.md"
+                    | "detailed-guide.zh-CN.md"
+                    | "detailed-guide.ja.md"
+            )
         };
         assert!(allowed, "unexpected public documentation path: {name}");
     }
@@ -192,25 +202,97 @@ fn public_tree_uses_only_product_documentation_directories() {
 }
 
 #[test]
-fn public_documentation_has_korean_and_english_pairs() {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("docs");
+fn repository_root_stays_small_and_support_files_stay_grouped() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let allowed_files = [
+        ".gitattributes",
+        ".gitignore",
+        "Cargo.lock",
+        "Cargo.toml",
+        "LICENSE",
+        "README.ja.md",
+        "README.ko.md",
+        "README.md",
+        "README.zh-CN.md",
+        "SKILL.md",
+        "bootstrap.ps1",
+        "bootstrap.sh",
+        "install.ps1",
+        "install.sh",
+        "power.ps1",
+        "power.sh",
+        "rust-toolchain.toml",
+        "uninstall.ps1",
+        "uninstall.sh",
+    ];
+    for entry in fs::read_dir(&root).unwrap() {
+        let entry = entry.unwrap();
+        if entry.path().is_file() {
+            let name = entry.file_name();
+            let name = name.to_str().unwrap_or("");
+            assert!(
+                allowed_files.contains(&name),
+                "support file escaped into the repository root: {name}"
+            );
+        }
+    }
+
+    for old in ["adapters", "bin", "commands", "hooks", "notify", "scripts"] {
+        assert!(
+            !root.join(old).exists(),
+            "legacy top-level directory must stay consolidated: {old}"
+        );
+    }
+    for current in ["integrations", "packaging", "runtime"] {
+        assert!(
+            root.join(current).is_dir(),
+            "grouped support directory is missing: {current}"
+        );
+    }
+}
+
+#[test]
+fn public_documentation_has_all_four_languages() {
+    let repository = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let root = repository.join("docs");
     let mut files = Vec::new();
     visit(&root, &mut files);
-    for path in files
-        .iter()
-        .filter(|path| path.extension().and_then(|value| value.to_str()) == Some("md"))
-    {
-        let name = path.file_name().and_then(|value| value.to_str()).unwrap();
-        let counterpart = if let Some(stem) = name.strip_suffix(".ko.md") {
-            path.with_file_name(format!("{stem}.md"))
-        } else {
-            path.with_file_name(format!("{}.ko.md", name.trim_end_matches(".md")))
-        };
-        assert!(
-            counterpart.is_file(),
-            "public document has no language counterpart: {}",
-            path.display()
-        );
+    for path in files.iter().filter(|path| {
+        path.extension().and_then(|value| value.to_str()) == Some("md")
+            && !path
+                .file_name()
+                .and_then(|value| value.to_str())
+                .is_some_and(|name| {
+                    name.ends_with(".ko.md")
+                        || name.ends_with(".zh-CN.md")
+                        || name.ends_with(".ja.md")
+                })
+    }) {
+        let stem = path.file_stem().and_then(|value| value.to_str()).unwrap();
+        for suffix in [".md", ".ko.md", ".zh-CN.md", ".ja.md"] {
+            let counterpart = path.with_file_name(format!("{stem}{suffix}"));
+            assert!(
+                counterpart.is_file(),
+                "public document has no {suffix} counterpart: {}",
+                path.display()
+            );
+        }
+    }
+
+    for base in [
+        repository.join("README"),
+        repository.join(".github/CONTRIBUTING"),
+        repository.join(".github/SECURITY"),
+        repository.join("integrations/codex/README"),
+    ] {
+        for suffix in [".md", ".ko.md", ".zh-CN.md", ".ja.md"] {
+            let counterpart = PathBuf::from(format!("{}{suffix}", base.display()));
+            assert!(
+                counterpart.is_file(),
+                "public document has no {suffix} counterpart: {}",
+                base.display()
+            );
+        }
     }
 }
 
@@ -218,8 +300,8 @@ fn public_documentation_has_korean_and_english_pairs() {
 fn manual_hook_templates_follow_the_canonical_event_contract() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     for (path, provider) in [
-        ("adapters/cli/claude/settings.json.template", "claude"),
-        ("adapters/cli/codex/hooks.json.template", "codex"),
+        ("integrations/claude/settings.json.template", "claude"),
+        ("integrations/codex/hooks.json.template", "codex"),
     ] {
         let template: Value = serde_json::from_slice(&fs::read(root.join(path)).unwrap()).unwrap();
         let actual = template["hooks"].as_object().unwrap();
@@ -255,7 +337,7 @@ fn manual_hook_templates_follow_the_canonical_event_contract() {
 #[test]
 fn installers_separate_codex_cli_and_app_reload_instructions() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    for installer in ["install.sh", "install.ps1"] {
+    for installer in ["packaging/install.sh", "packaging/install.ps1"] {
         let source = fs::read_to_string(root.join(installer)).unwrap();
         assert!(source.contains("Codex CLI:"), "{installer}");
         assert!(source.contains("Codex App:"), "{installer}");
@@ -302,13 +384,30 @@ fn installers_separate_codex_cli_and_app_reload_instructions() {
             "{installer} must not add SessionStart replay to user installation guidance"
         );
     }
-    let powershell = fs::read_to_string(root.join("install.ps1")).unwrap();
+    let powershell = fs::read_to_string(root.join("packaging/install.ps1")).unwrap();
     assert!(
         powershell.contains("function Resolve-ClaudeExecutable")
             && powershell.contains("$ErrorActionPreference = \"Continue\"")
             && powershell.contains("$ErrorActionPreference = $PreviousErrorActionPreference"),
         "install.ps1 must treat an absent Claude resolver result as a non-fatal probe"
     );
+}
+
+#[test]
+fn legacy_maintenance_entrypoints_delegate_to_the_grouped_implementation() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    for name in ["install", "uninstall", "power"] {
+        let unix = fs::read_to_string(root.join(format!("{name}.sh"))).unwrap();
+        assert!(
+            unix.contains(&format!("packaging/{name}.sh")),
+            "{name}.sh must preserve the v0.2.0 root entrypoint"
+        );
+        let windows = fs::read_to_string(root.join(format!("{name}.ps1"))).unwrap();
+        assert!(
+            windows.contains(&format!("packaging\\{name}.ps1")),
+            "{name}.ps1 must preserve the v0.2.0 root entrypoint"
+        );
+    }
 }
 
 #[test]
@@ -328,17 +427,19 @@ fn public_bootstrap_uses_verified_release_bundles_without_a_git_prerequisite() {
             "{name} must not require Git for the public one-line install"
         );
     }
-    for installer in ["install.sh", "install.ps1"] {
+    for installer in ["packaging/install.sh", "packaging/install.ps1"] {
         let source = fs::read_to_string(root.join(installer)).unwrap();
         assert!(
             source.contains(".memory-supervisor-release-source"),
             "{installer} must download the matching release binary for a release bundle"
         );
     }
-    let package = fs::read_to_string(root.join("scripts/package-release-source.sh")).unwrap();
+    let package =
+        fs::read_to_string(root.join("packaging/release/package-release-source.sh")).unwrap();
     assert!(package.contains("memory-supervisor-source.tar.gz"));
     assert!(package.contains("memory-supervisor-source.zip"));
-    let verify = fs::read_to_string(root.join("scripts/verify-release-assets.sh")).unwrap();
+    let verify =
+        fs::read_to_string(root.join("packaging/release/verify-release-assets.sh")).unwrap();
     for target in [
         "x86_64-unknown-linux-gnu",
         "x86_64-pc-windows-msvc.exe",

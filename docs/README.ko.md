@@ -1,7 +1,7 @@
 # 문서 안내
 
 <p align="center">
-  <a href="README.md">English</a> · <strong>한국어</strong>
+  <a href="README.md">English</a> · <strong>한국어</strong> · <a href="README.zh-CN.md">简体中文</a> · <a href="README.ja.md">日本語</a>
 </p>
 
 처음부터 모든 문서를 읽을 필요는 없습니다. 사용 목적에 맞는 아래 세 문서 중 하나에서
@@ -14,7 +14,7 @@
 | [운영·알림·복구](guides/operations.ko.md) | 상태·명령·알림을 설정하거나 일시정지된 작업과 자동 복구를 다룰 때 |
 
 기존 README의 설명을 처음부터 끝까지 한 문서에서 읽으려면
-[상세 안내](../README.full.ko.md)를 사용합니다.
+[상세 안내](detailed-guide.ko.md)를 사용합니다.
 
 <details>
 <summary><strong>주제별 전문 문서 모두 보기</strong></summary>
@@ -43,4 +43,4 @@
 
 </details>
 
-모든 공개 문서는 한국어 `.ko.md`와 영어 `.md` 한 쌍으로 제공합니다.
+모든 공개 문서는 영어 `.md`, 한국어 `.ko.md`, 중국어 간체 `.zh-CN.md`, 일본어 `.ja.md`로 제공합니다.

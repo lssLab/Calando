@@ -1,7 +1,7 @@
 # Codex usage
 
 <p align="center">
-  <strong>English</strong> · <a href="usage-codex.ko.md">한국어</a>
+  <strong>English</strong> · <a href="usage-codex.ko.md">한국어</a> · <a href="usage-codex.zh-CN.md">简体中文</a> · <a href="usage-codex.ja.md">日本語</a>
 </p>
 
 ## Supported contract

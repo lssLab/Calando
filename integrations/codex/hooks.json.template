@@ -1,0 +1,25 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {"hooks": [{"type": "command", "command": "__MEMORY_SUPERVISOR_ROOT__/runtime/hooks/gate.sh codex SessionStart --hook-source '__CODEX_HOOKS__'", "commandWindows": "powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"__MEMORY_SUPERVISOR_ROOT__/runtime/hooks/gate.ps1\" codex SessionStart --hook-source \"__CODEX_HOOKS__\"", "timeout": 5}]}
+    ],
+    "SubagentStart": [
+      {"matcher": ".*", "hooks": [{"type": "command", "command": "__MEMORY_SUPERVISOR_ROOT__/runtime/hooks/gate.sh codex SubagentStart --hook-source '__CODEX_HOOKS__'", "commandWindows": "powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"__MEMORY_SUPERVISOR_ROOT__/runtime/hooks/gate.ps1\" codex SubagentStart --hook-source \"__CODEX_HOOKS__\"", "timeout": 30}]}
+    ],
+    "SubagentStop": [
+      {"matcher": ".*", "hooks": [{"type": "command", "command": "__MEMORY_SUPERVISOR_ROOT__/runtime/hooks/gate.sh codex SubagentStop --hook-source '__CODEX_HOOKS__'", "commandWindows": "powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"__MEMORY_SUPERVISOR_ROOT__/runtime/hooks/gate.ps1\" codex SubagentStop --hook-source \"__CODEX_HOOKS__\"", "timeout": 5}]}
+    ],
+    "UserPromptSubmit": [
+      {"hooks": [{"type": "command", "command": "__MEMORY_SUPERVISOR_ROOT__/runtime/hooks/gate.sh codex UserPromptSubmit --hook-source '__CODEX_HOOKS__'", "commandWindows": "powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"__MEMORY_SUPERVISOR_ROOT__/runtime/hooks/gate.ps1\" codex UserPromptSubmit --hook-source \"__CODEX_HOOKS__\"", "timeout": 5}]}
+    ],
+    "Stop": [
+      {"hooks": [{"type": "command", "command": "__MEMORY_SUPERVISOR_ROOT__/runtime/hooks/gate.sh codex Stop --hook-source '__CODEX_HOOKS__'", "commandWindows": "powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"__MEMORY_SUPERVISOR_ROOT__/runtime/hooks/gate.ps1\" codex Stop --hook-source \"__CODEX_HOOKS__\"", "timeout": 5}]}
+    ],
+    "PreToolUse": [
+      {"matcher": ".*", "hooks": [{"type": "command", "command": "__MEMORY_SUPERVISOR_ROOT__/runtime/hooks/gate.sh codex PreToolUse --hook-source '__CODEX_HOOKS__'", "commandWindows": "powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"__MEMORY_SUPERVISOR_ROOT__/runtime/hooks/gate.ps1\" codex PreToolUse --hook-source \"__CODEX_HOOKS__\"", "timeout": 20}]}
+    ],
+    "PostToolUse": [
+      {"matcher": ".*", "hooks": [{"type": "command", "command": "__MEMORY_SUPERVISOR_ROOT__/runtime/hooks/gate.sh codex PostToolUse --hook-source '__CODEX_HOOKS__'", "commandWindows": "powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"__MEMORY_SUPERVISOR_ROOT__/runtime/hooks/gate.ps1\" codex PostToolUse --hook-source \"__CODEX_HOOKS__\"", "timeout": 15}]}
+    ]
+  }
+}

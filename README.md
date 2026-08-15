@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <strong>English</strong> · <a href="README.ko.md">한국어</a>
+  <strong>English</strong> · <a href="README.ko.md">한국어</a> · <a href="README.zh-CN.md">简体中文</a> · <a href="README.ja.md">日本語</a>
 </p>
 
 <p align="center">
@@ -37,7 +37,7 @@
   <a href="#how-it-works-in-30-seconds">How it works</a> ·
   <a href="#common-commands">Commands</a> ·
   <a href="#documentation">Docs</a> ·
-  <a href="README.full.md">Detailed guide</a>
+  <a href="docs/detailed-guide.md">Detailed guide</a>
 </p>
 
 ## Why Calando
@@ -265,7 +265,7 @@ conditions.
 | Installation, live-session connection, hook trust, Windows, WSL2, macOS, and Linux | [Installation, connection, and supported environments](docs/guides/setup.md) |
 | Gradual braking, CLI and Codex App architecture, blind control, and federation | [How Memory Supervisor works](docs/guides/how-it-works.md) |
 | Terminal, OS, Discord, and Telegram notifications, commands, pause, and recovery | [Operations, notifications, and recovery](docs/guides/operations.md) |
-| Read the original detailed README continuously in one document | [Detailed guide](README.full.md) |
+| Read the original detailed README continuously in one document | [Detailed guide](docs/detailed-guide.md) |
 | Find security, performance, testing, and every specialist reference | [Documentation index](docs/README.md) |
 
 ## Verification
@@ -275,8 +275,8 @@ privacy-boundary checks, and Linux, Windows, and macOS platform validation. See
 [test coverage](docs/testing/test-matrix.md) and
 [adaptive stopping distance](docs/testing/stopping-distance.md) for the public verification scope.
 
-See the [security policy](SECURITY.md) to report a vulnerability and
-[contributing guide](CONTRIBUTING.md) to work on the project.
+See the [security policy](.github/SECURITY.md) to report a vulnerability and
+[contributing guide](.github/CONTRIBUTING.md) to work on the project.
 
 ## License
 

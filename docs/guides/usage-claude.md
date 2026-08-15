@@ -1,12 +1,12 @@
 # Claude Code usage
 
 <p align="center">
-  <strong>English</strong> · <a href="usage-claude.ko.md">한국어</a>
+  <strong>English</strong> · <a href="usage-claude.ko.md">한국어</a> · <a href="usage-claude.zh-CN.md">简体中文</a> · <a href="usage-claude.ja.md">日本語</a>
 </p>
 
 ## Supported contract
 
-Memory Supervisor `0.2.0` supports Claude Code **2.1.217 or newer**. This is the pinned
+Memory Supervisor `0.2.1` supports Claude Code **2.1.217 or newer**. This is the pinned
 latest-supported baseline for the graded logical-control contract; old releases do not receive a
 reduced matcher set or compatibility policy.
 
@@ -111,7 +111,7 @@ Verify:
 bash tests/run.sh
 memory-status --connections
 memory-status
-printf '{}' | hooks/gate.sh SessionStart
+printf '{}' | runtime/hooks/gate.sh SessionStart
 ```
 
 Contract references:
@@ -124,7 +124,7 @@ Contract references:
 On Windows use:
 
 ```powershell
-'{}' | powershell -File .\hooks\gate.ps1 SessionStart
+'{}' | powershell -File .\runtime\hooks\gate.ps1 SessionStart
 ```
 
 The personal skill is linked at `~/.claude/skills/memory-supervisor`. A newly created top-level
@@ -142,7 +142,7 @@ applies the resume cooldown.
 Do not keep editing the active hook from the blocked session. From a separate terminal:
 
 1. Back up `~/.claude/settings.json` and the current supervisor checkout.
-2. Run `printf '{}' | hooks/gate.sh UserPromptSubmit`; the safe result is valid JSON or no output,
+2. Run `printf '{}' | runtime/hooks/gate.sh UserPromptSubmit`; the safe result is valid JSON or no output,
    always with exit code 0.
 3. Run `bash tests/run.sh`.
 4. Run `memory-supervisor update` to atomically replace only owned supervisor hook entries and reload the service.

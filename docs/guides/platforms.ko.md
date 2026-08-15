@@ -1,7 +1,7 @@
 # 플랫폼 배포와 federation
 
 <p align="center">
-  <a href="platforms.md">English</a> · <strong>한국어</strong>
+  <a href="platforms.md">English</a> · <strong>한국어</strong> · <a href="platforms.zh-CN.md">简体中文</a> · <a href="platforms.ja.md">日本語</a>
 </p>
 
 ## 보호 대상 사용자·PID 제어 환경마다 supervisor 하나

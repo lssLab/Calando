@@ -1,7 +1,7 @@
 # Federation across environments on one machine
 
 <p align="center">
-  <strong>English</strong> · <a href="federation-topology.ko.md">한국어</a>
+  <strong>English</strong> · <a href="federation-topology.ko.md">한국어</a> · <a href="federation-topology.zh-CN.md">简体中文</a> · <a href="federation-topology.ja.md">日本語</a>
 </p>
 
 Memory Supervisor runs once in each operating-system kernel that can see and control its own

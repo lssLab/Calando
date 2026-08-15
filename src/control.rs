@@ -655,7 +655,11 @@ fn installation_root() -> PathBuf {
     }
     if let Ok(executable) = env::current_exe() {
         for ancestor in executable.ancestors().skip(1).take(5) {
-            if ancestor.join("install.sh").is_file() || ancestor.join("install.ps1").is_file() {
+            if ancestor.join("packaging").join("install.sh").is_file()
+                || ancestor.join("packaging").join("install.ps1").is_file()
+                || ancestor.join("install.sh").is_file()
+                || ancestor.join("install.ps1").is_file()
+            {
                 return ancestor.to_path_buf();
             }
         }
@@ -671,6 +675,15 @@ fn installation_root() -> PathBuf {
         }
     }
     home.join(".local").join("share").join("memory-supervisor")
+}
+
+fn maintenance_script(root: &Path, name: &str) -> PathBuf {
+    let structured = root.join("packaging").join(name);
+    if structured.is_file() {
+        structured
+    } else {
+        root.join(name)
+    }
 }
 
 fn refresh_release_installation(root: &Path) -> io::Result<std::process::ExitStatus> {
@@ -747,17 +760,23 @@ fn maintain_installation(action: &str) -> i32 {
         }
     }
     let script = if cfg!(windows) {
-        root.join(if action == "uninstall" {
-            "uninstall.ps1"
-        } else {
-            "install.ps1"
-        })
+        maintenance_script(
+            &root,
+            if action == "uninstall" {
+                "uninstall.ps1"
+            } else {
+                "install.ps1"
+            },
+        )
     } else {
-        root.join(if action == "uninstall" {
-            "uninstall.sh"
-        } else {
-            "install.sh"
-        })
+        maintenance_script(
+            &root,
+            if action == "uninstall" {
+                "uninstall.sh"
+            } else {
+                "install.sh"
+            },
+        )
     };
     if !script.is_file() {
         eprintln!("maintenance script is missing: {}", script.display());
@@ -888,11 +907,14 @@ fn maintain_power(action: &str) -> i32 {
         return 1;
     }
     let root = installation_root();
-    let script = root.join(if cfg!(windows) {
-        "power.ps1"
-    } else {
-        "power.sh"
-    });
+    let script = maintenance_script(
+        &root,
+        if cfg!(windows) {
+            "power.ps1"
+        } else {
+            "power.sh"
+        },
+    );
     if !script.is_file() {
         eprintln!("power control script is missing: {}", script.display());
         return 1;
@@ -1538,6 +1560,26 @@ pub fn run_control(arguments: &[OsString]) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn maintenance_paths_prefer_the_structured_layout_and_accept_v020_flat_layout() {
+        let root = env::temp_dir().join(format!(
+            "memory-supervisor-maintenance-path-{}-{}",
+            std::process::id(),
+            now_nanos()
+        ));
+        fs::create_dir_all(root.join("packaging")).unwrap();
+
+        let legacy = root.join("install.sh");
+        fs::write(&legacy, "legacy").unwrap();
+        assert_eq!(maintenance_script(&root, "install.sh"), legacy);
+
+        let structured = root.join("packaging").join("install.sh");
+        fs::write(&structured, "structured").unwrap();
+        assert_eq!(maintenance_script(&root, "install.sh"), structured);
+
+        fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn mandatory_notification_routes_cannot_be_disabled_or_configured() {

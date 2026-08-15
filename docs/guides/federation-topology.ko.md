@@ -1,7 +1,7 @@
 # 한 컴퓨터의 여러 환경을 연결하는 Federation
 
 <p align="center">
-  <a href="federation-topology.md">English</a> · <strong>한국어</strong>
+  <a href="federation-topology.md">English</a> · <strong>한국어</strong> · <a href="federation-topology.zh-CN.md">简体中文</a> · <a href="federation-topology.ja.md">日本語</a>
 </p>
 
 Memory Supervisor는 자기 프로세스를 보고 제어할 수 있는 운영체제 커널마다 하나씩 실행됩니다.

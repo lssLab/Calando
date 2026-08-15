@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="README.md">English</a> · <strong>한국어</strong>
+  <a href="README.md">English</a> · <strong>한국어</strong> · <a href="README.zh-CN.md">简体中文</a> · <a href="README.ja.md">日本語</a>
 </p>
 
 <p align="center">
@@ -37,10 +37,10 @@
   <a href="#30초-작동-원리">작동 원리</a> ·
   <a href="#자주-쓰는-명령">명령</a> ·
   <a href="#문서">문서</a> ·
-  <a href="README.full.ko.md">상세 안내</a>
+  <a href="docs/detailed-guide.ko.md">상세 안내</a>
 </p>
 
-## 필요성
+## 무엇을 해결하나
 
 Claude Code·Codex CLI 또는 Codex Desktop App에서 큰 작업을 오래 진행하면 서브에이전트,
 빌드, 테스트, 브라우저 도구가 한꺼번에 겹칠 수 있습니다. 메모리 여유가 빠르게 사라지면
@@ -242,7 +242,7 @@ Windows·WSL2·macOS·Linux·VM·격리 컨테이너에는 각각 감시 프로�
 | 설치, 실행 중 연결, Hook 신뢰, Windows·WSL2·macOS·Linux | [설치·연결·지원 환경](docs/guides/setup.ko.md) |
 | 단계적 제동, CLI·Codex App 아키텍처, Blind 제어, Federation | [작동 원리와 아키텍처](docs/guides/how-it-works.ko.md) |
 | 터미널·OS·Discord·Telegram 알림, 명령, 일시정지와 복구 | [운영·알림·복구](docs/guides/operations.ko.md) |
-| 기존 README의 설명을 한 문서에서 연속으로 읽기 | [상세 안내](README.full.ko.md) |
+| 기존 README의 설명을 한 문서에서 연속으로 읽기 | [상세 안내](docs/detailed-guide.ko.md) |
 | 보안·성능·테스트 등 주제별 전문 문서 찾기 | [전체 문서 안내](docs/README.ko.md) |
 
 ## 검증
@@ -252,8 +252,8 @@ Rust 자동 테스트, 설치·업데이트·제거 E2E, Hook 계약, 저장소 
 [테스트 범위](docs/testing/test-matrix.ko.md)와
 [적응형 제동거리](docs/testing/stopping-distance.ko.md)에서 확인할 수 있습니다.
 
-보안 문제는 [보안 정책](SECURITY.ko.md), 개발 참여 방법은
-[기여 안내](CONTRIBUTING.ko.md)를 참고하십시오.
+보안 문제는 [보안 정책](.github/SECURITY.ko.md), 개발 참여 방법은
+[기여 안내](.github/CONTRIBUTING.ko.md)를 참고하십시오.
 
 ## 라이선스
 

@@ -1,7 +1,7 @@
 # Codex 사용 안내
 
 <p align="center">
-  <a href="usage-codex.md">English</a> · <strong>한국어</strong>
+  <a href="usage-codex.md">English</a> · <strong>한국어</strong> · <a href="usage-codex.zh-CN.md">简体中文</a> · <a href="usage-codex.ja.md">日本語</a>
 </p>
 
 ## 지원 기준

@@ -1,7 +1,7 @@
 # Operations, notifications, and recovery
 
 <p align="center">
-  <strong>English</strong> · <a href="operations.ko.md">한국어</a>
+  <strong>English</strong> · <a href="operations.ko.md">한국어</a> · <a href="operations.zh-CN.md">简体中文</a> · <a href="operations.ja.md">日本語</a>
 </p>
 
 ## Notifications

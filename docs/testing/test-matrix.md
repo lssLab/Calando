@@ -1,7 +1,7 @@
 # Test coverage
 
 <p align="center">
-  <strong>English</strong> · <a href="test-matrix.ko.md">한국어</a>
+  <strong>English</strong> · <a href="test-matrix.ko.md">한국어</a> · <a href="test-matrix.zh-CN.md">简体中文</a> · <a href="test-matrix.ja.md">日本語</a>
 </p>
 
 The public suite covers the product path from policy decisions through installation, hook wiring,
@@ -18,7 +18,7 @@ recovery, and coordination across environments.
 | Federation | kernel-local control, admission sharing for the same physical memory, and rejection of stale or invalid peers |
 | Notifications and security | exact-terminal validation, deduplication, optional routes, and private state-file permissions |
 | Release bundle | public-only source archives, checksums, and required platform binaries |
-| Repository safety | public-file allowlist, no personal paths or credentials, paired Korean and English docs, and valid internal links |
+| Repository safety | public-file allowlist, no personal paths or credentials, matching English, Korean, Simplified Chinese, and Japanese docs, and valid internal links |
 
 GitHub Actions checks Rust builds, tests, and platform contracts on Linux x86-64,
 Windows x86-64, Apple Silicon macOS, and macOS x86-64 under Rosetta. Operating-system signals and a

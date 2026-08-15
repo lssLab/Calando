@@ -1,7 +1,7 @@
 # Platform deployment and federation
 
 <p align="center">
-  <strong>English</strong> · <a href="platforms.ko.md">한국어</a>
+  <strong>English</strong> · <a href="platforms.ko.md">한국어</a> · <a href="platforms.zh-CN.md">简体中文</a> · <a href="platforms.ja.md">日本語</a>
 </p>
 
 ## One supervisor per protected user and PID-control environment

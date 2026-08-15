@@ -1,7 +1,7 @@
 # 알림 설정 — 파일을 열지 않고 터미널 명령으로 끝내기
 
 <p align="center">
-  <a href="notifications.md">English</a> · <strong>한국어</strong>
+  <a href="notifications.md">English</a> · <strong>한국어</strong> · <a href="notifications.zh-CN.md">简体中文</a> · <a href="notifications.ja.md">日本語</a>
 </p>
 
 Memory Supervisor를 설치하면 Linux, WSL, macOS, Windows PowerShell에서 똑같이

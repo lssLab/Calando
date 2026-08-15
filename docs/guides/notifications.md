@@ -1,7 +1,7 @@
 # Notification setup — finish in the terminal without opening a file
 
 <p align="center">
-  <strong>English</strong> · <a href="notifications.ko.md">한국어</a>
+  <strong>English</strong> · <a href="notifications.ko.md">한국어</a> · <a href="notifications.zh-CN.md">简体中文</a> · <a href="notifications.ja.md">日本語</a>
 </p>
 
 After Memory Supervisor is installed, the same `memory-supervisor notifications ...` commands work

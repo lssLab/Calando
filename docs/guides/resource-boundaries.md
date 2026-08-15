@@ -1,7 +1,7 @@
 # Session discovery, capacity detection, and memory boundaries
 
 <p align="center">
-  <strong>English</strong> · <a href="resource-boundaries.ko.md">한국어</a>
+  <strong>English</strong> · <a href="resource-boundaries.ko.md">한국어</a> · <a href="resource-boundaries.zh-CN.md">简体中文</a> · <a href="resource-boundaries.ja.md">日本語</a>
 </p>
 
 This guide explains what one installation can see, how the supervisor discovers terminal sessions

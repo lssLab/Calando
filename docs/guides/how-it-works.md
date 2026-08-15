@@ -1,7 +1,7 @@
 # How Memory Supervisor works
 
 <p align="center">
-  <strong>English</strong> · <a href="how-it-works.ko.md">한국어</a>
+  <strong>English</strong> · <a href="how-it-works.ko.md">한국어</a> · <a href="how-it-works.zh-CN.md">简体中文</a> · <a href="how-it-works.ja.md">日本語</a>
 </p>
 
 ## How does it work?

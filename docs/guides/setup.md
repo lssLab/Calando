@@ -1,7 +1,7 @@
 # Installation, connection, and supported environments
 
 <p align="center">
-  <strong>English</strong> · <a href="setup.ko.md">한국어</a>
+  <strong>English</strong> · <a href="setup.ko.md">한국어</a> · <a href="setup.zh-CN.md">简体中文</a> · <a href="setup.ja.md">日本語</a>
 </p>
 
 ## Installation
