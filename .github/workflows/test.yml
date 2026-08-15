@@ -1,0 +1,285 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  RUST_TOOLCHAIN: 1.88.0
+  CODEX_VERSION: 0.145.0
+
+jobs:
+  linux-x86-64:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install pinned Rust and Codex
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v rustup >/dev/null 2>&1; then
+            curl --proto '=https' --tlsv1.2 -fsS https://sh.rustup.rs -o /tmp/rustup-init.sh
+            sh /tmp/rustup-init.sh -y --profile minimal --default-toolchain none
+          fi
+          export PATH="$HOME/.cargo/bin:$PATH"
+          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal --component rustfmt,clippy
+          rustup default "$RUST_TOOLCHAIN"
+          if ! command -v npm >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y nodejs npm python3
+          fi
+          mkdir -p "$HOME/.local/codex-ci" "$HOME/.cache/codex-ci-home"
+          npm install --global --prefix "$HOME/.local/codex-ci" "@openai/codex@$CODEX_VERSION"
+          printf '%s\n' "$HOME/.cargo/bin" "$HOME/.local/codex-ci/bin" >> "$GITHUB_PATH"
+          printf 'CODEX_HOME=%s\n' "$HOME/.cache/codex-ci-home" >> "$GITHUB_ENV"
+
+      - name: Validate native Linux build
+        shell: bash
+        run: |
+          set -euo pipefail
+          export MEMORY_SUPERVISOR_NATIVE_CODEX_SMOKE=1
+          bash tests/run.sh
+          MEMORY_SUPERVISOR_BINARY="$PWD/target/release/memory-supervisor" bash tests/install-unix.sh --all
+          mkdir -p artifacts
+          cp target/release/memory-supervisor artifacts/memory-supervisor-x86_64-unknown-linux-gnu
+          (cd artifacts && sha256sum memory-supervisor-x86_64-unknown-linux-gnu > memory-supervisor-x86_64-unknown-linux-gnu.sha256)
+          scripts/package-release-source.sh artifacts HEAD
+
+      - name: Measure native Linux footprint
+        shell: bash
+        run: |
+          set -euo pipefail
+          diagnostic=$(mktemp -d)
+          mkdir -p "$diagnostic/state" "$diagnostic/federation" artifacts
+          MEMORY_SUPERVISOR_DIR="$diagnostic/state" \
+          MEMORY_SUPERVISOR_FEDERATION_DIR="$diagnostic/federation" \
+          MEMORY_SUPERVISOR_LEAK_ACTION=none \
+            target/release/memory-supervisor daemon --foreground >"$diagnostic/out" 2>"$diagnostic/err" &
+          daemon_pid=$!
+          trap 'kill "$daemon_pid" 2>/dev/null || true; wait "$daemon_pid" 2>/dev/null || true' EXIT
+          for _ in $(seq 1 100); do
+            [ -s "$diagnostic/state/state.json" ] && break
+            kill -0 "$daemon_pid"
+            sleep 0.1
+          done
+          [ -s "$diagnostic/state/state.json" ]
+          for _ in $(seq 1 20); do
+            ps -o rss=,nlwp= -p "$daemon_pid" >> "$diagnostic/samples"
+            sleep 0.2
+          done
+          binary_bytes=$(wc -c < target/release/memory-supervisor | tr -d '[:space:]')
+          awk -v binary_bytes="$binary_bytes" '
+            NR == 1 { rmin = rmax = $1; tmin = tmax = $2 }
+            { rsum += $1; if ($1 < rmin) rmin = $1; if ($1 > rmax) rmax = $1;
+              if ($2 < tmin) tmin = $2; if ($2 > tmax) tmax = $2 }
+            END { printf "{\"platform\":\"linux-x86_64\",\"samples\":%d,\"rss_kib_min\":%d,\"rss_kib_mean\":%.1f,\"rss_kib_max\":%d,\"threads_min\":%d,\"threads_max\":%d,\"binary_bytes\":%d}\n", NR,rmin,rsum/NR,rmax,tmin,tmax,binary_bytes; if (rmax > 10240) exit 1 }' \
+            "$diagnostic/samples" | tee artifacts/footprint-linux-x86_64.json
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: linux
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 7
+
+  windows-x86-64:
+    runs-on: windows-2022
+    timeout-minutes: 60
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Validate native Windows build
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $env:PATH = "$env:USERPROFILE\.cargo\bin;$env:PATH"
+          if (-not (Get-Command rustup -ErrorAction SilentlyContinue)) {
+            $Rustup = Join-Path $env:TEMP "rustup-init.exe"
+            Invoke-WebRequest -UseBasicParsing https://win.rustup.rs/x86_64 -OutFile $Rustup
+            & $Rustup -y --profile minimal --default-toolchain none
+          }
+          rustup toolchain install $env:RUST_TOOLCHAIN --profile minimal --component rustfmt,clippy
+          rustup default $env:RUST_TOOLCHAIN
+          if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
+            choco install nodejs-lts -y --no-progress
+            $env:PATH = "$env:ProgramFiles\nodejs;$env:PATH"
+          }
+          $CodexPrefix = Join-Path $env:USERPROFILE ".local\codex-ci"
+          $env:CODEX_HOME = Join-Path $env:USERPROFILE ".cache\codex-ci-home"
+          New-Item -ItemType Directory -Force -Path $CodexPrefix, $env:CODEX_HOME | Out-Null
+          npm install --global --prefix $CodexPrefix "@openai/codex@$env:CODEX_VERSION"
+          $env:PATH = "$CodexPrefix;$env:PATH"
+          $env:MEMORY_SUPERVISOR_NATIVE_CODEX_SMOKE = "1"
+          .\tests\run.ps1
+          .\tests\install-windows.ps1 -Binary .\target\release\memory-supervisor.exe
+          New-Item -ItemType Directory -Force -Path artifacts | Out-Null
+          $Asset = Join-Path artifacts "memory-supervisor-x86_64-pc-windows-msvc.exe"
+          Copy-Item .\target\release\memory-supervisor.exe $Asset
+          $Hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $Asset).Hash.ToLowerInvariant()
+          [IO.File]::WriteAllText("$Asset.sha256", "$Hash  memory-supervisor-x86_64-pc-windows-msvc.exe`n", [Text.UTF8Encoding]::new($false))
+
+      - name: Measure native Windows footprint
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $Diagnostic = Join-Path $env:TEMP "memory-supervisor-github-footprint"
+          $State = Join-Path $Diagnostic "state"
+          $Federation = Join-Path $Diagnostic "federation"
+          New-Item -ItemType Directory -Force -Path $State, $Federation, "artifacts" | Out-Null
+          $env:MEMORY_SUPERVISOR_DIR = $State
+          $env:MEMORY_SUPERVISOR_FEDERATION_DIR = $Federation
+          $env:MEMORY_SUPERVISOR_LEAK_ACTION = "none"
+          $Binary = (Resolve-Path .\target\release\memory-supervisor.exe).ProviderPath
+          $Process = Start-Process -FilePath $Binary `
+            -ArgumentList @("daemon", "--foreground", "--detach-console") -PassThru
+          try {
+            $StateFile = Join-Path $State "state.json"
+            for ($Index = 0; $Index -lt 100 -and (-not (Test-Path $StateFile)); $Index++) {
+              if ($Process.HasExited) { throw "diagnostic daemon exited" }
+              Start-Sleep -Milliseconds 100
+            }
+            if (-not (Test-Path $StateFile)) { throw "diagnostic state missing" }
+            $Samples = 1..20 | ForEach-Object {
+              $Process.Refresh()
+              $Value = [pscustomobject]@{ WorkingSet = $Process.WorkingSet64; Threads = $Process.Threads.Count }
+              Start-Sleep -Milliseconds 200
+              $Value
+            }
+            $Footprint = [ordered]@{
+              platform = "windows-x86_64"
+              samples = $Samples.Count
+              working_set_bytes_min = ($Samples.WorkingSet | Measure-Object -Minimum).Minimum
+              working_set_bytes_mean = [Math]::Round(($Samples.WorkingSet | Measure-Object -Average).Average, 1)
+              working_set_bytes_max = ($Samples.WorkingSet | Measure-Object -Maximum).Maximum
+              threads_min = ($Samples.Threads | Measure-Object -Minimum).Minimum
+              threads_max = ($Samples.Threads | Measure-Object -Maximum).Maximum
+              binary_bytes = (Get-Item $Binary).Length
+            }
+            if ($Footprint.working_set_bytes_max -gt 10MB) { throw "working set exceeded 10 MiB" }
+            $Json = $Footprint | ConvertTo-Json -Compress
+            $Json
+            [IO.File]::WriteAllText((Join-Path "artifacts" "footprint-windows-x86_64.json"), $Json)
+          }
+          finally {
+            if (-not $Process.HasExited) { Stop-Process -Id $Process.Id }
+          }
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: windows
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 7
+
+  macos-apple-silicon:
+    runs-on: macos-15
+    timeout-minutes: 75
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install pinned Rust and Codex
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v rustup >/dev/null 2>&1; then
+            curl --proto '=https' --tlsv1.2 -fsS https://sh.rustup.rs -o /tmp/rustup-init.sh
+            sh /tmp/rustup-init.sh -y --profile minimal --default-toolchain none
+          fi
+          export PATH="$HOME/.cargo/bin:$PATH"
+          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal --component rustfmt,clippy
+          rustup default "$RUST_TOOLCHAIN"
+          if ! command -v npm >/dev/null 2>&1; then
+            brew install node
+          fi
+          mkdir -p "$HOME/.local/codex-ci" "$HOME/.cache/codex-ci-home"
+          npm install --global --prefix "$HOME/.local/codex-ci" "@openai/codex@$CODEX_VERSION"
+          printf '%s\n' "$HOME/.cargo/bin" "$HOME/.local/codex-ci/bin" >> "$GITHUB_PATH"
+          printf 'CODEX_HOME=%s\n' "$HOME/.cache/codex-ci-home" >> "$GITHUB_ENV"
+
+      - name: Validate native Apple Silicon build
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = arm64
+          export MEMORY_SUPERVISOR_NATIVE_CODEX_SMOKE=1
+          bash tests/run.sh
+          MEMORY_SUPERVISOR_BINARY="$PWD/target/release/memory-supervisor" bash tests/install-unix.sh
+
+      - name: Validate x86-64 compatibility through Rosetta
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! arch -x86_64 /usr/bin/true >/dev/null 2>&1; then
+            sudo softwareupdate --install-rosetta --agree-to-license
+          fi
+          rustup target add x86_64-apple-darwin --toolchain "$RUST_TOOLCHAIN"
+          cargo test --all-targets --locked --target x86_64-apple-darwin
+          cargo build --release --locked --target x86_64-apple-darwin
+          arch -x86_64 target/x86_64-apple-darwin/release/memory-supervisor --version
+          mkdir -p artifacts
+          cp target/release/memory-supervisor artifacts/memory-supervisor-aarch64-apple-darwin
+          cp target/x86_64-apple-darwin/release/memory-supervisor artifacts/memory-supervisor-x86_64-apple-darwin
+          (cd artifacts && shasum -a 256 memory-supervisor-aarch64-apple-darwin > memory-supervisor-aarch64-apple-darwin.sha256)
+          (cd artifacts && shasum -a 256 memory-supervisor-x86_64-apple-darwin > memory-supervisor-x86_64-apple-darwin.sha256)
+
+      - name: Measure native Apple Silicon footprint
+        shell: bash
+        run: |
+          set -euo pipefail
+          diagnostic=$(mktemp -d)
+          mkdir -p "$diagnostic/state" "$diagnostic/federation" artifacts
+          MEMORY_SUPERVISOR_DIR="$diagnostic/state" \
+          MEMORY_SUPERVISOR_FEDERATION_DIR="$diagnostic/federation" \
+          MEMORY_SUPERVISOR_LEAK_ACTION=none \
+            target/release/memory-supervisor daemon --foreground >"$diagnostic/out" 2>"$diagnostic/err" &
+          daemon_pid=$!
+          trap 'kill "$daemon_pid" 2>/dev/null || true; wait "$daemon_pid" 2>/dev/null || true' EXIT
+          for _ in $(seq 1 100); do
+            [ -s "$diagnostic/state/state.json" ] && break
+            kill -0 "$daemon_pid"
+            sleep 0.1
+          done
+          [ -s "$diagnostic/state/state.json" ]
+          for _ in $(seq 1 20); do
+            rss=$(ps -o rss= -p "$daemon_pid" | tr -d '[:space:]')
+            threads=$(ps -M -p "$daemon_pid" | awk 'NR > 1 { count++ } END { print count + 0 }')
+            printf '%s %s\n' "$rss" "$threads" >> "$diagnostic/samples"
+            sleep 0.2
+          done
+          binary_bytes=$(wc -c < target/release/memory-supervisor | tr -d '[:space:]')
+          awk -v binary_bytes="$binary_bytes" '
+            NR == 1 { rmin = rmax = $1; tmin = tmax = $2 }
+            { rsum += $1; if ($1 < rmin) rmin = $1; if ($1 > rmax) rmax = $1;
+              if ($2 < tmin) tmin = $2; if ($2 > tmax) tmax = $2 }
+            END { printf "{\"platform\":\"macos-arm64\",\"samples\":%d,\"rss_kib_min\":%d,\"rss_kib_mean\":%.1f,\"rss_kib_max\":%d,\"threads_min\":%d,\"threads_max\":%d,\"binary_bytes\":%d}\n", NR,rmin,rsum/NR,rmax,tmin,tmax,binary_bytes; if (rmax > 10240) exit 1 }' \
+            "$diagnostic/samples" | tee artifacts/footprint-macos-arm64.json
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: macos-arm64
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 7

@@ -1,0 +1,10 @@
+#!/bin/bash
+case "$*" in
+  *hw.memsize*) echo "8589934592" ;;
+  *)
+    if [ "${MEMORY_SUPERVISOR_TEST_DARWIN_PRESSURE_FAILURE:-}" = "1" ]; then
+      exit 1
+    fi
+    echo "2"
+    ;;
+esac

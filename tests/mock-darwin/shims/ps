@@ -1,0 +1,7 @@
+#!/bin/bash
+cat << 'OUT'
+  501     1 450000 Sun Jul 19 12:00:01 2026 ttys001 claude     /usr/local/bin/claude --resume
+  777   501   3000 Sun Jul 19 12:00:02 2026 ttys001 bash       /bin/bash -c sleep 99
+  999     1 122880 Sun Jul 19 12:00:04 2026 ttys003 codex      codex exec hello
+    1     0   1000 Sun Jul 19 11:00:00 2026 ??      launchd    /sbin/launchd
+OUT

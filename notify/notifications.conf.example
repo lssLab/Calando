@@ -1,0 +1,23 @@
+# Installed as the private backing file for `memory-supervisor notifications`.
+# Normal setup should use the command; manual editing is not required.
+# Configure at most one Discord delivery method. Telegram can be enabled independently.
+# OS notification needs no credentials and follows MEMORY_SUPERVISOR_NOTIFICATION_CHANNELS.
+
+# Optional delivery routes: all, none, or a comma-separated subset of os,discord,telegram.
+# AI CLI hook and exact-terminal action notices are mandatory and always enabled.
+# Event selection is always action-only; this setting changes routes, not verbosity.
+MEMORY_SUPERVISOR_NOTIFICATION_CHANNELS="all"
+
+# Method A: Discord webhook (recommended; no bot required).
+#MEMORY_SUPERVISOR_DISCORD_WEBHOOK="https://discord.com/api/webhooks/XXXXXXXX/YYYYYYYY"
+
+# Method B: existing bot and channel ID.
+#MEMORY_SUPERVISOR_DISCORD_BOT_TOKEN="MTxx..."
+#MEMORY_SUPERVISOR_DISCORD_CHANNEL_ID="15xx..."
+
+# Method C: existing bot and owner DM. Leave CHANNEL_ID unset.
+#MEMORY_SUPERVISOR_DISCORD_OWNER_USER_ID="15xx..."
+
+# Telegram Bot API (outbound sendMessage; no inbound webhook server required).
+#MEMORY_SUPERVISOR_TELEGRAM_BOT_TOKEN="123456789:AA..."
+#MEMORY_SUPERVISOR_TELEGRAM_CHAT_ID="123456789"

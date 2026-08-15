@@ -1,0 +1,38 @@
+{
+  "schema_version": 5,
+  "ts": 1720915200.0,
+  "instance": "linux-contract",
+  "platform": "linux",
+  "level": "RED",
+  "utilization": "RED",
+  "local_level": "GREEN",
+  "action": "hold",
+  "admission_level": "ORANGE",
+  "admission_source": "windows-host",
+  "admission_action": "hold",
+  "admission_distress": "elevated",
+  "admission_attribution": "external",
+  "admission_mem_available_mb": 600,
+  "admission_capacity_mb": 32768,
+  "distress": "normal",
+  "attribution": "unknown",
+  "mem_available_mb": 1000,
+  "memory_capacity_mb": 102400,
+  "cli_hard_cap_mb": null,
+  "stopped_pids": [42],
+  "recent_incidents": [
+    {
+      "id": "contract-incident",
+      "pid": 42,
+      "name": "codex",
+      "role": "lead",
+      "status": "suspended",
+      "reason": "runaway-memory",
+      "recovery_policy": "lead-probation",
+      "terminal_notice": "delivered"
+    }
+  ],
+  "notification_channels": ["hook", "terminal"],
+  "sensor_ok": true,
+  "protection_degraded": false
+}

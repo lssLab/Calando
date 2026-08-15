@@ -1,0 +1,7 @@
+#!/bin/sh
+BINARY=${MEMORY_SUPERVISOR_BINARY:-}
+if [ -z "$BINARY" ] && [ -r "$HOME/.memory-supervisor/binary" ]; then
+  IFS= read -r BINARY < "$HOME/.memory-supervisor/binary" 2>/dev/null || :
+fi
+[ -n "$BINARY" ] || BINARY="$HOME/.local/lib/memory-supervisor/memory-supervisor"
+exec "$BINARY" "$@"

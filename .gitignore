@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+ci-codex-smoke.json
+ci-diagnostics.json
+/target/

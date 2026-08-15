@@ -1,0 +1,6 @@
+interface:
+  display_name: "Claude Code & Codex Memory Supervisor"
+  short_description: "Protect Claude Code and Codex CLI or App sessions from memory pressure"
+  default_prompt: "Use $memory-supervisor to inspect the current memory state and recommend a safe next action."
+policy:
+  allow_implicit_invocation: true
