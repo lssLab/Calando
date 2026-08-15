@@ -182,7 +182,7 @@ function Get-RuntimeCandidate {
     $Base = if ($env:MEMORY_SUPERVISOR_RELEASE_BASE_URL) {
         $env:MEMORY_SUPERVISOR_RELEASE_BASE_URL.TrimEnd("/")
     } else {
-        "https://github.com/lssLab/claude-code-codex-memory-supervisor-prerelease/releases/latest/download"
+        "https://github.com/lssLab/Calando/releases/latest/download"
     }
     $Binary = Join-Path $Temporary $Asset
     $Checksum = "$Binary.sha256"

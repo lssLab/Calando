@@ -690,13 +690,11 @@ fn refresh_release_installation(root: &Path) -> io::Result<std::process::ExitSta
     }
 
     let url = env::var("MEMORY_SUPERVISOR_BOOTSTRAP_URL").unwrap_or_else(|_| {
-        "https://raw.githubusercontent.com/lssLab/claude-code-codex-memory-supervisor-prerelease/main/bootstrap.sh"
-            .to_owned()
+        "https://raw.githubusercontent.com/lssLab/Calando/main/bootstrap.sh".to_owned()
     });
     if cfg!(windows) {
         let windows_url = env::var("MEMORY_SUPERVISOR_BOOTSTRAP_URL").unwrap_or_else(|_| {
-            "https://raw.githubusercontent.com/lssLab/claude-code-codex-memory-supervisor-prerelease/main/bootstrap.ps1"
-                .to_owned()
+            "https://raw.githubusercontent.com/lssLab/Calando/main/bootstrap.ps1".to_owned()
         });
         Command::new("powershell.exe")
             .args([

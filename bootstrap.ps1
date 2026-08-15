@@ -3,7 +3,7 @@
     $ReleaseBaseUrl = if ($env:MEMORY_SUPERVISOR_RELEASE_BASE_URL) {
         $env:MEMORY_SUPERVISOR_RELEASE_BASE_URL.TrimEnd("/")
     } else {
-        "https://github.com/lssLab/claude-code-codex-memory-supervisor-prerelease/releases/latest/download"
+        "https://github.com/lssLab/Calando/releases/latest/download"
     }
     $Source = if ($env:MEMORY_SUPERVISOR_INSTALL_ROOT) {
         $env:MEMORY_SUPERVISOR_INSTALL_ROOT

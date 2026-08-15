@@ -6,7 +6,7 @@
 
 ## Supported contract
 
-Memory Supervisor `0.2.0-alpha.3` supports Claude Code **2.1.217 or newer**. This is the pinned
+Memory Supervisor `0.2.0` supports Claude Code **2.1.217 or newer**. This is the pinned
 latest-supported baseline for the graded logical-control contract; old releases do not receive a
 reduced matcher set or compatibility policy.
 

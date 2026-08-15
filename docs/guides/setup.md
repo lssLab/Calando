@@ -16,7 +16,7 @@ A normal installation is scoped to your user account and does not require
 #### Linux, WSL2, or macOS terminal
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/lssLab/claude-code-codex-memory-supervisor-prerelease/main/bootstrap.sh | sh
+curl -fsSL https://raw.githubusercontent.com/lssLab/Calando/main/bootstrap.sh | sh
 ```
 
 When the command finishes, the background service is running and the detected
@@ -26,7 +26,7 @@ running AI program or interrupt work in progress.
 #### Windows PowerShell terminal
 
 ```powershell
-irm https://raw.githubusercontent.com/lssLab/claude-code-codex-memory-supervisor-prerelease/main/bootstrap.ps1 | iex
+irm https://raw.githubusercontent.com/lssLab/Calando/main/bootstrap.ps1 | iex
 ```
 
 When the command finishes, the background service is running and the detected
@@ -153,6 +153,17 @@ for the underlying trust rules.
 
 These commands install the latest public release. A Rust build tool is not
 required; the verified executable included in that release is used automatically.
+
+### 6. Uninstall
+
+To remove Calando, run this once in each environment where it is installed:
+
+```bash
+memory-supervisor uninstall
+```
+
+It removes the background service, executable, and Calando-owned hook and skill connections while
+preserving state and user settings.
 
 ## Supported environments
 

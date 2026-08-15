@@ -2,7 +2,7 @@
 # One-command release installer. Normal users need no Git checkout or language toolchain.
 set -eu
 
-RELEASE_BASE_URL=${MEMORY_SUPERVISOR_RELEASE_BASE_URL:-"https://github.com/lssLab/claude-code-codex-memory-supervisor-prerelease/releases/latest/download"}
+RELEASE_BASE_URL=${MEMORY_SUPERVISOR_RELEASE_BASE_URL:-"https://github.com/lssLab/Calando/releases/latest/download"}
 SOURCE=${MEMORY_SUPERVISOR_INSTALL_ROOT:-"$HOME/.local/share/memory-supervisor"}
 SOURCE_MARKER=.memory-supervisor-release-source
 TEMP_DIR=""

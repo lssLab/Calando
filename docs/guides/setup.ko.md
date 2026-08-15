@@ -15,7 +15,7 @@
 #### Linux, WSL2, macOS 터미널
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/lssLab/claude-code-codex-memory-supervisor-prerelease/main/bootstrap.sh | sh
+curl -fsSL https://raw.githubusercontent.com/lssLab/Calando/main/bootstrap.sh | sh
 ```
 
 명령이 끝나면 백그라운드 서비스가 바로 시작되고, 발견된 Claude Code·Codex Hook도 자동으로
@@ -24,7 +24,7 @@ curl -fsSL https://raw.githubusercontent.com/lssLab/claude-code-codex-memory-sup
 #### Windows PowerShell 터미널
 
 ```powershell
-irm https://raw.githubusercontent.com/lssLab/claude-code-codex-memory-supervisor-prerelease/main/bootstrap.ps1 | iex
+irm https://raw.githubusercontent.com/lssLab/Calando/main/bootstrap.ps1 | iex
 ```
 
 명령이 끝나면 백그라운드 서비스가 바로 시작되고, 발견된 Claude Code·Codex Hook도 자동으로
@@ -136,6 +136,17 @@ Codex의 Hook 신뢰는 관리자 권한 승인이 아니라, 로컬에서 실�
 
 위 명령은 최신 공개 릴리스를 설치합니다. Rust 빌드 도구가 없어도 릴리스에 포함된 검증된
 실행 파일을 자동으로 사용합니다.
+
+### 6. 삭제
+
+Calando를 삭제하려면 설치한 각 환경의 터미널에서 한 번씩 실행합니다.
+
+```bash
+memory-supervisor uninstall
+```
+
+백그라운드 서비스와 실행 파일, Calando가 추가한 Hook·Skill 연결만 제거하고 상태와 사용자
+설정은 보존합니다.
 
 ## 지원 환경
 

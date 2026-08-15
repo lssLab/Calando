@@ -279,7 +279,7 @@ obtain_binary() {
     return 1
   }
   asset="memory-supervisor-$target"
-  base=${MEMORY_SUPERVISOR_RELEASE_BASE_URL:-"https://github.com/lssLab/claude-code-codex-memory-supervisor-prerelease/releases/latest/download"}
+  base=${MEMORY_SUPERVISOR_RELEASE_BASE_URL:-"https://github.com/lssLab/Calando/releases/latest/download"}
   echo "downloading verified release binary: $asset" >&2
   curl -fL "$base/$asset" -o "$TEMP_DIR/$asset" >&2
   curl -fL "$base/$asset.sha256" -o "$TEMP_DIR/$asset.sha256" >&2

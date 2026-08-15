@@ -233,7 +233,7 @@ sequenceDiagram
 ## 저장소 파일 구조
 
 ```text
-claude-code-codex-memory-supervisor-prerelease/
+Calando/
 ├── src/
 │   ├── main.rs + lib.rs        단일 바이너리의 subcommand·별칭 routing
 │   ├── config.rs               기본값, override, 알림 설정

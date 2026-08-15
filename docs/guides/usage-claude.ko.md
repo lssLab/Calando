@@ -6,7 +6,7 @@
 
 ## 지원 기준
 
-Memory Supervisor `0.2.0-alpha.3`은 Claude Code **2.1.217 이상**을 지원합니다. 이 버전은
+Memory Supervisor `0.2.0`은 Claude Code **2.1.217 이상**을 지원합니다. 이 버전은
 단계적 논리 제어 계약을 적용하는 최소 기준입니다. 그보다 오래된 버전에 축소된 matcher나 별도
 호환 정책을 적용하지는 않습니다.
 

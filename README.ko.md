@@ -151,6 +151,17 @@ memory-status --connections
 상태가 다르면 출력에 표시된 항목만 처리하면 됩니다. 전체 예외와 실행 중 설치 방법은
 [설치·연결·지원 환경](docs/guides/setup.ko.md)에 있습니다.
 
+### 삭제
+
+Calando를 삭제하려면 설치한 각 환경의 터미널에서 한 번씩 실행합니다.
+
+```bash
+memory-supervisor uninstall
+```
+
+백그라운드 서비스와 실행 파일, Calando가 추가한 Hook·Skill 연결만 제거하고 상태와 사용자
+설정은 보존합니다.
+
 ## 30초 작동 원리
 
 Calando는 Claude Code나 Codex 앞에 끼어 명령을 대신 실행하지 않습니다. 운영체제

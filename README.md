@@ -167,6 +167,17 @@ memory-status --connections
 If a line differs, act only on what it reports. Every exception and the exact live-install behavior
 are in [installation, connection, and supported environments](docs/guides/setup.md).
 
+### Uninstall
+
+To remove Calando, run this once in each environment where it is installed:
+
+```bash
+memory-supervisor uninstall
+```
+
+It removes the background service, executable, and Calando-owned hook and skill connections while
+preserving state and user settings.
+
 ## How it works in 30 seconds
 
 Calando does not sit in front of Claude Code or Codex and execute commands on their behalf.

@@ -236,7 +236,7 @@ B, and C without a central network service.
 ## Repository file structure
 
 ```text
-claude-code-codex-memory-supervisor-prerelease/
+Calando/
 ├── src/
 │   ├── main.rs + lib.rs        one binary, subcommand and alias routing
 │   ├── config.rs               defaults, overrides, notification configuration

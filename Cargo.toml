@@ -1,12 +1,12 @@
 [package]
 name = "memory-supervisor"
-version = "0.2.0-alpha.3"
+version = "0.2.0"
 edition = "2024"
 rust-version = "1.88"
 license = "MIT"
 description = "Cross-platform memory supervision for Claude Code and Codex CLI or Desktop App sessions"
-repository = "https://github.com/lssLab/claude-code-codex-memory-supervisor-prerelease"
-homepage = "https://github.com/lssLab/claude-code-codex-memory-supervisor-prerelease"
+repository = "https://github.com/lssLab/Calando"
+homepage = "https://github.com/lssLab/Calando"
 readme = "README.md"
 
 [dependencies]
