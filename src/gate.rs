@@ -846,8 +846,22 @@ fn consume_memory_notice(
             .filter_map(|event| event.get("event_id").and_then(Value::as_str))
             .map(str::to_owned),
     );
-    let seen_incidents: Vec<_> = seen_incidents.into_iter().rev().take(256).collect();
-    let seen_events: Vec<_> = seen_events.into_iter().rev().take(256).collect();
+    // A marker is needed only while its item can still be delivered, so keep exactly the ids in
+    // the current bounded windows. A fixed cut by id order dropped live random ids, and those were
+    // then re-delivered on every hook.
+    let live_incidents: BTreeSet<String> = incidents.iter().map(incident_token).collect();
+    let live_events: BTreeSet<&str> = events
+        .iter()
+        .filter_map(|event| event.get("event_id").and_then(Value::as_str))
+        .collect();
+    let seen_incidents: Vec<_> = seen_incidents
+        .into_iter()
+        .filter(|token| live_incidents.contains(token))
+        .collect();
+    let seen_events: Vec<_> = seen_events
+        .into_iter()
+        .filter(|id| live_events.contains(id.as_str()))
+        .collect();
     let _ = write_atomic_json(
         &marker,
         &json!({
@@ -1744,6 +1758,40 @@ mod tests {
         assert!(!second.contains("worker-1"));
         assert!(second.contains("worker-5"));
         assert!(consume_memory_notice(&directory, "codex", &payload, &state, true).is_none());
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn delivered_notice_stays_seen_when_older_markers_sort_after_it() {
+        let directory = temp_directory();
+        let marker = directory.join("seen-long-session.json");
+        // A long session fills the marker with ids of events that already left the state window.
+        let stale: Vec<_> = (0..256).map(|index| format!("ff{index:022x}")).collect();
+        fs::write(
+            &marker,
+            serde_json::to_vec(&json!({"seen_incidents":[],"seen_events":stale})).unwrap(),
+        )
+        .unwrap();
+        let state = json!({
+            "level":"GREEN",
+            "notification_events":[{
+                "event_id":"0a0a0a0a0a0a0a0a0a0a0a0a",
+                "type":"pressure-episode",
+                "status":"active",
+                "importance":"important",
+                "message":"[Memory Supervisor] MEMORY PROTECTION ACTIVE",
+                "created_at":now_epoch() - 10.0,
+            }],
+        });
+        let payload = json!({"session_id":"long-session"});
+
+        let first = consume_memory_notice(&directory, "claude", &payload, &state, true)
+            .unwrap()
+            .0;
+        assert!(first.contains("MEMORY PROTECTION ACTIVE"));
+        assert!(consume_memory_notice(&directory, "claude", &payload, &state, true).is_none());
+        let kept: Value = serde_json::from_slice(&fs::read(&marker).unwrap()).unwrap();
+        assert_eq!(kept["seen_events"], json!(["0a0a0a0a0a0a0a0a0a0a0a0a"]));
         fs::remove_dir_all(directory).unwrap();
     }
 

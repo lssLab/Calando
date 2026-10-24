@@ -6479,13 +6479,11 @@ pub fn run_daemon(arguments: &[std::ffi::OsString]) -> i32 {
         eprintln!("usage: memory-supervisor daemon [--once|--foreground|--detach-console]");
         return 2;
     }
+    // A daemon never needs a console it alone owns. Detaching it regardless of `--detach-console`
+    // keeps a task registered before that flag from opening a blank window at logon, while a shell
+    // that shares the console still sees normal output.
     #[cfg(windows)]
-    if arguments
-        .iter()
-        .any(|argument| argument == "--detach-console")
-    {
-        terminal::detach_private_console();
-    }
+    terminal::detach_private_console();
     let directory = state_dir();
     if let Err(error) =
         ensure_private_dir(&directory).and_then(|()| ensure_private_dir(&directory.join("control")))
