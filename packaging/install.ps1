@@ -347,7 +347,8 @@ try {
         -Argument "daemon --foreground --detach-console"
     $Trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
     $Settings = New-ScheduledTaskSettingsSet -RestartCount 5 `
-        -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero)
+        -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero) `
+        -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
     Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $Trigger `
         -Settings $Settings -Description "Claude Code & Codex CLI Memory Supervisor" -Force | Out-Null
     if ($PoweredOff) {

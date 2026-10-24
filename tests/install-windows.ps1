@@ -80,6 +80,8 @@ try {
         "clean install missed the scheduled task"
     Assert-True ([string]$InstalledTask.Actions[0].Arguments -eq "daemon --foreground --detach-console") `
         "scheduled task can leave the daemon console window open"
+    Assert-True (-not $InstalledTask.Settings.DisallowStartIfOnBatteries -and
+        -not $InstalledTask.Settings.StopIfGoingOnBatteries) "scheduled task does not run on battery"
     Wait-FreshStatus $InstalledBinary
     $InitialHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $InstalledBinary).Hash
 
