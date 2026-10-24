@@ -7,7 +7,7 @@
 <a id="supported-contract"></a>
 ## 支持合约
 
-Memory Supervisor `0.2.2` 支持 Claude Code **2.1.217 或更高版本**。 这是分级逻辑控制合约固定的最新支持的基线； 旧版本不会收到减少的匹配器集或兼容性策略。
+Memory Supervisor `0.2.3` 支持 Claude Code **2.1.217 或更高版本**。 这是分级逻辑控制合约固定的最新支持的基线； 旧版本不会收到减少的匹配器集或兼容性策略。
 
 ```bash
 claude --version
