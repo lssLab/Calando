@@ -213,8 +213,8 @@ memory-supervisor notifications test
 <a id="when-notifications-are-sent"></a>
 ## 通知が送信されるとき
 
-- いずれかの `HOLD|DRAIN`、ライブ論理制限、管理対象停止 PID、または lead 保護観察が最初にアクティブになったとき、1 つの `pressure-episode / active`
-- これらの条件がすべてクリアされた後の最後の 1 つ `recovered`、または再開が確認される前に停止した worker が消えたときの `ended-with-loss`
+- `DRAIN`、実際に作業を延期した `HOLD`、ライブ論理制限、管理対象停止 PID、または lead 保護観察が最初にアクティブになったとき、1 つの `pressure-episode / active`
+- これらの条件が admission の安定確認時間のあいだクリアされ続けた後の最後の 1 つ `recovered`、または再開が確認される前に停止した worker が消えたときの `ended-with-loss`
 - 正確な端末 PID の一時停止/再開の安全に関する通知
 - 以前は新鮮だった federation ピアが失効し、その後の回復
 - ライブ daemon なしで hooks がフェールオープンしているときに、レート制限された保護が利用できないという警告が表示されます。

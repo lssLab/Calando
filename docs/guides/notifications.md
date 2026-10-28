@@ -241,10 +241,10 @@ does not take effect.
 
 ## When notifications are sent
 
-- One `pressure-episode / active` when any `HOLD|DRAIN`, live logical restriction, managed stopped
-  PID, or lead probation first becomes active
-- One final `recovered` after all those conditions clear, or `ended-with-loss` when a stopped
-  worker disappeared before confirmed resume
+- One `pressure-episode / active` when `DRAIN`, a `HOLD` that actually deferred work, a live
+  logical restriction, a managed stopped PID, or lead probation first becomes active
+- One final `recovered` after all those conditions stay clear for the admission stability window,
+  or `ended-with-loss` when a stopped worker disappeared before confirmed resume
 - Exact-terminal PID pause/resume safety notices
 - A previously fresh federation peer going stale, and its later recovery
 - A rate-limited protection-unavailable warning while hooks fail open without a live daemon

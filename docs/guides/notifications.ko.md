@@ -243,9 +243,9 @@ memory-supervisor notifications test
 
 ## 이 알림이 오는 순간들
 
-- `HOLD|DRAIN`, 논리 제한, managed 정지 PID, lead probation 중 하나가 처음 활성화될 때
-  `pressure-episode / active` 1회
-- 위 조건이 모두 해소될 때 `recovered`, 확인된 재개 전에 정지 worker가 사라졌다면
+- `DRAIN`, 실제로 작업을 미룬 `HOLD`, 논리 제한, managed 정지 PID, lead probation 중 하나가 처음
+  활성화될 때 `pressure-episode / active` 1회
+- 위 조건이 admission 안정 확인 시간 동안 모두 해소된 상태로 유지될 때 `recovered`, 확인된 재개 전에 정지 worker가 사라졌다면
   `ended-with-loss` 1회
 - exact-PID pause/resume의 정확한 터미널 안전 고지
 - fresh하던 federation peer의 stale 전환과 이후 회복

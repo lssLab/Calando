@@ -599,6 +599,7 @@ pub struct Supervisor {
     leak_action: String,
     cli_hard_cap_mb: Option<f64>,
     logical_recovery_since: Option<f64>,
+    pressure_episode_clear_since: Option<f64>,
     codex_app_snapshot: CodexAppSnapshot,
     last_codex_app_hook_sync_at: f64,
 }
@@ -692,6 +693,7 @@ impl Supervisor {
             leak_action,
             cli_hard_cap_mb,
             logical_recovery_since: None,
+            pressure_episode_clear_since: None,
             codex_app_snapshot: CodexAppSnapshot::default(),
             last_codex_app_hook_sync_at: 0.0,
         }
@@ -1212,13 +1214,37 @@ impl Supervisor {
             .values()
             .filter(|agent| agent.active && agent.state != LogicalState::Active)
             .count();
-        let active = assessment.action >= Action::Hold
-            || restricted > 0
+        let containment = restricted > 0
             || self.ledger.codex_app.control.surface_gate
             || self.ledger.codex_app.control.pending_physical.is_some()
             || !self.ledger.stopped.is_empty()
             || self.ledger.probation.is_some();
         let previous_started_at = self.ledger.pressure_episode_started_at;
+        // HOLD alone restricts nothing until a gate actually defers work, so it opens an episode
+        // only then; once open, HOLD keeps it open so per-session deferrals stay one alert pair.
+        let hold_deferred_work = assessment.action == Action::Hold
+            && self.ledger.notification_events.iter().any(|event| {
+                event.get("cause").and_then(Value::as_str) == Some("memory-admission")
+                    && event
+                        .get("created_at")
+                        .and_then(Value::as_f64)
+                        .is_some_and(|created_at| created_at >= self.ledger.action_since)
+            });
+        let engaged = assessment.action == Action::Drain
+            || containment
+            || hold_deferred_work
+            || (previous_started_at.is_some() && assessment.action >= Action::Hold);
+        // Recovery is announced only after the clear state survives the same stability window that
+        // reopens admission; a boundary oscillation inside it stays one episode, not an alert pair.
+        let active = if engaged {
+            self.pressure_episode_clear_since = None;
+            true
+        } else if previous_started_at.is_some() {
+            let clear_since = *self.pressure_episode_clear_since.get_or_insert(now);
+            now - clear_since < self.hysteresis_s.max(assessment.reaction_s * 2.0)
+        } else {
+            false
+        };
         if active == previous_started_at.is_some() {
             return;
         }
@@ -1316,6 +1342,7 @@ impl Supervisor {
             ]),
         );
         self.ledger.pressure_episode_started_at = active.then_some(now);
+        self.pressure_episode_clear_since = None;
         self.ledger.pending_pressure_episode_event = Some(event);
         if !self.persist_runtime(now) {
             self.ledger.pressure_episode_started_at = previous_started_at;
@@ -7280,26 +7307,66 @@ mod tests {
     }
 
     #[test]
-    fn hold_is_one_pressure_episode_with_one_start_and_one_recovery() {
+    fn hold_opens_an_episode_only_after_a_gate_defers_work() {
         let root = temp_directory("hold-episode-notify");
         let mut supervisor = Supervisor::new(Some(root.join("runtime.json")));
         let hold = assessment_for(Action::Hold, "unknown");
+        supervisor.ledger.action_since = 10.0;
 
+        // A HOLD that defers nothing (no connected agent asked to start work) stays silent.
         supervisor.update_pressure_episode(&hold, 10.0);
-        supervisor.update_pressure_episode(&hold, 11.0);
-        assert_eq!(supervisor.ledger.pressure_episode_started_at, Some(10.0));
+        assert!(supervisor.ledger.pressure_episode_started_at.is_none());
+
+        supervisor.ledger.notification_events.push(json!({
+            "event_id":"deferred-1", "cause":"memory-admission", "created_at":11.0
+        }));
+        supervisor.update_pressure_episode(&hold, 12.0);
+        assert_eq!(supervisor.ledger.pressure_episode_started_at, Some(12.0));
 
         let observe = assessment_for(Action::Observe, "unknown");
         supervisor.update_pressure_episode(&observe, 20.0);
+        // A HOLD that returns inside the stability window continues the same episode.
+        supervisor.update_pressure_episode(&hold, 22.0);
+        supervisor.update_pressure_episode(&observe, 23.0);
+        assert_eq!(supervisor.ledger.pressure_episode_started_at, Some(12.0));
+        supervisor.update_pressure_episode(&observe, 1023.0);
         assert!(supervisor.ledger.pressure_episode_started_at.is_none());
 
         let notified: Vec<_> = pending_events(&root, &BTreeSet::new())
             .into_iter()
             .filter(event_should_notify)
             .collect();
+        let mut statuses: Vec<_> = notified
+            .iter()
+            .map(|event| event["status"].clone())
+            .collect();
+        statuses.sort_by_key(|status| status.to_string());
+        assert_eq!(statuses, [json!("active"), json!("recovered")]);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn drain_oscillation_inside_the_stability_window_is_one_alert_pair() {
+        let root = temp_directory("drain-oscillation-one-pair");
+        let mut supervisor = Supervisor::new(Some(root.join("runtime.json")));
+        let drain = assessment_for(Action::Drain, "external");
+        let allow = assessment_for(Action::Allow, "external");
+        let window = supervisor.hysteresis_s.max(allow.reaction_s * 2.0);
+        // The 2026-10-28 Windows trace: DRAIN and ALLOW alternated every few seconds near 500 MiB.
+        let mut now = 10.0;
+        for _ in 0..6 {
+            supervisor.update_pressure_episode(&drain, now);
+            supervisor.update_pressure_episode(&allow, now + 1.0);
+            now += (window / 2.0).max(1.0);
+        }
+        supervisor.update_pressure_episode(&allow, now);
+        supervisor.update_pressure_episode(&allow, now + window + 1.0);
+
+        let notified: Vec<_> = pending_events(&root, &BTreeSet::new())
+            .into_iter()
+            .filter(event_should_notify)
+            .collect();
         assert_eq!(notified.len(), 2);
-        assert_eq!(notified[0]["status"], "active");
-        assert_eq!(notified[1]["status"], "recovered");
         fs::remove_dir_all(root).unwrap();
     }
 
@@ -7550,6 +7617,7 @@ mod tests {
             supervisor.update_pressure_episode(&safe, now);
             now += 1.0;
         }
+        supervisor.update_pressure_episode(&safe, now + 1000.0);
 
         let events = pending_events(&root, &BTreeSet::new());
         let components: Vec<_> = events
@@ -8690,6 +8758,8 @@ mod tests {
 
         supervisor.ledger.probation = None;
         supervisor.update_pressure_episode(&safe, 31.0);
+        assert_eq!(supervisor.ledger.pressure_episode_started_at, Some(10.0));
+        supervisor.update_pressure_episode(&safe, 1031.0);
         assert!(supervisor.ledger.pressure_episode_started_at.is_none());
         let events = pending_events(&root, &BTreeSet::new());
         assert_eq!(
@@ -8719,6 +8789,7 @@ mod tests {
         supervisor.reconcile_stopped(20.0, &BTreeMap::new());
         let safe = assessment_for(Action::Allow, "unknown");
         supervisor.update_pressure_episode(&safe, 21.0);
+        supervisor.update_pressure_episode(&safe, 1021.0);
 
         let events = pending_events(&root, &BTreeSet::new());
         let notified: Vec<_> = events

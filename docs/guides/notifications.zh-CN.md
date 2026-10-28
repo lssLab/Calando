@@ -213,8 +213,8 @@ memory-supervisor notifications test
 <a id="when-notifications-are-sent"></a>
 ## 发送通知时
 
-- 当任何 `HOLD|DRAIN`、实时逻辑限制、托管停止 PID 或 lead 试用期首次激活时，一个 `pressure-episode / active`
-- 所有这些条件清除后，最后一个`recovered`，或者当停止的worker在确认恢复之前消失时`ended-with-loss`
+- 当 `DRAIN`、实际推迟了工作的 `HOLD`、实时逻辑限制、托管停止 PID 或 lead 试用期首次激活时，一个 `pressure-episode / active`
+- 所有这些条件在 admission 稳定确认时间内保持清除后，最后一个`recovered`，或者当停止的worker在确认恢复之前消失时`ended-with-loss`
 - 精确终端PID暂停/恢复安全注意事项
 - 之前新鲜的federation对等点变得陈旧，以及后来的恢复
 - 当 hooks 在没有实时 daemon 的情况下打开失败时，出现速率限制保护不可用的警告
