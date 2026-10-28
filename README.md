@@ -144,6 +144,26 @@ progress.
 > [installation, connection, and supported environments](docs/guides/setup.md#windows-powershell-terminal)
 > for Windows 11 re-enable conditions and environments that remain blocked.
 
+### Install with git clone
+
+You can also clone the repository and run the installer from that folder. This path needs Git.
+If Rust is installed, the installer builds from the cloned source; otherwise it downloads the
+latest release binary.
+
+```bash
+git clone https://github.com/lssLab/Calando.git
+cd Calando
+./install.sh
+```
+
+```powershell
+git clone https://github.com/lssLab/Calando.git
+cd Calando
+powershell -ExecutionPolicy Bypass -File .\install.ps1
+```
+
+To update, run `git pull` in the same folder and run the installer again.
+
 ### Connect the programs you use
 
 | Program | What to do after installation |
@@ -277,6 +297,13 @@ privacy-boundary checks, and Linux, Windows, and macOS platform validation. See
 
 See the [security policy](.github/SECURITY.md) to report a vulnerability and
 [contributing guide](.github/CONTRIBUTING.md) to work on the project.
+
+Release binaries are built by GitHub Actions from the tagged commit and carry a build provenance
+attestation. To check a downloaded file:
+
+```bash
+gh attestation verify memory-supervisor-x86_64-unknown-linux-gnu --repo lssLab/Calando
+```
 
 ## License
 

@@ -128,6 +128,25 @@ irm https://raw.githubusercontent.com/lssLab/Calando/main/bootstrap.ps1 | iex
 > Windows 11에서 다시 켤 수 있는 조건과 설치가 차단되는 환경은
 > [설치·연결·지원 환경](docs/guides/setup.ko.md#windows-powershell-터미널)에 정리되어 있습니다.
 
+### git clone으로 설치
+
+레포를 clone한 뒤 그 폴더에서 설치기를 실행해도 됩니다. 이 방법은 Git이 필요합니다. Rust가 설치돼
+있으면 clone한 소스로 빌드하고, 없으면 최신 릴리스 바이너리를 내려받습니다.
+
+```bash
+git clone https://github.com/lssLab/Calando.git
+cd Calando
+./install.sh
+```
+
+```powershell
+git clone https://github.com/lssLab/Calando.git
+cd Calando
+powershell -ExecutionPolicy Bypass -File .\install.ps1
+```
+
+업데이트할 때는 같은 폴더에서 `git pull`을 실행한 뒤 설치기를 다시 실행합니다.
+
 ### 사용하는 프로그램 연결
 
 | 사용 대상 | 설치 직후 할 일 |
@@ -254,6 +273,13 @@ Rust 자동 테스트, 설치·업데이트·제거 E2E, Hook 계약, 저장소 
 
 보안 문제는 [보안 정책](.github/SECURITY.ko.md), 개발 참여 방법은
 [기여 안내](.github/CONTRIBUTING.ko.md)를 참고하십시오.
+
+릴리스 바이너리는 태그된 커밋에서 GitHub Actions가 빌드하며 빌드 출처 증명(attestation)이 붙어
+있습니다. 내려받은 파일은 다음 명령으로 확인할 수 있습니다.
+
+```bash
+gh attestation verify memory-supervisor-x86_64-unknown-linux-gnu --repo lssLab/Calando
+```
 
 ## 라이선스
 

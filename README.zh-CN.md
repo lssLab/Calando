@@ -95,6 +95,24 @@ irm https://raw.githubusercontent.com/lssLab/Calando/main/bootstrap.ps1 | iex
 > [安装、连接与支持环境](docs/guides/setup.zh-CN.md#windows-powershell-terminal)。
 
 <a id="connect-the-programs-you-use"></a>
+### 使用 git clone 安装
+
+也可以克隆仓库，然后在该文件夹中运行安装程序。此方式需要 Git。如果已安装 Rust，安装程序会从克隆的源码构建；否则会下载最新发布的二进制文件。
+
+```bash
+git clone https://github.com/lssLab/Calando.git
+cd Calando
+./install.sh
+```
+
+```powershell
+git clone https://github.com/lssLab/Calando.git
+cd Calando
+powershell -ExecutionPolicy Bypass -File .\install.ps1
+```
+
+更新时，在同一文件夹中运行 `git pull`，然后重新运行安装程序。
+
 ### 连接您使用的程序
 
 | 程序 | 安装后做什么 |
@@ -212,6 +230,12 @@ Calando不会挡在Claude Code或Codex前面代替它们执行命令。每个操
 请参阅[安全策略](.github/SECURITY.zh-CN.md)来报告漏洞，并参阅[贡献指南](.github/CONTRIBUTING.zh-CN.md)来处理该项目。
 
 <a id="license"></a>
+发布的二进制文件由 GitHub Actions 从带标签的提交构建，并附带构建来源证明（attestation）。可以用以下命令检查下载的文件：
+
+```bash
+gh attestation verify memory-supervisor-x86_64-unknown-linux-gnu --repo lssLab/Calando
+```
+
 ## 许可证
 
 [MIT](LICENSE)

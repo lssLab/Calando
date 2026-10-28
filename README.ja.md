@@ -95,6 +95,25 @@ irm https://raw.githubusercontent.com/lssLab/Calando/main/bootstrap.ps1 | iex
 > [インストール・接続・対応環境](docs/guides/setup.ja.md#windows-powershell-terminal)を参照してください。
 
 <a id="connect-the-programs-you-use"></a>
+### git clone でインストール
+
+リポジトリを clone し、そのフォルダーからインストーラーを実行することもできます。この方法には Git が必要です。
+Rust がインストールされていれば clone したソースからビルドし、なければ最新リリースのバイナリをダウンロードします。
+
+```bash
+git clone https://github.com/lssLab/Calando.git
+cd Calando
+./install.sh
+```
+
+```powershell
+git clone https://github.com/lssLab/Calando.git
+cd Calando
+powershell -ExecutionPolicy Bypass -File .\install.ps1
+```
+
+更新するときは、同じフォルダーで `git pull` を実行してからインストーラーを再実行します。
+
 ### 使用するプログラムを接続する
 
 | プログラム | インストール後にやるべきこと |
@@ -212,6 +231,13 @@ CalandoはClaude CodeやCodexの前に入り込み、代わりにコマンドを
 脆弱性を報告するには [セキュリティ ポリシー](.github/SECURITY.ja.md) を参照し、プロジェクトに取り組むには [貢献ガイド](.github/CONTRIBUTING.ja.md) を参照してください。
 
 <a id="license"></a>
+リリースバイナリは、タグ付きコミットから GitHub Actions がビルドし、ビルド来歴の証明（attestation）が付いています。
+ダウンロードしたファイルは次のコマンドで確認できます。
+
+```bash
+gh attestation verify memory-supervisor-x86_64-unknown-linux-gnu --repo lssLab/Calando
+```
+
 ## ライセンス
 
 [MIT](LICENSE)
