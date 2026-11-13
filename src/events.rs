@@ -246,6 +246,19 @@ pub fn concise_message(event: &Value) -> String {
         .get("pid")
         .and_then(Value::as_u64)
         .filter(|pid| *pid > 1);
+    // Told only to the lead's own session: which process is growing, and what follows.
+    if event_type == "leak-suspect" && text(event, "role") == Some("lead") {
+        return format!(
+            "This session's own process ({}, PID {}) is growing: {} GB, +{:.0} MB/s.\n\
+             If memory runs low, Calando pauses this session; the user can resume it.",
+            text(event, "name").unwrap_or("CLI"),
+            pid.unwrap_or_default(),
+            number(event, "anon_mb")
+                .map(gb)
+                .unwrap_or_else(|| "?".to_owned()),
+            number(event, "slope_mb_s").unwrap_or_default()
+        );
+    }
     let role = text(event, "role").unwrap_or("process");
     let count = |key: &str| event.get(key).and_then(Value::as_u64).unwrap_or_default();
     let stored_title = text(event, "message")
@@ -266,10 +279,6 @@ pub fn concise_message(event: &Value) -> String {
         .unwrap_or_else(|| role.to_owned());
 
     let (headline, action): (String, String) = match (event_type, status) {
-        ("leak-suspect", _) if role == "lead" => (
-            "This session's own process is growing".to_owned(),
-            "If memory runs low, Calando pauses this session; the user can resume it.".to_owned(),
-        ),
         ("pressure-episode", "active") => (
             "Memory protection on".to_owned(),
             "New heavy work is on hold. Running work continues.".to_owned(),
@@ -341,16 +350,6 @@ pub fn concise_message(event: &Value) -> String {
     }
     if count("paused") > 0 {
         lines.push(format!("Paused processes: {}", count("paused")));
-    }
-    if event_type == "leak-suspect"
-        && let (Some(memory), Some(slope)) = (number(event, "anon_mb"), number(event, "slope_mb_s"))
-    {
-        lines.push(format!(
-            "Process: {} (PID {}) · {} GB, +{slope:.0} MB/s",
-            text(event, "name").unwrap_or("CLI"),
-            pid.unwrap_or_default(),
-            gb(memory)
-        ));
     }
     if event_type == "pressure-episode"
         && let Some(seconds) = number(event, "duration_s")
@@ -660,10 +659,8 @@ mod tests {
         });
         assert_eq!(
             concise_message(&event),
-            "This session's own process is growing\n\
-             WSL (Ubuntu-LAPTOP-1)\n\
-             Process: claude (PID 4242) · 5.8 GB, +3 MB/s\n\
-             Action: If memory runs low, Calando pauses this session; the user can resume it."
+            "This session's own process (claude, PID 4242) is growing: 5.8 GB, +3 MB/s.\n\
+             If memory runs low, Calando pauses this session; the user can resume it."
         );
         assert!(event_should_notify(&event));
         assert!(!event_should_push(&event));
