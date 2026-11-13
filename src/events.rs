@@ -300,17 +300,34 @@ pub fn concise_message(event: &Value) -> String {
         _ => (stored_title, "Run `calando status` for details.".to_owned()),
     };
 
-    let mut lines = vec![headline, environment(event)];
+    let environment = environment(event);
+    let os = environment
+        .split(" (")
+        .next()
+        .unwrap_or("This machine")
+        .to_owned();
+    let mut lines = vec![headline, environment];
+    // Each OS gets its own line: Windows counts the whole WSL VM as used, but memory WSL holds
+    // and does not use is still free for work inside WSL.
     if let (Some(free), Some(capacity)) =
         (number(event, "headroom_mb"), number(event, "capacity_mb"))
     {
-        lines.push(format!("Free: {} of {} GB", gb(free), gb(capacity)));
-    }
-    if let Some(held) = number(event, "vm_held_mb") {
-        let used = number(event, "guest_used_mb")
-            .map(|used| format!(", uses {} GB", gb(used)))
+        let vm = number(event, "vm_held_mb")
+            .map(|held| format!(" (WSL VM holds {} GB of it)", gb(held)))
             .unwrap_or_default();
-        lines.push(format!("WSL VM: holds {} GB{used}", gb(held)));
+        lines.push(format!(
+            "{os} free: {} of {} GB{vm}",
+            gb(free),
+            gb(capacity)
+        ));
+    }
+    if let (Some(held), Some(used)) = (number(event, "vm_held_mb"), number(event, "guest_used_mb"))
+    {
+        lines.push(format!(
+            "WSL free: {} of {} GB",
+            gb((held - used).max(0.0)),
+            gb(held)
+        ));
     }
     if count("restricted") > 0 {
         lines.push(format!("Restricted agents: {}", count("restricted")));
@@ -590,8 +607,8 @@ mod tests {
             concise_message(&event),
             "Memory protection on\n\
              Windows (LAPTOP-1)\n\
-             Free: 1.5 of 15.7 GB\n\
-             WSL VM: holds 9.6 GB, uses 3.2 GB\n\
+             Windows free: 1.5 of 15.7 GB (WSL VM holds 9.6 GB of it)\n\
+             WSL free: 6.4 of 9.6 GB\n\
              Action: New heavy work is on hold. Running work continues."
         );
         let recovered = json!({
@@ -603,7 +620,7 @@ mod tests {
             concise_message(&recovered),
             "Memory protection off\n\
              WSL (Ubuntu-LAPTOP-1)\n\
-             Free: 8.0 of 9.7 GB\n\
+             WSL free: 8.0 of 9.7 GB\n\
              Paused processes: 1\n\
              Duration: 33 s\n\
              Action: None. Normal operation resumed."
