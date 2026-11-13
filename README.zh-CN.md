@@ -185,16 +185,28 @@ Calando不会挡在Claude Code或Codex前面代替它们执行命令。每个操
 <a id="common-commands"></a>
 ## 常用命令
 
+在终端中（整个环境）：
+
 | 目的 | 命令 |
 | --- | --- |
-| 当前内存和保护状态 | `memory-status` |
-| 每个互联环境 | `memory-status --all` |
-| Claude Code 和 Codex 挂钩连接 | `memory-status --connections` |
-| 更新程序并重新连接集成 | `memory-supervisor update` |
-| 在此环境下关闭或打开保护 | `memory-supervisor off` / `memory-supervisor on` |
-| 显示通知路线 | `memory-supervisor notifications show` |
+| 内存与保护状态、已连接的 CLI、所有环境 | `calando status` |
+| 关闭或开启此环境的保护 | `calando off` / `calando on` |
+| 继续已暂停的会话（方向键选择，`a` 全部） | `calando resume` |
+| 通过 Telegram 接收通知 | `calando telegram` |
+| 高级：此环境所有代理的内存上限 | `calando cap <GB>` |
+| 立即更新（默认自动） | `calando update` |
+| 所有命令 | `calando help` |
 
-请参阅[操作、通知和恢复](docs/guides/operations.zh-CN.md)，了解暂停工作处理、自动恢复、手动恢复、可选内存硬上限配置以及 Discord 和 Telegram 通知设置。
+在 Claude Code 会话内（Codex 用 `$calando`）——只作用于该会话，不会发送给模型：
+
+| 目的 | 命令 |
+| --- | --- |
+| Calando 对此会话看到的状态 | `/calando status` |
+| 关闭或开启此会话的保护 | `/calando off` / `/calando on` |
+| 高级：此会话的内存上限 | `/calando cap <GB>` |
+| 所有会话命令 | `/calando help` |
+
+详情请参阅[操作、通知和恢复](docs/guides/operations.zh-CN.md)。
 
 <a id="supported-environments-and-safety-boundary"></a>
 ## 支持的环境和安全边界

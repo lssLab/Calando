@@ -226,17 +226,28 @@ Windows·WSL2·macOS·Linux·VM·격리 컨테이너에는 각각 감시 프로�
 
 ## 자주 쓰는 명령
 
+터미널에서(환경 전체):
+
 | 목적 | 명령 |
 | --- | --- |
-| 현재 메모리와 보호 상태 | `memory-status` |
-| 연결된 모든 환경의 상태 | `memory-status --all` |
-| Claude Code·Codex Hook 연결 확인 | `memory-status --connections` |
-| 프로그램과 연결을 최신 버전으로 갱신 | `memory-supervisor update` |
-| 현재 환경의 보호 기능 끄기·켜기 | `memory-supervisor off` / `memory-supervisor on` |
-| 알림 경로 확인 | `memory-supervisor notifications show` |
+| 메모리·보호 상태, 연결된 CLI, 모든 환경 | `calando status` |
+| 현재 환경의 보호 기능 끄기·켜기 | `calando off` / `calando on` |
+| 일시정지된 세션 이어 가기(화살표로 선택, `a` 전체) | `calando resume` |
+| 알림을 텔레그램으로 받기 | `calando telegram` |
+| 고급: 이 환경의 모든 에이전트 메모리 상한 | `calando cap <GB>` |
+| 지금 업데이트(기본은 자동) | `calando update` |
+| 전체 명령 | `calando help` |
 
-일시정지된 작업의 확인·자동 복구·수동 재개, 선택형 메모리 하드캡 설정, Discord·Telegram 알림 설정은
-[운영·알림·복구](docs/guides/operations.ko.md)에 있습니다.
+Claude Code 세션 안에서(Codex는 `$calando`) — 그 세션에만 적용되고 모델에는 전달되지 않습니다.
+
+| 목적 | 명령 |
+| --- | --- |
+| 이 세션에서 Calando가 보는 상태 | `/calando status` |
+| 이 세션의 보호 끄기·켜기 | `/calando off` / `/calando on` |
+| 고급: 이 세션의 메모리 상한 | `/calando cap <GB>` |
+| 세션 명령 전체 | `/calando help` |
+
+자세한 내용은 [운영·알림·복구](docs/guides/operations.ko.md)에 있습니다.
 
 ## 지원 환경과 안전 경계
 

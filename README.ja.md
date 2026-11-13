@@ -186,16 +186,28 @@ CalandoはClaude CodeやCodexの前に入り込み、代わりにコマンドを
 <a id="common-commands"></a>
 ## 共通コマンド
 
-| 目的 | 指示 |
-| --- | --- |
-| 現在のメモリと保護状態 | `memory-status` |
-| あらゆる接続環境 | `memory-status --all` |
-| Claude Code および Codex フック接続 | `memory-status --connections` |
-| プログラムを更新し、統合を再接続します | `memory-supervisor update` |
-| この環境で保護をオフまたはオンにする | `memory-supervisor off` / `memory-supervisor on` |
-| 通知ルートを表示する | `memory-supervisor notifications show` |
+ターミナルで（環境全体）:
 
-一時停止された作業の処理、自動回復、手動再開、オプションのメモリのハードキャップ構成、Discord と Telegram の通知設定については、[操作、通知、および回復](docs/guides/operations.ja.md)を参照してください。
+| 目的 | コマンド |
+| --- | --- |
+| メモリ・保護状態、接続中の CLI、すべての環境 | `calando status` |
+| この環境の保護をオフ・オン | `calando off` / `calando on` |
+| 一時停止したセッションを再開（矢印キーで選択、`a` で全部） | `calando resume` |
+| 通知を Telegram で受け取る | `calando telegram` |
+| 上級: この環境の全エージェントのメモリ上限 | `calando cap <GB>` |
+| 今すぐ更新（既定は自動） | `calando update` |
+| すべてのコマンド | `calando help` |
+
+Claude Code のセッション内で（Codex は `$calando`）— そのセッションだけに適用され、モデルには送られません:
+
+| 目的 | コマンド |
+| --- | --- |
+| このセッションで Calando が見ている状態 | `/calando status` |
+| このセッションの保護をオフ・オン | `/calando off` / `/calando on` |
+| 上級: このセッションのメモリ上限 | `/calando cap <GB>` |
+| セッションコマンド一覧 | `/calando help` |
+
+詳細は[操作、通知、および回復](docs/guides/operations.ja.md)を参照してください。
 
 <a id="supported-environments-and-safety-boundary"></a>
 ## サポートされる環境と安全境界

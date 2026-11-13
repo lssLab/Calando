@@ -248,18 +248,28 @@ The complete stage policy, both architectures, and federation topology are prese
 
 ## Common commands
 
+In a terminal (the whole environment):
+
 | Purpose | Command |
 | --- | --- |
-| Current memory and protection state | `memory-status` |
-| Every connected environment | `memory-status --all` |
-| Claude Code and Codex hook connections | `memory-status --connections` |
-| Update the program and reconnect integrations | `memory-supervisor update` |
-| Turn protection off or on in this environment | `memory-supervisor off` / `memory-supervisor on` |
-| Show notification routes | `memory-supervisor notifications show` |
+| Memory, protection, connected CLIs, and every environment | `calando status` |
+| Turn protection off or on in this environment | `calando off` / `calando on` |
+| Continue a paused session (arrow keys to pick, `a` all) | `calando resume` |
+| Send notices to Telegram | `calando telegram` |
+| Advanced: hard memory cap for all agents here | `calando cap <GB>` |
+| Update now (automatic by default) | `calando update` |
+| All commands | `calando help` |
 
-See [operations, notifications, and recovery](docs/guides/operations.md) for paused-work handling,
-automatic recovery, manual resume, optional memory hard-cap configuration, and Discord and Telegram
-notification setup.
+Inside a Claude Code session (Codex: `$calando`), only that session; never sent to the model:
+
+| Purpose | Command |
+| --- | --- |
+| What Calando sees for this session | `/calando status` |
+| Turn protection off or on for this session | `/calando off` / `/calando on` |
+| Advanced: hard memory cap for this session | `/calando cap <GB>` |
+| All session commands | `/calando help` |
+
+See [operations, notifications, and recovery](docs/guides/operations.md) for details.
 
 ## Supported environments and safety boundary
 
