@@ -4,7 +4,10 @@ use std::env;
 use std::ffi::OsString;
 use std::fs;
 use std::io;
-use std::io::{IsTerminal, Write};
+#[cfg(windows)]
+use std::io::IsTerminal;
+#[cfg(unix)]
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::thread;
@@ -611,37 +614,24 @@ fn resume(arguments: &[String]) -> i32 {
         },
         None => {
             println!("Paused sessions:");
-            for (index, (pid, label)) in paused.iter().enumerate() {
-                println!("  {}) PID {pid}  {label}", index + 1);
-            }
-            if !io::stdin().is_terminal() {
-                println!("Run `calando resume <pid>` or `calando resume all`.");
-                return 1;
-            }
-            print!(
-                "Resume which? [1-{}, a = all, Enter = cancel]: ",
-                paused.len()
-            );
-            let _ = io::stdout().flush();
-            let mut line = String::new();
-            let _ = io::stdin().read_line(&mut line);
-            match line.trim().to_lowercase().as_str() {
-                "" => {
+            let labels: Vec<String> = paused
+                .iter()
+                .map(|(pid, label)| format!("PID {pid}  {label}"))
+                .collect();
+            match crate::picker::pick(&labels) {
+                Some(crate::picker::Pick::One(index)) => vec![paused[index].0],
+                Some(crate::picker::Pick::All) => paused.iter().map(|(pid, _)| *pid).collect(),
+                Some(crate::picker::Pick::Cancel) => {
                     println!("Cancelled; nothing changed.");
                     return 0;
                 }
-                "a" | "all" => paused.iter().map(|(pid, _)| *pid).collect(),
-                number => match number
-                    .parse::<usize>()
-                    .ok()
-                    .and_then(|n| paused.get(n.checked_sub(1)?))
-                {
-                    Some((pid, _)) => vec![*pid],
-                    None => {
-                        eprintln!("Not on the list; nothing changed.");
-                        return 2;
+                None => {
+                    for (index, label) in labels.iter().enumerate() {
+                        println!("  {}) {label}", index + 1);
                     }
-                },
+                    println!("Run `calando resume <pid>` or `calando resume all`.");
+                    return 1;
+                }
             }
         }
     };

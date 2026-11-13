@@ -10,6 +10,7 @@ pub mod events;
 pub mod gate;
 pub mod integration;
 pub mod notify;
+pub mod picker;
 pub mod platform;
 pub mod policy;
 pub mod runtime;
