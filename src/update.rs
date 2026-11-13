@@ -166,7 +166,7 @@ fn spawn_detached_update() -> bool {
 
 /// Only the installed binary updates itself or repairs hooks; a test or development build must
 /// neither reach the network nor rewire the user's CLIs.
-fn running_installed_binary() -> bool {
+pub(crate) fn running_installed_binary() -> bool {
     let installed = fs::read_to_string(crate::config::pointer_dir().join("binary"))
         .ok()
         .and_then(|path| fs::canonicalize(path.trim()).ok());

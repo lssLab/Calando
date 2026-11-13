@@ -385,8 +385,33 @@ fn refresh_release_installation(root: &Path) -> io::Result<std::process::ExitSta
     result
 }
 
+fn maintain_from_copy(action: &str, root: &Path) -> i32 {
+    let copy = env::temp_dir().join(format!("calando-maintain-{}.exe", std::process::id()));
+    let status = env::current_exe()
+        .and_then(|exe| fs::copy(exe, &copy))
+        .and_then(|_| {
+            Command::new(&copy)
+                .args(["maintain", action])
+                .env("MEMORY_SUPERVISOR_INSTALL_ROOT", root)
+                .status()
+        });
+    let _ = fs::remove_file(&copy);
+    match status {
+        Ok(status) => status.code().unwrap_or(1),
+        Err(error) => {
+            eprintln!("maintenance failed: {error}");
+            1
+        }
+    }
+}
+
 fn maintain_installation(action: &str) -> i32 {
     let root = installation_root();
+    // Windows cannot replace or delete a running executable, so the installed binary hands
+    // the work to a temporary copy of itself.
+    if cfg!(windows) && crate::update::running_installed_binary() {
+        return maintain_from_copy(action, &root);
+    }
     let mut update_status = 0;
     if action == "update" {
         println!("Updating Calando source...");
@@ -1259,6 +1284,8 @@ pub fn run_control(arguments: &[OsString]) -> i32 {
             }
         }
         "update" | "uninstall" if arguments.len() == 1 => maintain_installation(action),
+        // Internal: the temporary copy a Windows maintenance run hands its work to.
+        "maintain" if arguments.len() == 2 => maintain_installation(&arguments[1]),
         _ => {
             eprintln!("unknown command: {}\n\n{}", arguments.join(" "), usage());
             2

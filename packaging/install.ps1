@@ -229,9 +229,10 @@ function Get-OwnedRuntimeProcesses {
     ) | Select-Object -Unique
     return @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
         $Process = $_
+        # Only the service: `calando update` itself and hook calls also run this binary.
         ($Process.ExecutablePath -and [string]::Equals(
             [string]$Process.ExecutablePath, $InstalledBinary, [StringComparison]::OrdinalIgnoreCase
-        )) -or ($Process.CommandLine -and @($OldScripts | Where-Object {
+        ) -and $Process.CommandLine -match '\sdaemon(\s|$)') -or ($Process.CommandLine -and @($OldScripts | Where-Object {
             $Process.CommandLine.IndexOf($_, [StringComparison]::OrdinalIgnoreCase) -ge 0
         }).Count -gt 0)
     })
@@ -265,7 +266,9 @@ function Restore-PreviousRuntime {
         }
     }
     Restore-PythonRollback
-    if ($HadState -and (Test-Path -LiteralPath (Join-Path $Temporary "previous-state.json"))) {
+    # StateDir is unset when activation failed before it was resolved; then nothing was moved.
+    if (-not $StateDir) {
+    } elseif ($HadState -and (Test-Path -LiteralPath (Join-Path $Temporary "previous-state.json"))) {
         Copy-Item -Force -LiteralPath (Join-Path $Temporary "previous-state.json") `
             -Destination (Join-Path $StateDir "state.json")
     } else {
@@ -345,6 +348,14 @@ try {
 
     $NewBinary = Join-Path $RuntimeDir (".calando.new." + $PID + ".exe")
     Copy-Item -Force -LiteralPath $Candidate -Destination $NewBinary
+    # A running executable cannot be overwritten but can be renamed, so a hook or the updater
+    # still running the old binary does not block the switch.
+    Get-ChildItem -LiteralPath $RuntimeDir -Filter ".calando.old.*.exe" -ErrorAction SilentlyContinue |
+        Remove-Item -Force -ErrorAction SilentlyContinue
+    if (Test-Path -LiteralPath $InstalledBinary -PathType Leaf) {
+        Move-Item -Force -LiteralPath $InstalledBinary `
+            -Destination (Join-Path $RuntimeDir (".calando.old." + $PID + ".exe"))
+    }
     Move-Item -Force -LiteralPath $NewBinary -Destination $InstalledBinary
     $BinaryReplaced = $true
 

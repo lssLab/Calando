@@ -61,9 +61,10 @@ where
         Some("gate") => Ok(Command::Gate(rest)),
         Some("status") => Ok(Command::Status(rest)),
         Some("control") => Ok(Command::Control(rest)),
-        Some("on" | "off" | "resume" | "telegram" | "cap" | "lock" | "update" | "uninstall") => {
-            Ok(Command::Control(remaining))
-        }
+        Some(
+            "on" | "off" | "resume" | "telegram" | "cap" | "lock" | "update" | "uninstall"
+            | "maintain",
+        ) => Ok(Command::Control(remaining)),
         Some("notify") => Ok(Command::Notify(rest)),
         Some("integration") => Ok(Command::Integration(rest)),
         Some("app-resume-guard") => Ok(Command::AppResumeGuard(rest)),
