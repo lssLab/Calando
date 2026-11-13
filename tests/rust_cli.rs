@@ -6,7 +6,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::process::{Command, Output, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 static NEXT_SANDBOX: AtomicU64 = AtomicU64::new(0);
 
@@ -104,6 +104,7 @@ impl Drop for Sandbox {
     }
 }
 
+#[cfg(unix)]
 fn stdout(output: &Output) -> String {
     String::from_utf8_lossy(&output.stdout).into_owned()
 }
@@ -204,15 +205,17 @@ fn status_gate_and_notification_routes_work_through_the_real_binary() {
             .all(|event| { event["type"] == "spawn-denial" && event["importance"] == "detail" })
     );
 
-    let routes = sandbox.run(&["control", "notifications", "routes", "none"], None);
-    assert!(routes.status.success(), "{}", stderr(&routes));
-    let show = sandbox.run(&["control", "notifications", "show"], None);
-    assert!(show.status.success(), "{}", stderr(&show));
-    assert!(stdout(&show).contains("routes: hook,terminal"));
+    fs::write(
+        &sandbox.notifications,
+        "MEMORY_SUPERVISOR_TELEGRAM_BOT_TOKEN=1:secret\nMEMORY_SUPERVISOR_TELEGRAM_CHAT_ID=7\n",
+    )
+    .unwrap();
+    let off = sandbox.run(&["telegram", "off"], None);
+    assert!(off.status.success(), "{}", stderr(&off));
     assert!(
-        fs::read_to_string(&sandbox.notifications)
+        !fs::read_to_string(&sandbox.notifications)
             .unwrap()
-            .contains("MEMORY_SUPERVISOR_NOTIFICATION_CHANNELS=none")
+            .contains("secret")
     );
 }
 
@@ -254,44 +257,41 @@ fn connection_status_reports_attention_without_failing_a_healthy_core() {
 }
 
 #[test]
-fn notification_setup_rejects_empty_ids_before_prompting_for_a_secret() {
-    let sandbox = Sandbox::new("empty-notification-ids");
+fn telegram_setup_rejects_bad_chat_ids_before_prompting_for_a_secret() {
+    let sandbox = Sandbox::new("telegram-ids");
     for arguments in [
-        &["control", "notifications", "discord-channel", ""][..],
-        &["control", "notifications", "discord-dm", ""][..],
-        &["control", "notifications", "telegram", "-"][..],
+        &["telegram", "-"][..],
+        &["telegram", "x1"][..],
+        &["telegram", "1", "2"][..],
     ] {
         let output = sandbox.run(arguments, None);
         assert_eq!(output.status.code(), Some(2), "{}", stderr(&output));
     }
-    let webhook = sandbox.run(
-        &["control", "notifications", "discord-webhook"],
-        Some("https://discord.com/api/webhooks/\n"),
-    );
-    assert_eq!(webhook.status.code(), Some(1), "{}", stderr(&webhook));
     assert!(!sandbox.notifications.exists());
-
-    fs::write(
-        &sandbox.notifications,
-        "MEMORY_SUPERVISOR_NOTIFICATION_CHANNELS=discord\n",
-    )
-    .unwrap();
-    let test = sandbox.run(&["control", "notifications", "test"], None);
-    assert_eq!(test.status.code(), Some(1), "{}", stderr(&test));
-    assert!(stdout(&test).contains("discord: not configured"));
 }
 
+#[cfg(unix)]
 #[test]
-fn control_request_and_acknowledgement_complete_over_the_real_filesystem() {
-    let sandbox = Sandbox::new("control");
+fn off_resumes_every_paused_process_before_turning_off() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let sandbox = Sandbox::new("off-release");
+    let runtime = sandbox.state.join("runtime.json");
+    fs::write(&runtime, br#"{"stopped":{"4242":"4242:start"}}"#).unwrap();
+    let install_root = sandbox.root.join("install-root");
+    fs::create_dir(&install_root).unwrap();
+    let marker = sandbox.root.join("power-runs");
+    let power = install_root.join("power.sh");
     fs::write(
-        sandbox.state.join("state.json"),
-        br#"{"stopped_pids":[4242]}"#,
+        &power,
+        "#!/bin/sh\nprintf '%s\\n' \"$1\" >> \"$POWER_MARKER\"\n",
     )
     .unwrap();
+    fs::write(install_root.join("install.sh"), "").unwrap();
+    fs::set_permissions(&power, fs::Permissions::from_mode(0o755)).unwrap();
     let control = sandbox.state.join("control");
     let responder = std::thread::spawn(move || {
-        for _ in 0..200 {
+        for _ in 0..400 {
             if let Ok(entries) = fs::read_dir(&control) {
                 for entry in entries.flatten() {
                     let path = entry.path();
@@ -300,6 +300,7 @@ fn control_request_and_acknowledgement_complete_over_the_real_filesystem() {
                     }
                     let request: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
                     let request_id = request["request_id"].as_str().unwrap();
+                    fs::write(&runtime, br#"{"stopped":{}}"#).unwrap();
                     fs::create_dir_all(control.join("results")).unwrap();
                     fs::write(
                         control.join("results").join(format!("{request_id}.json")),
@@ -309,22 +310,28 @@ fn control_request_and_acknowledgement_complete_over_the_real_filesystem() {
                     return request;
                 }
             }
-            std::thread::sleep(Duration::from_millis(10));
+            std::thread::sleep(std::time::Duration::from_millis(10));
         }
-        panic!("control request was not created")
+        panic!("off did not ask the daemon to resume the paused process")
     });
-    let output = sandbox.run(&["control", "resume", "--timeout", "2"], None);
-    assert!(output.status.success(), "{}", stderr(&output));
-    assert!(stdout(&output).contains("completed: resume pid=4242"));
+    let mut off = sandbox.command();
+    let off = off
+        .env("MEMORY_SUPERVISOR_INSTALL_ROOT", &install_root)
+        .env("POWER_MARKER", &marker)
+        .arg("off")
+        .output()
+        .unwrap();
     let request = responder.join().unwrap();
     assert_eq!(request["action"], "resume");
     assert_eq!(request["pid"], 4242);
+    assert!(off.status.success(), "{}", stderr(&off));
+    assert_eq!(fs::read_to_string(&marker).unwrap(), "off\n");
 }
 
 #[cfg(unix)]
 #[test]
-fn hard_cap_and_secret_notification_setup_are_atomic_and_private() {
-    use std::os::unix::fs::{MetadataExt, PermissionsExt};
+fn cap_requires_confirmation_and_keeps_other_settings() {
+    use std::os::unix::fs::PermissionsExt;
 
     let sandbox = Sandbox::new("settings");
     let install_root = sandbox.root.join("install-root");
@@ -338,12 +345,30 @@ fn hard_cap_and_secret_notification_setup_are_atomic_and_private() {
     .unwrap();
     fs::set_permissions(&installer, fs::Permissions::from_mode(0o755)).unwrap();
     fs::write(&sandbox.config, br#"{"KEEP":"yes"}"#).unwrap();
+    fs::write(
+        sandbox.state.join("state.json"),
+        serde_json::to_vec(&json!({"ts":now_epoch(), "memory_capacity_mb":8192})).unwrap(),
+    )
+    .unwrap();
+    let unconfirmed = sandbox.run(&["cap", "2"], Some("\n"));
+    assert_eq!(
+        unconfirmed.status.code(),
+        Some(1),
+        "{}",
+        stderr(&unconfirmed)
+    );
+    assert!(stderr(&unconfirmed).contains("Not recommended for normal use"));
+    assert!(
+        !fs::read_to_string(&sandbox.config)
+            .unwrap()
+            .contains("HARD_CAP")
+    );
 
     let mut set = sandbox.command();
     let set = set
         .env("MEMORY_SUPERVISOR_INSTALL_ROOT", &install_root)
         .env("INSTALL_MARKER", &marker)
-        .args(["control", "hard-cap", "set", "2048"])
+        .args(["cap", "2", "--yes"])
         .output()
         .unwrap();
     assert!(set.status.success(), "{}", stderr(&set));
@@ -355,7 +380,7 @@ fn hard_cap_and_secret_notification_setup_are_atomic_and_private() {
     let off = off
         .env("MEMORY_SUPERVISOR_INSTALL_ROOT", &install_root)
         .env("INSTALL_MARKER", &marker)
-        .args(["control", "hard-cap", "off"])
+        .args(["cap", "off"])
         .output()
         .unwrap();
     assert!(off.status.success(), "{}", stderr(&off));
@@ -364,27 +389,9 @@ fn hard_cap_and_secret_notification_setup_are_atomic_and_private() {
     assert!(config.get("MEMORY_SUPERVISOR_CLI_HARD_CAP_MB").is_none());
     assert_eq!(fs::read_to_string(&marker).unwrap(), "apply\napply\n");
 
-    let webhook = "https://discord.com/api/webhooks/1/private-token";
-    let setup = sandbox.run(
-        &["control", "notifications", "discord-webhook"],
-        Some(&format!("{webhook}\n")),
-    );
-    assert!(setup.status.success(), "{}", stderr(&setup));
-    assert!(!stdout(&setup).contains("private-token"));
-    assert!(!stderr(&setup).contains("private-token"));
-    let source = fs::read_to_string(&sandbox.notifications).unwrap();
-    assert!(source.contains(webhook));
-    assert_eq!(
-        fs::metadata(&sandbox.notifications).unwrap().mode() & 0o777,
-        0o600
-    );
-    let show = sandbox.run(&["control", "notifications", "show"], None);
-    assert!(stdout(&show).contains("webhook configured (secret hidden)"));
-    assert!(!stdout(&show).contains("private-token"));
-
     let invalid = Sandbox::new("invalid-settings");
     fs::write(&invalid.config, "not-json").unwrap();
-    let refused = invalid.run(&["control", "hard-cap", "set", "1024"], None);
+    let refused = invalid.run(&["cap", "off"], None);
     assert!(!refused.status.success());
     assert!(stderr(&refused).contains("nothing changed"));
     assert_eq!(fs::read_to_string(&invalid.config).unwrap(), "not-json");

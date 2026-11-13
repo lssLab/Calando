@@ -9,14 +9,7 @@ use crate::storage::write_atomic_text;
 
 pub const PREFIX: &str = "MEMORY_SUPERVISOR_";
 pub(crate) const PRETOOL_HOLD_DEFAULT_S: f64 = 12.0;
-pub const MANDATORY_NOTIFICATION_CHANNELS: [&str; 2] = ["hook", "terminal"];
-pub const CONFIGURABLE_NOTIFICATION_CHANNELS: [&str; 3] = ["os", "discord", "telegram"];
-pub const NOTIFICATION_CONFIG_KEYS: [&str; 7] = [
-    "MEMORY_SUPERVISOR_NOTIFICATION_CHANNELS",
-    "MEMORY_SUPERVISOR_DISCORD_WEBHOOK",
-    "MEMORY_SUPERVISOR_DISCORD_BOT_TOKEN",
-    "MEMORY_SUPERVISOR_DISCORD_CHANNEL_ID",
-    "MEMORY_SUPERVISOR_DISCORD_OWNER_USER_ID",
+pub const NOTIFICATION_CONFIG_KEYS: [&str; 2] = [
     "MEMORY_SUPERVISOR_TELEGRAM_BOT_TOKEN",
     "MEMORY_SUPERVISOR_TELEGRAM_CHAT_ID",
 ];
@@ -258,7 +251,7 @@ pub fn load_notification_config(path: &Path) -> BTreeMap<String, String> {
 
 pub fn save_notification_config(path: &Path, values: &BTreeMap<String, String>) -> io::Result<()> {
     let mut lines = vec![
-        "# Managed by `memory-supervisor notifications`; do not commit this file.".to_owned(),
+        "# Managed by `calando telegram`; do not commit this file.".to_owned(),
         "# Changes are read automatically at the next notification event.".to_owned(),
     ];
     for key in NOTIFICATION_CONFIG_KEYS {
@@ -279,29 +272,18 @@ pub fn save_notification_config(path: &Path, values: &BTreeMap<String, String>) 
     write_atomic_text(path, &(lines.join("\n") + "\n"), 0o600)
 }
 
+/// Telegram is the only push route; it is on exactly when a bot token and chat are saved.
+pub fn telegram_enabled(values: &BTreeMap<String, String>) -> bool {
+    NOTIFICATION_CONFIG_KEYS
+        .iter()
+        .all(|key| values.get(*key).is_some_and(|value| !value.is_empty()))
+}
+
+/// Routes that receive notices: the hook and terminal always, plus Telegram when set up.
 pub fn notification_channels(values: &BTreeMap<String, String>) -> BTreeSet<String> {
-    let raw = values
-        .get("MEMORY_SUPERVISOR_NOTIFICATION_CHANNELS")
-        .map(String::as_str)
-        .unwrap_or("all")
-        .trim()
-        .to_lowercase();
-    let mut channels: BTreeSet<String> = MANDATORY_NOTIFICATION_CHANNELS
-        .into_iter()
-        .map(str::to_owned)
-        .collect();
-    if raw.is_empty() || raw == "all" {
-        channels.extend(
-            CONFIGURABLE_NOTIFICATION_CHANNELS
-                .into_iter()
-                .map(str::to_owned),
-        );
-    } else if raw != "none" && raw != "off" {
-        for item in raw.split(',').map(str::trim) {
-            if CONFIGURABLE_NOTIFICATION_CHANNELS.contains(&item) {
-                channels.insert(item.to_owned());
-            }
-        }
+    let mut channels = BTreeSet::from(["hook".to_owned(), "terminal".to_owned()]);
+    if telegram_enabled(values) {
+        channels.insert("telegram".to_owned());
     }
     channels
 }
@@ -363,14 +345,19 @@ mod tests {
         // SAFETY: the test serializes all environment mutation with ENV_LOCK.
         unsafe { env::remove_var("MEMORY_SUPERVISOR_TICK_S") };
 
-        let values = BTreeMap::from([(
-            "MEMORY_SUPERVISOR_NOTIFICATION_CHANNELS".to_owned(),
-            "none".to_owned(),
+        let mut values = BTreeMap::from([(
+            "MEMORY_SUPERVISOR_TELEGRAM_CHAT_ID".to_owned(),
+            "-1".to_owned(),
         )]);
         assert_eq!(
             notification_channels(&values),
             BTreeSet::from(["hook".to_owned(), "terminal".to_owned()])
         );
+        values.insert(
+            "MEMORY_SUPERVISOR_TELEGRAM_BOT_TOKEN".to_owned(),
+            "1:token".to_owned(),
+        );
+        assert!(notification_channels(&values).contains("telegram"));
         fs::remove_dir_all(root).unwrap();
     }
 
@@ -410,8 +397,8 @@ mod tests {
         let notifications = root.join("notifications.conf");
         let values = BTreeMap::from([
             (
-                "MEMORY_SUPERVISOR_NOTIFICATION_CHANNELS".to_owned(),
-                "os,telegram".to_owned(),
+                "MEMORY_SUPERVISOR_TELEGRAM_BOT_TOKEN".to_owned(),
+                "1:token".to_owned(),
             ),
             (
                 "MEMORY_SUPERVISOR_TELEGRAM_CHAT_ID".to_owned(),

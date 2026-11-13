@@ -687,6 +687,14 @@ fn incident_context(incident: &Value) -> String {
     } else {
         String::new()
     };
+    if text("status", "") == "gone" && text("role", "") == "lead" {
+        return format!(
+            "• This session's previous process ({} PID {pid}) was paused for {} and then ended. \
+             Subagent results from that run may be missing; check before relying on them.",
+            text("name", "process"),
+            text("reason", "memory pressure"),
+        );
+    }
     format!(
         "• Process {}: {} PID {} ({}) · {}{}",
         text("status", "recorded"),
@@ -1743,6 +1751,26 @@ mod tests {
                 .contains("Process resumed: claude")
         );
         assert!(second.is_none());
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn a_resumed_session_learns_its_paused_lead_ended() {
+        let directory = temp_directory();
+        let state = json!({
+            "level":"GREEN",
+            "recent_incidents":[{
+                "id":"inc-lead","status":"gone","source":"wsl-host","pid":77,
+                "name":"claude","role":"lead","reason":"runaway-memory",
+                "updated_at":now_epoch(), "audience_sessions":["s-resumed"]
+            }]
+        });
+        let payload = json!({"source":"resume","session_id":"s-resumed"});
+        let context = consume_memory_notice(&directory, "claude", &payload, &state, true)
+            .unwrap()
+            .0;
+        assert!(context.contains("previous process (claude PID 77) was paused"));
+        assert!(consume_memory_notice(&directory, "claude", &payload, &state, true).is_none());
         fs::remove_dir_all(directory).unwrap();
     }
 

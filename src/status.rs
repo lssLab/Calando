@@ -22,6 +22,9 @@ use crate::platform::{
 };
 use crate::policy::Level;
 
+/// The one way back from a pause Calando will not undo by itself.
+pub const RESUME_GUIDANCE: &str = "close this terminal and reopen the session with your CLI's resume (`claude --resume`, `codex resume`), or run `calando off` to resume it in place";
+
 fn now_epoch() -> f64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -441,7 +444,6 @@ pub fn human(status: &Value) -> String {
                     .unwrap_or_else(|| "not currently calculable".to_owned())
             ));
             lines.push(format!("Recovery: {recovery}."));
-            lines.push(format!("Manual command: memory-supervisor resume {pid}"));
             lines.push(format!(
                 "Terminal delivery: {} ({})",
                 display(
@@ -458,11 +460,7 @@ pub fn human(status: &Value) -> String {
                 )
             ));
         }
-        if stopped.len() == 1 {
-            lines.push(
-                "Shortcut: memory-supervisor resume (selects the only paused PID)".to_owned(),
-            );
-        }
+        lines.push(format!("To continue now: {RESUME_GUIDANCE}."));
         lines.push(String::new());
     } else if probation.and_then(|value| value.get("status").and_then(Value::as_str))
         == Some("monitoring")
@@ -775,7 +773,7 @@ pub fn human(status: &Value) -> String {
             .trim_start_matches("[Memory Supervisor] ");
         lines.push(format!("Recent action notice: {title}"));
         if let Some(deliveries) = latest.get("deliveries").and_then(Value::as_object) {
-            let summary = ["hook", "terminal", "os", "discord", "telegram"]
+            let summary = ["hook", "terminal", "telegram"]
                 .into_iter()
                 .filter_map(|route| {
                     deliveries
@@ -1469,7 +1467,7 @@ mod tests {
         let first = output.lines().take(10).collect::<Vec<_>>().join("\n");
         assert!(first.contains("This is not a terminal crash"));
         assert!(first.contains("codex (lead), PID 42"));
-        assert!(first.contains("memory-supervisor resume 42"));
+        assert!(output.contains("calando off"));
     }
 
     #[test]
@@ -1710,17 +1708,14 @@ mod tests {
                 "type":"process-pause","status":"suspended","action":"paused",
                 "cause":"pressure-pause","created_at":now_epoch(),
                 "message":"legacy TTE=Some(4.0)s",
-                "deliveries":{"hook":"delivered","os":"failed"},
-                "delivery_details":{"os_route":"windows-balloon"}
+                "deliveries":{"hook":"delivered","telegram":"failed"}
             }]
         }));
-        assert!(output.contains("memory-supervisor resume 42"));
-        assert!(output.contains("memory-supervisor resume 43"));
-        assert!(!output.contains("selects the only paused PID"));
+        assert!(output.contains("PID 42") && output.contains("PID 43"));
+        assert!(output.contains("calando off"));
         assert!(output.contains("Recent action notice: PROCESS PAUSED"));
-        assert!(output.contains("Notice delivery: hook=delivered, os=failed"));
+        assert!(output.contains("Notice delivery: hook=delivered, telegram=failed"));
         assert!(!output.contains("Some("));
-        assert!(!output.contains("windows-balloon"));
 
         let probation = human(&json!({
             "running":true, "level":"GREEN", "admission_level":"ORANGE", "platform":"linux",

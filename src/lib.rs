@@ -57,10 +57,9 @@ where
         Some("gate") => Ok(Command::Gate(rest)),
         Some("status") => Ok(Command::Status(rest)),
         Some("control") => Ok(Command::Control(rest)),
-        Some(
-            "resume" | "terminate" | "kill" | "budget" | "hard-cap" | "notifications" | "update"
-            | "uninstall" | "on" | "off",
-        ) => Ok(Command::Control(remaining)),
+        Some("on" | "off" | "telegram" | "cap" | "update" | "uninstall") => {
+            Ok(Command::Control(remaining))
+        }
         Some("notify") => Ok(Command::Notify(rest)),
         Some("integration") => Ok(Command::Integration(rest)),
         Some("app-resume-guard") => Ok(Command::AppResumeGuard(rest)),
@@ -72,7 +71,7 @@ where
 }
 
 pub fn help() -> &'static str {
-    "Memory Supervisor\n\nUSAGE:\n  memory-supervisor <on|off|status|resume|terminate|kill|budget|hard-cap|notifications|update|uninstall> [arguments]\n  memory-supervisor <daemon|gate|notify|integration> [arguments]\n  memory-status [arguments]"
+    control::usage()
 }
 
 #[cfg(test)]
@@ -86,18 +85,10 @@ mod tests {
             Command::Status(vec![OsString::from("--json")])
         );
         assert_eq!(
-            resolve_command(["memory-supervisor", "resume", "42"].map(OsString::from)).unwrap(),
-            Command::Control(vec![OsString::from("resume"), OsString::from("42")])
+            resolve_command(["calando", "cap", "off"].map(OsString::from)).unwrap(),
+            Command::Control(vec![OsString::from("cap"), OsString::from("off")])
         );
-        assert_eq!(
-            resolve_command(["memory-supervisor", "control", "resume", "42"].map(OsString::from))
-                .unwrap(),
-            Command::Control(vec![OsString::from("resume"), OsString::from("42")])
-        );
-        assert_eq!(
-            resolve_command(["memory-supervisor", "hard-cap", "show"].map(OsString::from)).unwrap(),
-            Command::Control(vec![OsString::from("hard-cap"), OsString::from("show")])
-        );
+        assert!(resolve_command(["calando", "resume", "42"].map(OsString::from)).is_err());
         assert_eq!(
             resolve_command(["memory-supervisor", "off"].map(OsString::from)).unwrap(),
             Command::Control(vec![OsString::from("off")])

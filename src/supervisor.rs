@@ -363,6 +363,8 @@ fn incident_is_codex_app_physical(incident: &Value) -> bool {
             == Some("thread-confirmed-child")
 }
 
+const PUSH_TRANSPORTS: [&str; 1] = ["telegram"];
+
 fn extend_incident_audience(fields: &mut Map<String, Value>, incident: &Value) {
     if incident_is_codex_app_physical(incident) {
         fields.insert(
@@ -438,7 +440,7 @@ fn incident_notice(incident: &Value, phase: &str, transition_source: &str) -> St
             match recovery {
                 "lead-probation" => "After sustained machine recovery, the supervisor will attempt one guarded automatic resume and watch the same PID. Run `memory-status` from another terminal for the live decision.".to_owned(),
                 "automatic-pressure-recovery" => "The supervisor will resume one paused process at a time after sustained recovery. Run `memory-status` from another terminal for the live decision.".to_owned(),
-                _ => format!("Run `memory-status` from another terminal. Resume only after reviewing the cause: `memory-supervisor resume {pid}`."),
+                _ => format!("To continue: {}.", crate::status::RESUME_GUIDANCE),
             },
         ),
         "probation" => (
@@ -449,7 +451,7 @@ fn incident_notice(incident: &Value, phase: &str, transition_source: &str) -> St
         "probation_failed" => (
             "PROCESS PAUSED AGAIN",
             "The guarded resume relapsed, so the same PID was reversibly paused again.".to_owned(),
-            format!("Run `memory-status`, preserve any available work, and resume manually only if you accept another recurrence: `memory-supervisor resume {pid}`."),
+            format!("It grew again after one automatic resume. To continue: {}.", crate::status::RESUME_GUIDANCE),
         ),
         "pressure_resumed" | "recovery_confirmed" => (
             "PROCESS RESUMED",
@@ -1431,32 +1433,13 @@ impl Supervisor {
                 .entry("deliveries".to_owned())
                 .or_insert_with(|| json!({}));
             let current = current.as_object_mut().expect("deliveries object");
-            for transport in ["os", "discord", "telegram"] {
+            for transport in PUSH_TRANSPORTS {
                 if let Some(status) = deliveries.get(transport).and_then(Value::as_str)
                     && matches!(status, "delivered" | "failed" | "skipped" | "unavailable")
                     && current.get(transport).and_then(Value::as_str) != Some("delivered")
                 {
                     current.insert(transport.to_owned(), Value::String(status.to_owned()));
                 }
-            }
-            if let Some(details) = result.get("delivery_details").and_then(Value::as_object) {
-                object.insert(
-                    "delivery_details".to_owned(),
-                    Value::Object(Map::from_iter(details.iter().map(|(key, value)| {
-                        (
-                            key.chars().take(64).collect(),
-                            Value::String(
-                                value
-                                    .as_str()
-                                    .map(str::to_owned)
-                                    .unwrap_or_else(|| value.to_string())
-                                    .chars()
-                                    .take(256)
-                                    .collect(),
-                            ),
-                        )
-                    }))),
-                );
             }
             object.insert("delivered_at".to_owned(), json!(rounded(now, 3)));
             consumed_paths.push(path);
@@ -1487,8 +1470,6 @@ impl Supervisor {
                 json!({
                     "hook": if notify { "pending" } else { "skipped" },
                     "terminal": terminal_status,
-                    "os": if notify && channels.contains("os") { "pending" } else { "skipped" },
-                    "discord": if notify && channels.contains("discord") { "pending" } else { "skipped" },
                     "telegram": if notify && channels.contains("telegram") { "pending" } else { "skipped" },
                 }),
             );
@@ -1532,7 +1513,7 @@ impl Supervisor {
                 continue;
             }
             let mut expired = false;
-            for transport in ["os", "discord", "telegram"] {
+            for transport in PUSH_TRANSPORTS {
                 if deliveries.get(transport).and_then(Value::as_str) == Some("pending") {
                     deliveries.insert(transport.to_owned(), Value::String("failed".to_owned()));
                     expired = true;
@@ -1594,7 +1575,7 @@ impl Supervisor {
                 .get("deliveries")
                 .and_then(Value::as_object)
                 .is_some_and(|deliveries| {
-                    ["os", "discord", "telegram"].into_iter().any(|transport| {
+                    PUSH_TRANSPORTS.into_iter().any(|transport| {
                         deliveries.get(transport).and_then(Value::as_str) == Some("pending")
                     })
                 });
@@ -1620,7 +1601,7 @@ impl Supervisor {
                 if let Some(deliveries) =
                     object.get_mut("deliveries").and_then(Value::as_object_mut)
                 {
-                    for transport in ["os", "discord", "telegram"] {
+                    for transport in PUSH_TRANSPORTS {
                         if deliveries.get(transport).and_then(Value::as_str) == Some("pending") {
                             deliveries
                                 .insert(transport.to_owned(), Value::String("failed".to_owned()));
@@ -4705,6 +4686,20 @@ impl Supervisor {
                 || (growth >= 32
                     && growth_rate
                         >= (self.policy.value("MEMORY_SUPERVISOR_LEAK_SLOPE_MBS") * 0.25).max(4.0));
+            // Every App conversation shares the App Server, so a relapse there must not freeze
+            // the whole App again; per-thread limits and admission carry on instead.
+            if relapse && crate::codex_app::is_codex_app_server(&process) {
+                self.ledger.probation = None;
+                self.ledger.transition_incident(
+                    &probation.identity,
+                    "resumed",
+                    now,
+                    "probation-shared-host",
+                    Map::from_iter([("probation_attempted".to_owned(), Value::Bool(true))]),
+                );
+                let _ = self.persist_runtime(now);
+                return;
+            }
             if relapse {
                 if suspend_process(&self.platform, probation.pid).is_err() {
                     return;
@@ -5507,7 +5502,8 @@ impl Supervisor {
                 if self.runtime_error.is_some() {
                     return Err("runtime protection is degraded".to_owned());
                 }
-                if !matches!(action.as_str(), "resume" | "terminate" | "kill") {
+                // Only `calando off` submits control now, to release what it paused.
+                if action != "resume" {
                     return Err(format!("unsupported control action: {action}"));
                 }
                 let identity = self
@@ -6768,7 +6764,7 @@ mod tests {
     }
 
     fn notification_channels_for_test() -> BTreeSet<String> {
-        ["hook", "terminal", "os", "discord", "telegram"]
+        ["hook", "terminal", "telegram"]
             .into_iter()
             .map(str::to_owned)
             .collect()
@@ -8183,12 +8179,7 @@ mod tests {
                     result_path,
                     &json!({
                         "event_id": event_id,
-                        "deliveries": {
-                            "os": "delivered",
-                            "discord": "failed",
-                            "telegram": "skipped"
-                        },
-                        "delivery_details": {"os_route": "linux-desktop-user-bus"}
+                        "deliveries": {"telegram": "delivered"}
                     }),
                     0o600,
                     true,
@@ -8202,7 +8193,8 @@ mod tests {
                 .join(format!("{event_id}.json"))
                 .exists()
         );
-        crate::events::acknowledge_event(&root, &event_id, "os", "failed", "late-failure").unwrap();
+        crate::events::acknowledge_event(&root, &event_id, "telegram", "failed", "late-failure")
+            .unwrap();
         supervisor.drain_notification_events_with(
             now + 1.0,
             &notification_channels_for_test(),
@@ -8214,18 +8206,13 @@ mod tests {
             .iter()
             .find(|item| item.get("event_id").and_then(Value::as_str) == Some(&event_id))
             .unwrap();
-        assert_eq!(stored["deliveries"]["os"], "delivered");
-        assert_eq!(stored["deliveries"]["discord"], "failed");
-        assert_eq!(
-            stored["delivery_details"]["os_route"],
-            "linux-desktop-user-bus"
-        );
+        assert_eq!(stored["deliveries"]["telegram"], "delivered");
 
         supervisor.ledger.notification_events.push(json!({
             "event_id":"timeout",
             "created_at":now,
             "dispatch_started_at":now-31.0,
-            "deliveries":{"os":"pending","discord":"pending","telegram":"skipped"}
+            "deliveries":{"telegram":"pending"}
         }));
         supervisor.ledger.notification_events.push(json!({
             "event_id":"bad-time",
@@ -8243,7 +8230,7 @@ mod tests {
             .iter()
             .find(|item| item["event_id"] == "timeout")
             .unwrap();
-        assert_eq!(timeout["deliveries"]["os"], "failed");
+        assert_eq!(timeout["deliveries"]["telegram"], "failed");
         assert!(timeout.get("delivery_timeout_at").is_some());
         assert!(
             !supervisor

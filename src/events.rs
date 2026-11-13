@@ -45,7 +45,7 @@ const ALLOWED_FIELDS: [&str; 33] = [
     "audience_sessions",
     "surface",
 ];
-const TRANSPORTS: [&str; 5] = ["hook", "terminal", "os", "discord", "telegram"];
+const TRANSPORTS: [&str; 3] = ["hook", "terminal", "telegram"];
 const DELIVERY_STATES: [&str; 4] = ["delivered", "failed", "skipped", "unavailable"];
 
 fn text<'a>(event: &'a Value, key: &str) -> Option<&'a str> {
@@ -91,12 +91,8 @@ pub fn user_message(event: &Value) -> String {
         (
             "PROCESS PAUSED",
             "The exact PID and its in-memory session are preserved; this is not a crash.",
-            pid.map(|pid| {
-                format!(
-                    "Review `memory-status`; resume only after reviewing the cause with `memory-supervisor resume {pid}`."
-                )
-            })
-            .unwrap_or_else(|| "Review `memory-status` before resuming any process.".to_owned()),
+            pid.map(|_| format!("To continue now: {}.", crate::status::RESUME_GUIDANCE))
+                .unwrap_or_else(|| "Check `calando status`.".to_owned()),
         )
     } else if action == "resumed" || status == "resumed" {
         (
@@ -279,7 +275,10 @@ pub fn concise_message(event: &Value) -> String {
         ),
         ("lead-probation", "failed") => (
             "Guarded resume failed".to_owned(),
-            format!("{process} is paused again and needs your decision. Run memory-status."),
+            format!(
+                "{process} is paused again. To continue, {}.",
+                crate::status::RESUME_GUIDANCE
+            ),
         ),
         ("lead-probation", "resumed") => (
             "Recovery complete".to_owned(),

@@ -1,5 +1,5 @@
 use serde_json::{Map, Value, json};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::env;
 use std::ffi::OsString;
 use std::fs;
@@ -8,13 +8,12 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::mpsc;
 use std::thread;
-use std::time::{Duration, Instant};
 
 use crate::config::{
-    load_notification_config, notification_channels, notification_config_path, state_dir,
+    load_notification_config, notification_config_path, state_dir, telegram_enabled,
 };
 use crate::events::{acknowledge_event, concise_message, event_should_notify};
-use crate::storage::{ensure_private_dir, write_atomic_json, write_atomic_text};
+use crate::storage::write_atomic_json;
 
 const USER_AGENT: &str = "claude-codex-memory-supervisor";
 const TITLE: &str = "Calando";
@@ -23,156 +22,6 @@ const TITLE: &str = "Calando";
 fn titled(message: &str) -> (String, String) {
     let (headline, body) = message.split_once('\n').unwrap_or((message, ""));
     (format!("{TITLE} — {headline}"), body.to_owned())
-}
-
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct DesktopResult {
-    pub status: String,
-    pub route: String,
-}
-
-fn command_status(command: &mut Command, timeout: Duration) -> io::Result<bool> {
-    command
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null());
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        command.creation_flags(0x0800_0000);
-    }
-    let mut child = command.spawn()?;
-    let started = Instant::now();
-    loop {
-        if let Some(status) = child.try_wait()? {
-            return Ok(status.success());
-        }
-        if started.elapsed() >= timeout {
-            let _ = child.kill();
-            let _ = child.wait();
-            return Err(io::Error::new(
-                io::ErrorKind::TimedOut,
-                "notification command timed out",
-            ));
-        }
-        thread::sleep(Duration::from_millis(20));
-    }
-}
-
-#[cfg(any(windows, all(unix, not(target_os = "macos"))))]
-fn windows_notification(message: &str) -> String {
-    let script = concat!(
-        "Add-Type -AssemblyName System.Windows.Forms;",
-        "[System.Windows.Forms.NotifyIcon]$n=New-Object System.Windows.Forms.NotifyIcon;",
-        "$n.Icon=[System.Drawing.SystemIcons]::Warning;",
-        "$n.BalloonTipTitle=$env:MEMORY_SUPERVISOR_TITLE;",
-        "$n.BalloonTipText=$env:MEMORY_SUPERVISOR_MESSAGE;",
-        "$n.Visible=$true;$n.ShowBalloonTip(5000);Start-Sleep -Seconds 6;$n.Dispose()"
-    );
-    let (title, body) = titled(message);
-    // WSL passes only variables listed in WSLENV to a Windows process.
-    let wslenv = env::var("WSLENV").unwrap_or_default();
-    let wslenv = format!("{wslenv}:MEMORY_SUPERVISOR_TITLE:MEMORY_SUPERVISOR_MESSAGE");
-    for executable in ["powershell.exe", "powershell", "pwsh"] {
-        let mut command = Command::new(executable);
-        command
-            .args(["-NoProfile", "-NonInteractive", "-Command", script])
-            .env("MEMORY_SUPERVISOR_TITLE", &title)
-            .env(
-                "MEMORY_SUPERVISOR_MESSAGE",
-                if body.is_empty() { " " } else { &body },
-            )
-            .env("WSLENV", wslenv.trim_start_matches(':'));
-        match command_status(&mut command, Duration::from_secs(15)) {
-            Ok(success) => {
-                return if success { "delivered" } else { "failed" }.to_owned();
-            }
-            Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
-            Err(_) => return "failed".to_owned(),
-        }
-    }
-    "unavailable".to_owned()
-}
-
-#[cfg(all(unix, not(target_os = "macos")))]
-fn is_wsl() -> bool {
-    fs::read_to_string("/proc/version")
-        .is_ok_and(|value| value.to_lowercase().contains("microsoft"))
-}
-
-pub fn notify_desktop_result(message: &str) -> DesktopResult {
-    #[cfg(target_os = "macos")]
-    {
-        let (title, body) = titled(message);
-        let mut command = Command::new("osascript");
-        command.args([
-            "-e",
-            "on run argv",
-            "-e",
-            "display notification (item 1 of argv) with title (item 2 of argv)",
-            "-e",
-            "end run",
-            &body,
-            &title,
-        ]);
-        DesktopResult {
-            status: if command_status(&mut command, Duration::from_secs(8)).unwrap_or(false) {
-                "delivered"
-            } else {
-                "failed"
-            }
-            .to_owned(),
-            route: "macos-notification".to_owned(),
-        }
-    }
-    #[cfg(windows)]
-    {
-        DesktopResult {
-            status: windows_notification(message),
-            route: "windows-balloon".to_owned(),
-        }
-    }
-    #[cfg(all(unix, not(target_os = "macos")))]
-    {
-        let mut delivered = Vec::new();
-        let mut failed = Vec::new();
-        if is_wsl() {
-            let route = "wsl-host-windows-balloon";
-            match windows_notification(message).as_str() {
-                "delivered" => delivered.push(route),
-                "failed" => failed.push(route),
-                _ => {}
-            }
-        }
-        if env::var_os("DISPLAY").is_some() || env::var_os("WAYLAND_DISPLAY").is_some() {
-            let route = "linux-desktop-user-bus";
-            let mut command = Command::new("notify-send");
-            let (title, body) = titled(message);
-            command.args(["-u", "critical", &title, &body]);
-            match command_status(&mut command, Duration::from_secs(8)) {
-                Ok(true) => delivered.push(route),
-                Ok(_) => failed.push(route),
-                Err(error) if error.kind() == io::ErrorKind::NotFound => {}
-                Err(_) => failed.push(route),
-            }
-        }
-        if !delivered.is_empty() {
-            DesktopResult {
-                status: "delivered".to_owned(),
-                route: delivered.join(","),
-            }
-        } else if !failed.is_empty() {
-            DesktopResult {
-                status: "failed".to_owned(),
-                route: failed.join(","),
-            }
-        } else {
-            DesktopResult {
-                status: "unavailable".to_owned(),
-                route: "no-os-notification-route".to_owned(),
-            }
-        }
-    }
 }
 
 fn curl_quote(value: &str) -> String {
@@ -265,94 +114,6 @@ fn request_json(
         .map_err(|_| "connection failed or timed out".to_owned())?;
     let response = String::from_utf8_lossy(&output.stdout);
     parse_http_response(&response)
-}
-
-fn discord_cache_path() -> PathBuf {
-    notification_config_path()
-        .parent()
-        .unwrap_or_else(|| Path::new("."))
-        .join(".dm_channel")
-}
-
-pub fn notify_discord(message: &str, config: &BTreeMap<String, String>) -> String {
-    let webhook = config
-        .get("MEMORY_SUPERVISOR_DISCORD_WEBHOOK")
-        .map(String::as_str)
-        .unwrap_or_default();
-    let token = config
-        .get("MEMORY_SUPERVISOR_DISCORD_BOT_TOKEN")
-        .map(String::as_str)
-        .unwrap_or_default();
-    let mut channel = config
-        .get("MEMORY_SUPERVISOR_DISCORD_CHANNEL_ID")
-        .cloned()
-        .unwrap_or_default();
-    let owner = config
-        .get("MEMORY_SUPERVISOR_DISCORD_OWNER_USER_ID")
-        .map(String::as_str)
-        .unwrap_or_default();
-    let (url, authorization) = if !webhook.is_empty() {
-        if !webhook.starts_with("https://discord.com/api/webhooks/") {
-            return "failed".to_owned();
-        }
-        (webhook.to_owned(), None)
-    } else if !token.is_empty() && channel.is_empty() && !owner.is_empty() {
-        channel = fs::read_to_string(discord_cache_path())
-            .unwrap_or_default()
-            .trim()
-            .to_owned();
-        if channel.is_empty() {
-            let authorization = format!("Bot {token}");
-            let Ok((status, body)) = request_json(
-                "POST",
-                "https://discord.com/api/v10/users/@me/channels",
-                Some(&json!({"recipient_id": owner})),
-                Some(&authorization),
-                8,
-            ) else {
-                return "failed".to_owned();
-            };
-            if !(200..300).contains(&status) {
-                return "failed".to_owned();
-            }
-            channel = body
-                .get("id")
-                .and_then(Value::as_str)
-                .unwrap_or_default()
-                .to_owned();
-            if channel.is_empty()
-                || ensure_private_dir(
-                    discord_cache_path()
-                        .parent()
-                        .unwrap_or_else(|| Path::new(".")),
-                )
-                .is_err()
-                || write_atomic_text(&discord_cache_path(), &channel, 0o600).is_err()
-            {
-                return "failed".to_owned();
-            }
-        }
-        (
-            format!("https://discord.com/api/v10/channels/{channel}/messages"),
-            Some(format!("Bot {token}")),
-        )
-    } else if !token.is_empty() && !channel.is_empty() {
-        (
-            format!("https://discord.com/api/v10/channels/{channel}/messages"),
-            Some(format!("Bot {token}")),
-        )
-    } else {
-        return "skipped".to_owned();
-    };
-    let (title, body) = titled(message);
-    let payload = json!({
-        "content": format!("**{title}**\n{}", body.chars().take(1800).collect::<String>())
-    });
-    match request_json("POST", &url, Some(&payload), authorization.as_deref(), 8) {
-        Ok((status, _)) if (200..300).contains(&status) => "delivered",
-        _ => "failed",
-    }
-    .to_owned()
 }
 
 fn valid_telegram_token(token: &str) -> bool {
@@ -475,46 +236,13 @@ fn telegram_chats(body: &Value) -> Result<Vec<(String, String)>, String> {
 pub fn dispatch_event(
     event: &Value,
     config: &BTreeMap<String, String>,
-) -> (BTreeMap<String, String>, Map<String, Value>) {
-    let selected = notification_channels(config);
-    let should_notify = event_should_notify(event);
-    let message = concise_message(event);
-    let desktop = if !should_notify {
-        DesktopResult {
-            status: "skipped".to_owned(),
-            route: "action-only".to_owned(),
-        }
-    } else if selected.contains("os") {
-        notify_desktop_result(&message)
+) -> BTreeMap<String, String> {
+    let status = if event_should_notify(event) && telegram_enabled(config) {
+        notify_telegram(&concise_message(event), config)
     } else {
-        DesktopResult {
-            status: "skipped".to_owned(),
-            route: "disabled-by-config".to_owned(),
-        }
+        "skipped".to_owned()
     };
-    let deliveries = BTreeMap::from([
-        ("os".to_owned(), desktop.status.clone()),
-        (
-            "discord".to_owned(),
-            if should_notify && selected.contains("discord") {
-                notify_discord(&message, config)
-            } else {
-                "skipped".to_owned()
-            },
-        ),
-        (
-            "telegram".to_owned(),
-            if should_notify && selected.contains("telegram") {
-                notify_telegram(&message, config)
-            } else {
-                "skipped".to_owned()
-            },
-        ),
-    ]);
-    (
-        deliveries,
-        Map::from_iter([("os_route".to_owned(), Value::String(desktop.route))]),
-    )
+    BTreeMap::from([("telegram".to_owned(), status)])
 }
 
 fn spawn_reaped(command: &mut Command) -> io::Result<u32> {
@@ -632,7 +360,7 @@ pub fn run_notify(arguments: &[OsString]) -> i32 {
         }
     };
     let config = load_notification_config(&notification_config_path());
-    let (deliveries, details) = dispatch_event(&event, &config);
+    let deliveries = dispatch_event(&event, &config);
     if let Some(event_id) = event.get("event_id").and_then(Value::as_str) {
         for (transport, status) in &deliveries {
             let _ = acknowledge_event(&state_dir(), event_id, transport, status, "rust-dispatcher");
@@ -644,20 +372,12 @@ pub fn run_notify(arguments: &[OsString]) -> i32 {
             &json!({
                 "event_id": event.get("event_id"),
                 "deliveries": deliveries,
-                "delivery_details": details,
             }),
             0o600,
             true,
         );
     }
     0
-}
-
-pub fn configured_optional_routes(config: &BTreeMap<String, String>) -> BTreeSet<String> {
-    notification_channels(config)
-        .into_iter()
-        .filter(|route| matches!(route.as_str(), "os" | "discord" | "telegram"))
-        .collect()
 }
 
 #[cfg(test)]
@@ -733,13 +453,8 @@ mod tests {
             "importance": "detail",
             "message": "yellow to orange"
         });
-        let config = BTreeMap::from([(
-            "MEMORY_SUPERVISOR_NOTIFICATION_CHANNELS".to_owned(),
-            "none".to_owned(),
-        )]);
-        let (deliveries, details) = dispatch_event(&event, &config);
+        let deliveries = dispatch_event(&event, &BTreeMap::new());
         assert!(deliveries.values().all(|status| status == "skipped"));
-        assert_eq!(details["os_route"], "action-only");
     }
 
     #[cfg(target_os = "linux")]
@@ -752,7 +467,7 @@ mod tests {
             if !process.exists() {
                 return;
             }
-            thread::sleep(Duration::from_millis(10));
+            thread::sleep(std::time::Duration::from_millis(10));
         }
         panic!("notification child {pid} remained as an unreaped process");
     }

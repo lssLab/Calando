@@ -1,5 +1,5 @@
 use serde_json::{Value, json};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::env;
 use std::ffi::OsString;
 use std::fs;
@@ -14,70 +14,19 @@ use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use crate::config::{
-    CONFIGURABLE_NOTIFICATION_CHANNELS, Config, MANDATORY_NOTIFICATION_CHANNELS,
-    NOTIFICATION_CONFIG_KEYS, config_path, load_notification_config, load_notification_file,
-    notification_channels, notification_config_path, power_is_off, save_notification_config,
-    state_dir,
+    Config, NOTIFICATION_CONFIG_KEYS, config_path, load_notification_file,
+    notification_config_path, power_is_off, save_notification_config, state_dir,
 };
-use crate::notify::{
-    discover_telegram_chats, notify_desktop_result, notify_discord, notify_telegram,
-};
+use crate::notify::{discover_telegram_chats, notify_telegram};
 use crate::platform::federation_dir;
 use crate::storage::{ensure_private_dir, write_atomic_json};
 
 const HARD_CAP_KEY: &str = "MEMORY_SUPERVISOR_CLI_HARD_CAP_MB";
-const CHANNEL_ORDER: [&str; 5] = ["hook", "terminal", "os", "discord", "telegram"];
-const OPTIONAL_CHANNEL_ORDER: [&str; 3] = ["os", "discord", "telegram"];
-const DISCORD_KEYS: [&str; 4] = [
-    "MEMORY_SUPERVISOR_DISCORD_WEBHOOK",
-    "MEMORY_SUPERVISOR_DISCORD_BOT_TOKEN",
-    "MEMORY_SUPERVISOR_DISCORD_CHANNEL_ID",
-    "MEMORY_SUPERVISOR_DISCORD_OWNER_USER_ID",
-];
-const TELEGRAM_KEYS: [&str; 2] = [
-    "MEMORY_SUPERVISOR_TELEGRAM_BOT_TOKEN",
-    "MEMORY_SUPERVISOR_TELEGRAM_CHAT_ID",
-];
-
 fn now_nanos() -> u128 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_nanos()
-}
-
-fn positive_pid(value: &Value) -> Option<u32> {
-    value
-        .as_u64()
-        .and_then(|value| u32::try_from(value).ok())
-        .or_else(|| value.as_str()?.parse().ok())
-        .filter(|pid| *pid > 1)
-}
-
-fn resolve_single_stopped_pid(directory: &Path) -> Result<u32, String> {
-    let state = serde_json::from_slice::<Value>(
-        &fs::read(directory.join("state.json"))
-            .map_err(|error| format!("cannot read supervisor state: {error}"))?,
-    )
-    .map_err(|error| format!("cannot read supervisor state: {error}"))?;
-    let mut pids: BTreeSet<_> = state
-        .get("stopped_pids")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(positive_pid)
-        .collect();
-    match pids.len() {
-        0 => Err("no supervisor-managed paused process; no signal was sent".to_owned()),
-        1 => Ok(pids.pop_first().unwrap()),
-        _ => Err(format!(
-            "multiple paused processes; choose one: {}; no signal was sent",
-            pids.into_iter()
-                .map(|pid| format!("memory-supervisor resume {pid}"))
-                .collect::<Vec<_>>()
-                .join(", ")
-        )),
-    }
 }
 
 fn control_acknowledgement(result: &Value, action: &str, pid: u32) -> (i32, String, bool) {
@@ -162,79 +111,6 @@ fn submit_control(action: &str, pid: u32, timeout: f64) -> i32 {
     2
 }
 
-fn parse_routes(value: &str) -> Result<String, String> {
-    let normalized = value.trim().to_lowercase();
-    if normalized == "all" {
-        return Ok("all".to_owned());
-    }
-    if matches!(normalized.as_str(), "none" | "off") {
-        return Ok("none".to_owned());
-    }
-    let selected: BTreeSet<_> = normalized
-        .split(',')
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .collect();
-    let mandatory: Vec<_> = selected
-        .iter()
-        .filter(|route| MANDATORY_NOTIFICATION_CHANNELS.contains(route))
-        .copied()
-        .collect();
-    if !mandatory.is_empty() {
-        return Err(format!(
-            "{} is mandatory and cannot be configured; omit mandatory routes from the route list",
-            mandatory.join(",")
-        ));
-    }
-    let unknown: Vec<_> = selected
-        .iter()
-        .filter(|route| !CONFIGURABLE_NOTIFICATION_CHANNELS.contains(route))
-        .copied()
-        .collect();
-    if selected.is_empty() || !unknown.is_empty() {
-        return Err(format!(
-            "invalid route(s): {}; expected all, none, or a comma-separated subset of os,discord,telegram",
-            if unknown.is_empty() {
-                value.to_owned()
-            } else {
-                unknown.join(",")
-            }
-        ));
-    }
-    Ok(OPTIONAL_CHANNEL_ORDER
-        .into_iter()
-        .filter(|route| selected.contains(route))
-        .collect::<Vec<_>>()
-        .join(","))
-}
-
-fn set_route(values: &mut BTreeMap<String, String>, route: &str, enabled: bool) {
-    let mut selected: BTreeSet<_> = notification_channels(values)
-        .into_iter()
-        .filter(|channel| CONFIGURABLE_NOTIFICATION_CHANNELS.contains(&channel.as_str()))
-        .collect();
-    if enabled {
-        selected.insert(route.to_owned());
-    } else {
-        selected.remove(route);
-    }
-    let serialized = if selected.len() == CONFIGURABLE_NOTIFICATION_CHANNELS.len() {
-        "all".to_owned()
-    } else if selected.is_empty() {
-        "none".to_owned()
-    } else {
-        OPTIONAL_CHANNEL_ORDER
-            .into_iter()
-            .filter(|route| selected.contains(*route))
-            .collect::<Vec<_>>()
-            .join(",")
-    };
-    values.insert(
-        "MEMORY_SUPERVISOR_NOTIFICATION_CHANNELS".to_owned(),
-        serialized,
-    );
-}
-
 #[cfg(unix)]
 struct EchoGuard(bool);
 
@@ -308,330 +184,89 @@ fn validate_secret(value: &str) -> Result<String, String> {
     }
 }
 
-fn save_and_report(values: &BTreeMap<String, String>, route: Option<&str>) -> i32 {
+fn telegram(arguments: &[String]) -> i32 {
     let path = notification_config_path();
-    if let Err(error) = save_notification_config(&path, values) {
-        eprintln!("notification settings were not saved: {error}");
+    let mut values = load_notification_file(&path);
+    if arguments.first().map(String::as_str) == Some("off") {
+        for key in NOTIFICATION_CONFIG_KEYS {
+            values.remove(key);
+        }
+        if let Err(error) = save_notification_config(&path, &values) {
+            eprintln!("Telegram settings were not saved: {error}");
+            return 1;
+        }
+        println!("Telegram off. Check state any time with `calando status`.");
+        return 0;
+    }
+    let explicit_chat = arguments.first().cloned();
+    if arguments.len() > 1
+        || explicit_chat.as_ref().is_some_and(|id| {
+            let digits = id.strip_prefix('-').unwrap_or(id);
+            digits.is_empty() || !digits.bytes().all(|byte| byte.is_ascii_digit())
+        })
+    {
+        eprintln!("usage: calando telegram [CHAT_ID] | calando telegram off");
+        return 2;
+    }
+    let token = match prompt_secret("Telegram bot token from @BotFather") {
+        Ok(token) => token,
+        Err(error) => {
+            eprintln!("{error}; nothing was saved");
+            return 1;
+        }
+    };
+    let chat_id = match explicit_chat {
+        Some(chat_id) => chat_id,
+        None => {
+            let mut chats = match discover_telegram_chats(&token, 0) {
+                Ok(chats) => chats,
+                Err(error) => return telegram_discovery_error(&error),
+            };
+            if chats.is_empty() {
+                println!(
+                    "Open your bot in Telegram and send it any message. Waiting 120 seconds..."
+                );
+                chats = match discover_telegram_chats(&token, 120) {
+                    Ok(chats) => chats,
+                    Err(error) => return telegram_discovery_error(&error),
+                };
+            }
+            match chats.len() {
+                0 => {
+                    eprintln!("No message reached the bot within 120 seconds. Nothing was saved.");
+                    return 1;
+                }
+                1 => chats.pop().unwrap().0,
+                _ => {
+                    eprintln!("Several chats wrote to this bot:");
+                    for (id, label) in chats {
+                        eprintln!("  {id}  {label}");
+                    }
+                    eprintln!("Choose one: calando telegram <CHAT_ID>");
+                    return 1;
+                }
+            }
+        }
+    };
+    values.insert("MEMORY_SUPERVISOR_TELEGRAM_BOT_TOKEN".to_owned(), token);
+    values.insert("MEMORY_SUPERVISOR_TELEGRAM_CHAT_ID".to_owned(), chat_id);
+    if let Err(error) = save_notification_config(&path, &values) {
+        eprintln!("Telegram settings were not saved: {error}");
         return 1;
     }
-    println!("saved private notification settings: {}", path.display());
-    if let Some(route) = route {
-        println!("enabled route: {route}");
-    }
-    let overrides: Vec<_> = NOTIFICATION_CONFIG_KEYS
-        .into_iter()
-        .filter(|key| env::var_os(key).is_some())
-        .collect();
-    if !overrides.is_empty() {
-        eprintln!(
-            "warning: environment override(s) still take precedence: {}",
-            overrides.join(", ")
-        );
-    }
-    0
-}
-
-fn show_notifications() -> i32 {
-    let config = load_notification_config(&notification_config_path());
-    let selected = notification_channels(&config);
-    println!(
-        "notification settings: {}",
-        notification_config_path().display()
-    );
-    println!(
-        "routes: {}",
-        CHANNEL_ORDER
-            .into_iter()
-            .filter(|route| selected.contains(*route))
-            .collect::<Vec<_>>()
-            .join(",")
-    );
-    let discord = if config
-        .get("MEMORY_SUPERVISOR_DISCORD_WEBHOOK")
-        .is_some_and(|value| !value.is_empty())
+    match notify_telegram(
+        "Telegram connected\nYou will get a message when Calando acts.",
+        &values,
+    )
+    .as_str()
     {
-        "webhook configured (secret hidden)".to_owned()
-    } else if config
-        .get("MEMORY_SUPERVISOR_DISCORD_BOT_TOKEN")
-        .is_some_and(|value| !value.is_empty())
-        && config
-            .get("MEMORY_SUPERVISOR_DISCORD_CHANNEL_ID")
-            .is_some_and(|value| !value.is_empty())
-    {
-        format!(
-            "bot configured for channel {} (token hidden)",
-            config["MEMORY_SUPERVISOR_DISCORD_CHANNEL_ID"]
-        )
-    } else if config
-        .get("MEMORY_SUPERVISOR_DISCORD_BOT_TOKEN")
-        .is_some_and(|value| !value.is_empty())
-        && config
-            .get("MEMORY_SUPERVISOR_DISCORD_OWNER_USER_ID")
-            .is_some_and(|value| !value.is_empty())
-    {
-        format!(
-            "bot configured for DM user {} (token hidden)",
-            config["MEMORY_SUPERVISOR_DISCORD_OWNER_USER_ID"]
-        )
-    } else if DISCORD_KEYS.iter().any(|key| config.contains_key(*key)) {
-        "incomplete configuration".to_owned()
-    } else {
-        "not configured".to_owned()
-    };
-    let telegram = if config
-        .get("MEMORY_SUPERVISOR_TELEGRAM_BOT_TOKEN")
-        .is_some_and(|value| !value.is_empty())
-        && config
-            .get("MEMORY_SUPERVISOR_TELEGRAM_CHAT_ID")
-            .is_some_and(|value| !value.is_empty())
-    {
-        format!(
-            "bot configured for chat {} (token hidden)",
-            config["MEMORY_SUPERVISOR_TELEGRAM_CHAT_ID"]
-        )
-    } else if TELEGRAM_KEYS.iter().any(|key| config.contains_key(*key)) {
-        "incomplete configuration".to_owned()
-    } else {
-        "not configured".to_owned()
-    };
-    println!("discord: {discord}");
-    println!("telegram: {telegram}");
-    0
-}
-
-fn test_notifications() -> i32 {
-    let config = load_notification_config(&notification_config_path());
-    let selected = notification_channels(&config);
-    let message = "Notification connection test; no protective action occurred.";
-    let desktop = if selected.contains("os") {
-        notify_desktop_result(message)
-    } else {
-        crate::notify::DesktopResult {
-            status: "disabled".to_owned(),
-            route: "disabled-by-config".to_owned(),
-        }
-    };
-    let discord_configured = config
-        .get("MEMORY_SUPERVISOR_DISCORD_WEBHOOK")
-        .is_some_and(|value| !value.is_empty())
-        || (config
-            .get("MEMORY_SUPERVISOR_DISCORD_BOT_TOKEN")
-            .is_some_and(|value| !value.is_empty())
-            && [
-                "MEMORY_SUPERVISOR_DISCORD_CHANNEL_ID",
-                "MEMORY_SUPERVISOR_DISCORD_OWNER_USER_ID",
-            ]
-            .into_iter()
-            .any(|key| config.get(key).is_some_and(|value| !value.is_empty())));
-    let telegram_configured = TELEGRAM_KEYS
-        .into_iter()
-        .all(|key| config.get(key).is_some_and(|value| !value.is_empty()));
-    let discord = if !selected.contains("discord") {
-        "disabled".to_owned()
-    } else if !discord_configured {
-        "not configured".to_owned()
-    } else {
-        notify_discord(message, &config)
-    };
-    let telegram = if !selected.contains("telegram") {
-        "disabled".to_owned()
-    } else if !telegram_configured {
-        "not configured".to_owned()
-    } else {
-        notify_telegram(message, &config)
-    };
-    println!("os: {} ({})", desktop.status, desktop.route);
-    println!("discord: {discord}");
-    println!("telegram: {telegram}");
-    println!("hook/terminal: tested only by a real supervisor action");
-    if matches!(desktop.status.as_str(), "failed" | "unavailable")
-        || matches!(discord.as_str(), "failed" | "skipped" | "not configured")
-        || matches!(telegram.as_str(), "failed" | "skipped" | "not configured")
-    {
-        1
-    } else {
-        0
-    }
-}
-
-fn configure_notifications(arguments: &[String]) -> i32 {
-    let Some(action) = arguments.first().map(String::as_str) else {
-        eprintln!("notifications requires a subcommand\n{}", usage());
-        return 2;
-    };
-    if action == "show" {
-        return show_notifications();
-    }
-    if action == "test" {
-        return test_notifications();
-    }
-    let mut values = load_notification_file(&notification_config_path());
-    match action {
-        "routes" => {
-            let Some(raw) = arguments.get(1) else {
-                eprintln!("notifications routes requires ROUTES");
-                return 2;
-            };
-            let routes = match parse_routes(raw) {
-                Ok(routes) => routes,
-                Err(error) => {
-                    eprintln!("{error}");
-                    return 2;
-                }
-            };
-            values.insert("MEMORY_SUPERVISOR_NOTIFICATION_CHANNELS".to_owned(), routes);
-            save_and_report(&values, None)
-        }
-        "discord-webhook" => {
-            let secret = match prompt_secret("Discord webhook URL") {
-                Ok(secret) => secret,
-                Err(error) => {
-                    eprintln!("{error}; nothing was saved");
-                    return 1;
-                }
-            };
-            let valid = secret
-                .strip_prefix("https://discord.com/api/webhooks/")
-                .and_then(|suffix| suffix.split_once('/'))
-                .is_some_and(|(id, token)| {
-                    !id.is_empty()
-                        && id.bytes().all(|byte| byte.is_ascii_digit())
-                        && !token.is_empty()
-                });
-            if !valid {
-                eprintln!(
-                    "Expected an https://discord.com/api/webhooks/... URL; nothing was saved."
-                );
-                return 1;
-            }
-            for key in DISCORD_KEYS {
-                values.remove(key);
-            }
-            values.insert("MEMORY_SUPERVISOR_DISCORD_WEBHOOK".to_owned(), secret);
-            set_route(&mut values, "discord", true);
-            save_and_report(&values, Some("discord"))
-        }
-        "discord-channel" | "discord-dm" => {
-            let Some(id) = arguments
-                .get(1)
-                .filter(|id| !id.is_empty() && id.bytes().all(|byte| byte.is_ascii_digit()))
-            else {
-                eprintln!("Discord IDs contain digits only");
-                return 2;
-            };
-            let secret = match prompt_secret("Discord bot token") {
-                Ok(secret) => secret,
-                Err(error) => {
-                    eprintln!("{error}; nothing was saved");
-                    return 1;
-                }
-            };
-            for key in DISCORD_KEYS {
-                values.remove(key);
-            }
-            values.insert("MEMORY_SUPERVISOR_DISCORD_BOT_TOKEN".to_owned(), secret);
-            values.insert(
-                if action == "discord-channel" {
-                    "MEMORY_SUPERVISOR_DISCORD_CHANNEL_ID"
-                } else {
-                    "MEMORY_SUPERVISOR_DISCORD_OWNER_USER_ID"
-                }
-                .to_owned(),
-                id.clone(),
-            );
-            set_route(&mut values, "discord", true);
-            let _ = fs::remove_file(
-                notification_config_path()
-                    .parent()
-                    .unwrap_or_else(|| Path::new("."))
-                    .join(".dm_channel"),
-            );
-            save_and_report(&values, Some("discord"))
-        }
-        "telegram" => {
-            let explicit_chat = arguments.get(1).cloned();
-            if explicit_chat.as_ref().is_some_and(|id| {
-                let digits = id.strip_prefix('-').unwrap_or(id);
-                digits.is_empty() || !digits.bytes().all(|byte| byte.is_ascii_digit())
-            }) {
-                eprintln!("Telegram chat ID must be an integer");
-                return 2;
-            }
-            let token = match prompt_secret("Telegram bot token") {
-                Ok(token) => token,
-                Err(error) => {
-                    eprintln!("{error}; nothing was saved");
-                    return 1;
-                }
-            };
-            let chat_id = match explicit_chat {
-                Some(chat_id) => chat_id,
-                None => {
-                    let mut chats = match discover_telegram_chats(&token, 0) {
-                        Ok(chats) => chats,
-                        Err(error) => return telegram_discovery_error(&error),
-                    };
-                    if chats.is_empty() {
-                        println!(
-                            "No pending Telegram update yet. Open this exact bot and send /start or any new message now; waiting 120 seconds..."
-                        );
-                        chats = match discover_telegram_chats(&token, 120) {
-                            Ok(chats) => chats,
-                            Err(error) => return telegram_discovery_error(&error),
-                        };
-                    }
-                    if chats.is_empty() {
-                        eprintln!(
-                            "No Telegram update arrived within 120 seconds. Confirm that you opened the bot matching this token, then run the command again and send a fresh /start or message while it waits. Nothing was saved."
-                        );
-                        return 1;
-                    }
-                    if chats.len() > 1 {
-                        eprintln!("Multiple Telegram chats were found:");
-                        for (id, label) in chats {
-                            eprintln!("  {id}  {label}");
-                        }
-                        eprintln!("Run: memory-supervisor notifications telegram <CHAT_ID>");
-                        return 1;
-                    }
-                    let (id, label) = chats.pop().unwrap();
-                    println!("found Telegram chat: {id} ({label})");
-                    id
-                }
-            };
-            for key in TELEGRAM_KEYS {
-                values.remove(key);
-            }
-            values.insert("MEMORY_SUPERVISOR_TELEGRAM_BOT_TOKEN".to_owned(), token);
-            values.insert("MEMORY_SUPERVISOR_TELEGRAM_CHAT_ID".to_owned(), chat_id);
-            set_route(&mut values, "telegram", true);
-            save_and_report(&values, Some("telegram"))
-        }
-        "disable-discord" => {
-            for key in DISCORD_KEYS {
-                values.remove(key);
-            }
-            set_route(&mut values, "discord", false);
-            let result = save_and_report(&values, None);
-            if result == 0 {
-                println!("discord credentials removed and route disabled");
-            }
-            result
-        }
-        "disable-telegram" => {
-            for key in TELEGRAM_KEYS {
-                values.remove(key);
-            }
-            set_route(&mut values, "telegram", false);
-            let result = save_and_report(&values, None);
-            if result == 0 {
-                println!("telegram credentials removed and route disabled");
-            }
-            result
+        "delivered" => {
+            println!("Telegram on. A test message was sent.");
+            0
         }
         _ => {
-            eprintln!("unknown notifications subcommand: {action}\n{}", usage());
-            2
+            eprintln!("Saved, but the test message failed. Check the bot and chat, then retry.");
+            1
         }
     }
 }
@@ -832,7 +467,7 @@ fn power_off_preflight_at(path: &Path) -> Result<(), String> {
         .collect::<Result<_, _>>()?;
     if !stopped.is_empty() {
         return Err(format!(
-            "cannot turn off while Memory Supervisor owns paused PID(s): {}; resume or terminate them first",
+            "cannot turn off: paused PID(s) {} could not be resumed",
             stopped
                 .iter()
                 .map(u32::to_string)
@@ -899,7 +534,26 @@ fn run_power_script(script: &Path, action: &str) -> io::Result<std::process::Exi
     command.status()
 }
 
+/// `off` first lets the running daemon resume every process it paused, so turning
+/// Calando off never leaves work frozen.
+fn release_paused_processes() {
+    let stopped: Vec<u32> = read_json_file(&state_dir().join("runtime.json"))
+        .and_then(|runtime| {
+            runtime
+                .get("stopped")?
+                .as_object()
+                .map(|stopped| stopped.keys().filter_map(|pid| pid.parse().ok()).collect())
+        })
+        .unwrap_or_default();
+    for pid in stopped {
+        submit_control("resume", pid, 5.0);
+    }
+}
+
 fn maintain_power(action: &str) -> i32 {
+    if action == "off" {
+        release_paused_processes();
+    }
     if action == "off"
         && let Err(error) = power_off_preflight()
     {
@@ -1043,8 +697,21 @@ fn hard_cap(arguments: &[String]) -> i32 {
     status
 }
 
-fn usage() -> &'static str {
-    "Memory Supervisor control\n\nUSAGE:\n  memory-supervisor on\n  memory-supervisor off\n  memory-supervisor resume [PID] [--timeout SECONDS]\n  memory-supervisor terminate PID [--timeout SECONDS]\n  memory-supervisor kill PID [--timeout SECONDS]\n  memory-supervisor budget\n  memory-supervisor budget set <GiB | N MB> [--yes]\n  memory-supervisor budget off\n  memory-supervisor hard-cap <show|set MB|off>\n  memory-supervisor notifications <show|routes ROUTES|discord-webhook|discord-channel ID|discord-dm ID|telegram [CHAT_ID]|disable-discord|disable-telegram|test>\n  memory-supervisor update\n  memory-supervisor uninstall"
+pub fn usage() -> &'static str {
+    "Calando - memory protection for Claude Code and Codex
+
+Usage: calando <command>
+
+  status [--json]        Show memory, protection and agents
+  on | off               Turn protection on or off for this environment
+  telegram [CHAT_ID]     Send notices to Telegram (asks for the bot token)
+  telegram off           Stop Telegram notices
+  cap [<GB> | off]       Advanced: hard memory cap for all agents here (asks to confirm)
+  update                 Update now
+  uninstall              Remove Calando, keeping its settings
+  help                   Show this help
+
+Inside a Claude Code or Codex session, /calando (Codex: $calando) affects only that session."
 }
 
 struct BudgetPeer {
@@ -1094,34 +761,6 @@ impl BudgetView {
             .min(self.own_capacity_mb)
             .max(0.0)
     }
-}
-
-enum BudgetGate {
-    Apply,
-    Confirm { percent: f64, machine_percent: f64 },
-    TooHigh { beyond_theoretical: bool },
-}
-
-fn budget_gate(requested_mb: f64, view: &BudgetView) -> BudgetGate {
-    let current = view.current_mb();
-    if requested_mb > current {
-        return BudgetGate::TooHigh {
-            beyond_theoretical: requested_mb > view.theoretical_mb(),
-        };
-    }
-    // Two attention lines feed one confirmation: taking 90%+ of what is still possible in this
-    // kernel, or the machine-wide explicit-budget total reaching 90%+ of the physical estimate.
-    // The second closes the gradual case where several kernels each stay below 90% locally while
-    // together committing nearly the whole machine.
-    let machine_after_mb = view.other_claims_mb() + requested_mb;
-    let machine_percent = 100.0 * machine_after_mb / view.physical_mb;
-    if requested_mb >= 0.9 * current || machine_after_mb >= 0.9 * view.physical_mb {
-        return BudgetGate::Confirm {
-            percent: 100.0 * requested_mb / current,
-            machine_percent,
-        };
-    }
-    BudgetGate::Apply
 }
 
 fn parse_budget_amount(raw: &str) -> Result<f64, String> {
@@ -1332,131 +971,79 @@ fn confirm_on_stdin() -> bool {
     }
 }
 
-fn budget(arguments: &[String]) -> i32 {
+pub(crate) const CAP_EXPLAINER: &str = "Memory cap (advanced)
+Not recommended for normal use: Calando already protects memory automatically.
+Use it only when you need a strict limit, such as research or benchmark runs.
+Effect: new heavy agent work is held near the cap; above it, one growing subagent is paused.
+Limit: a pause cannot take back memory already used, and use can briefly pass the cap between checks.";
+
+fn cap(arguments: &[String]) -> i32 {
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs_f64();
-    match arguments.first().map(String::as_str) {
-        None | Some("show") => match collect_budget_view(now) {
-            Ok(view) => show_budget(&view),
-            Err(error) => {
-                eprintln!("{error}");
-                1
-            }
-        },
-        Some("off") => hard_cap(&["off".to_owned()]),
-        Some("set") => {
-            let mut assume_yes = false;
-            let mut value = None;
-            for argument in &arguments[1..] {
-                if argument == "--yes" {
-                    assume_yes = true;
-                } else if value.is_none() {
-                    value = Some(argument.clone());
-                } else {
-                    eprintln!("budget set accepts one amount\n{}", usage());
-                    return 2;
-                }
-            }
-            let Some(raw) = value else {
-                eprintln!("budget set requires an amount in GiB (or with an MB/GB suffix)");
-                return 2;
-            };
-            let requested_mb = match parse_budget_amount(&raw) {
-                Ok(requested_mb) => requested_mb,
+    let assume_yes = arguments.iter().any(|argument| argument == "--yes");
+    let values: Vec<_> = arguments
+        .iter()
+        .filter(|argument| *argument != "--yes")
+        .collect();
+    let raw = match values.as_slice() {
+        [] => {
+            return match collect_budget_view(now) {
+                Ok(view) => show_budget(&view),
                 Err(error) => {
                     eprintln!("{error}");
-                    return 2;
-                }
-            };
-            if env::var_os(HARD_CAP_KEY).is_some() {
-                eprintln!(
-                    "{HARD_CAP_KEY} is set in the environment and overrides the config file; unset it first; nothing changed"
-                );
-                return 1;
-            }
-            let view = match collect_budget_view(now) {
-                Ok(view) => view,
-                Err(error) => {
-                    eprintln!("{error}");
-                    return 1;
-                }
-            };
-            let current = view.current_mb();
-            match budget_gate(requested_mb, &view) {
-                BudgetGate::TooHigh { beyond_theoretical } => {
-                    eprintln!(
-                        "requested {} exceeds what is currently possible in this kernel: {}",
-                        mb_gib(requested_mb),
-                        mb_gib(current)
-                    );
-                    eprintln!(
-                        "  physical machine estimate {}; this kernel capacity {}",
-                        mb_gib(view.physical_mb),
-                        mb_gib(view.own_capacity_mb)
-                    );
-                    let mut stale_claim = false;
-                    for peer in &view.peers {
-                        if let Some(cap) = peer.cap_mb {
-                            stale_claim |= peer.stale();
-                            eprintln!(
-                                "  {}: {} explicit budget{}",
-                                peer.instance,
-                                mb_gib(cap),
-                                peer.stale_note()
-                            );
-                        }
-                    }
-                    if stale_claim {
-                        eprintln!(
-                            "  a stale snapshot contributes to this total; if that kernel is gone, remove its old file with `memory-status --all --prune-stale-hours 24`"
-                        );
-                    }
-                    if beyond_theoretical {
-                        eprintln!(
-                            "even with every other kernel's budget removed, the maximum possible \
-                             here is {} (bounded by this kernel's capacity within the physical \
-                             machine)",
-                            mb_gib(view.theoretical_mb())
-                        );
-                    } else {
-                        eprintln!(
-                            "to budget {} here, reduce other kernels' budgets by at least {}",
-                            mb_gib(requested_mb),
-                            mb_gib(requested_mb - current)
-                        );
-                    }
-                    eprintln!("nothing changed");
                     1
                 }
-                BudgetGate::Confirm {
-                    percent,
-                    machine_percent,
-                } if !assume_yes => {
-                    eprint!(
-                        "requested {} is {percent:.0}% of the currently possible {}; explicit \
-                         budgets across kernels would total {} of the {} physical estimate \
-                         ({machine_percent:.0}%). Continue? [y/N]: ",
-                        mb_gib(requested_mb),
-                        mb_gib(current),
-                        mb_gib(view.other_claims_mb() + requested_mb),
-                        mb_gib(view.physical_mb)
-                    );
-                    if !confirm_on_stdin() {
-                        eprintln!("nothing changed");
-                        return 1;
-                    }
-                    apply_budget(requested_mb, &view)
-                }
-                _ => apply_budget(requested_mb, &view),
-            }
+            };
         }
-        Some(other) => {
-            eprintln!("unknown budget subcommand: {other}\n{}", usage());
-            2
+        [value] if value.as_str() == "off" => return hard_cap(&["off".to_owned()]),
+        [value] => value.as_str(),
+        _ => {
+            eprintln!("usage: calando cap [<GB> [--yes] | off]");
+            return 2;
+        }
+    };
+    let requested_mb = match parse_budget_amount(raw) {
+        Ok(requested_mb) => requested_mb,
+        Err(error) => {
+            eprintln!("{error}");
+            return 2;
+        }
+    };
+    if env::var_os(HARD_CAP_KEY).is_some() {
+        eprintln!(
+            "{HARD_CAP_KEY} is set in the environment and overrides the config file; unset it first; nothing changed"
+        );
+        return 1;
+    }
+    let view = match collect_budget_view(now) {
+        Ok(view) => view,
+        Err(error) => {
+            eprintln!("{error}");
+            return 1;
+        }
+    };
+    if requested_mb > view.current_mb() {
+        eprintln!(
+            "{} is more than this environment can use now ({}); nothing changed",
+            mb_gib(requested_mb),
+            mb_gib(view.current_mb())
+        );
+        return 1;
+    }
+    if !assume_yes {
+        eprintln!("{CAP_EXPLAINER}\n");
+        eprint!(
+            "Apply a cap of {} for all agents here? [y/N]: ",
+            mb_gib(requested_mb)
+        );
+        if !confirm_on_stdin() {
+            eprintln!("nothing changed (non-interactive callers add --yes)");
+            return 1;
         }
     }
+    apply_budget(requested_mb, &view)
 }
 
 fn apply_budget(requested_mb: f64, view: &BudgetView) -> i32 {
@@ -1472,45 +1059,6 @@ fn apply_budget(requested_mb: f64, view: &BudgetView) -> i32 {
         );
     }
     status
-}
-
-fn parse_process(arguments: &[String], action: &str) -> Result<(u32, f64), String> {
-    let mut pid = None;
-    let mut timeout: f64 = 5.0;
-    let mut index = 0;
-    while index < arguments.len() {
-        if arguments[index] == "--timeout" {
-            timeout = arguments
-                .get(index + 1)
-                .ok_or_else(|| "--timeout requires SECONDS".to_owned())?
-                .parse()
-                .map_err(|_| "timeout must be a number".to_owned())?;
-            index += 2;
-        } else if arguments[index].starts_with('-') {
-            return Err(format!("unknown option: {}", arguments[index]));
-        } else if pid.is_none() {
-            pid = Some(
-                arguments[index]
-                    .parse::<u32>()
-                    .map_err(|_| "PID must be an integer > 1".to_owned())?,
-            );
-            index += 1;
-        } else {
-            return Err("only one PID is accepted".to_owned());
-        }
-    }
-    if !(0.1..=300.0).contains(&timeout) || !timeout.is_finite() {
-        return Err("timeout must be between 0.1 and 300 seconds".to_owned());
-    }
-    let pid = match pid {
-        Some(pid) => pid,
-        None if action == "resume" => resolve_single_stopped_pid(&state_dir())?,
-        None => return Err("PID may be omitted only for resume".to_owned()),
-    };
-    if pid <= 1 {
-        return Err("PID must be an integer > 1".to_owned());
-    }
-    Ok((pid, timeout))
 }
 
 pub fn run_control(arguments: &[OsString]) -> i32 {
@@ -1534,24 +1082,12 @@ pub fn run_control(arguments: &[OsString]) -> i32 {
             println!("{}", usage());
             0
         }
-        "notifications" => configure_notifications(&arguments[1..]),
-        "budget" => budget(&arguments[1..]),
-        "hard-cap" => hard_cap(&arguments[1..]),
+        "telegram" => telegram(&arguments[1..]),
+        "cap" => cap(&arguments[1..]),
         "on" | "off" if arguments.len() == 1 => maintain_power(action),
-        "on" | "off" => {
-            eprintln!("{action} accepts no arguments\n{}", usage());
-            2
-        }
-        "update" | "uninstall" => maintain_installation(action),
-        "resume" | "terminate" | "kill" => match parse_process(&arguments[1..], action) {
-            Ok((pid, timeout)) => submit_control(action, pid, timeout),
-            Err(error) => {
-                eprintln!("{error}\n{}", usage());
-                2
-            }
-        },
+        "update" | "uninstall" if arguments.len() == 1 => maintain_installation(action),
         _ => {
-            eprintln!("unknown action: {action}\n{}", usage());
+            eprintln!("unknown command: {}\n\n{}", arguments.join(" "), usage());
             2
         }
     }
@@ -1578,36 +1114,6 @@ mod tests {
         fs::write(&structured, "structured").unwrap();
         assert_eq!(maintenance_script(&root, "install.sh"), structured);
 
-        fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    fn mandatory_notification_routes_cannot_be_disabled_or_configured() {
-        assert!(parse_routes("hook,os").unwrap_err().contains("mandatory"));
-        let mut values = BTreeMap::from([(
-            "MEMORY_SUPERVISOR_NOTIFICATION_CHANNELS".to_owned(),
-            "none".to_owned(),
-        )]);
-        set_route(&mut values, "discord", true);
-        assert_eq!(values["MEMORY_SUPERVISOR_NOTIFICATION_CHANNELS"], "discord");
-        assert!(notification_channels(&values).contains("hook"));
-        assert!(notification_channels(&values).contains("terminal"));
-    }
-
-    #[test]
-    fn resume_without_pid_selects_only_one_paused_process() {
-        let root = env::temp_dir().join(format!(
-            "memory-supervisor-control-{}-{}",
-            std::process::id(),
-            now_nanos()
-        ));
-        fs::create_dir(&root).unwrap();
-        fs::write(root.join("state.json"), br#"{"stopped_pids":[42]}"#).unwrap();
-        assert_eq!(resolve_single_stopped_pid(&root).unwrap(), 42);
-        fs::write(root.join("state.json"), br#"{"stopped_pids":[42,43]}"#).unwrap();
-        let error = resolve_single_stopped_pid(&root).unwrap_err();
-        assert!(error.contains("memory-supervisor resume 42"));
-        assert!(error.contains("memory-supervisor resume 43"));
         fs::remove_dir_all(root).unwrap();
     }
 
@@ -1734,90 +1240,5 @@ mod tests {
         let alone = view(7941.0, None, &[]);
         assert_eq!(alone.physical_mb, 7941.0);
         assert_eq!(alone.current_mb(), 7941.0);
-    }
-
-    #[test]
-    fn budget_gate_orders_error_confirmation_and_plain_application() {
-        let constrained = view(7941.0, Some(16108.0), &[12288.0]);
-        let current = constrained.current_mb();
-        assert!(matches!(
-            budget_gate(current + 1.0, &constrained),
-            BudgetGate::TooHigh {
-                beyond_theoretical: false
-            }
-        ));
-        assert!(matches!(
-            budget_gate(8000.0, &constrained),
-            BudgetGate::TooHigh {
-                beyond_theoretical: true
-            }
-        ));
-        assert!(matches!(
-            budget_gate(current, &constrained),
-            BudgetGate::Confirm { .. }
-        ));
-        assert!(matches!(
-            budget_gate(0.9 * current, &constrained),
-            BudgetGate::Confirm { .. }
-        ));
-        // Locally below 90%, but the machine-wide explicit total crosses 90% — still confirms.
-        assert!(matches!(
-            budget_gate(0.9 * current - 1.0, &constrained),
-            BudgetGate::Confirm { .. }
-        ));
-        assert!(matches!(
-            budget_gate(1000.0, &constrained),
-            BudgetGate::Apply
-        ));
-        let over_committed = view(7941.0, Some(16108.0), &[17000.0]);
-        assert!(matches!(
-            budget_gate(1.0, &over_committed),
-            BudgetGate::TooHigh { .. }
-        ));
-    }
-
-    #[test]
-    fn machine_level_commitment_also_requires_confirmation() {
-        let host = view(16108.0, None, &[8000.0]);
-        assert!(matches!(budget_gate(6000.0, &host), BudgetGate::Apply));
-        match budget_gate(6600.0, &host) {
-            BudgetGate::Confirm {
-                percent,
-                machine_percent,
-            } => {
-                assert!(percent < 90.0);
-                assert!(machine_percent >= 90.0);
-            }
-            _ => panic!("expected machine-level confirmation"),
-        }
-    }
-
-    #[test]
-    fn route_parser_is_canonical_and_process_arguments_are_bounded() {
-        assert_eq!(parse_routes("telegram,os").unwrap(), "os,telegram");
-        assert_eq!(parse_routes("all").unwrap(), "all");
-        assert_eq!(parse_routes("off").unwrap(), "none");
-        assert!(
-            parse_routes("unknown")
-                .unwrap_err()
-                .contains("invalid route")
-        );
-        assert_eq!(
-            parse_process(
-                &["42".to_owned(), "--timeout".to_owned(), "0.1".to_owned()],
-                "resume"
-            )
-            .unwrap(),
-            (42, 0.1)
-        );
-        assert!(parse_process(&["1".to_owned()], "resume").is_err());
-        assert!(
-            parse_process(
-                &["42".to_owned(), "--timeout".to_owned(), "301".to_owned()],
-                "resume"
-            )
-            .is_err()
-        );
-        assert!(parse_process(&[], "kill").is_err());
     }
 }
