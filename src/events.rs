@@ -8,7 +8,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::storage::write_atomic_json;
 
-const ALLOWED_FIELDS: [&str; 33] = [
+const ALLOWED_FIELDS: [&str; 36] = [
     "source",
     "platform",
     "severity",
@@ -39,6 +39,9 @@ const ALLOWED_FIELDS: [&str; 33] = [
     "duration_s",
     "vm_held_mb",
     "guest_used_mb",
+    "host_free_mb",
+    "machine_mb",
+    "guest_limit_mb",
     // Routing: which provider/session may see this event. Dropping these broadcast
     // session-scoped notices to every lead.
     "audience_provider",
@@ -188,6 +191,47 @@ fn gb(mb: f64) -> String {
 
 /// Name the environment a notice is about, e.g. `Windows (LAPTOP-1)`, so a federated
 /// Windows/WSL pair never reads as one pooled memory figure.
+/// Free memory per OS, split so the parts add up to the machine's RAM: Windows owns what the WSL
+/// VM does not hold right now, and WSL owns what its VM holds. The split moves as the VM grows or
+/// gives memory back, so each line also says where its share comes from.
+pub fn memory_lines(source: &Value, os: &str, free_key: &str, capacity_key: &str) -> Vec<String> {
+    let number = |key: &str| number(source, key);
+    if let (Some(host_free), Some(machine), Some(held), Some(used)) = (
+        number("host_free_mb"),
+        number("machine_mb"),
+        number("vm_held_mb"),
+        number("guest_used_mb"),
+    ) {
+        let guest_free = (held - used).max(0.0);
+        let mut wsl = format!("WSL free: {} of {} GB", gb(guest_free), gb(held));
+        if let Some(limit) = number("guest_limit_mb").filter(|limit| *limit > held) {
+            wsl.push_str(&format!(
+                " (grows up to {} GB, taking from Windows)",
+                gb(limit)
+            ));
+        }
+        return vec![
+            format!(
+                "Total free: {} of {} GB",
+                gb(host_free + guest_free),
+                gb(machine)
+            ),
+            format!(
+                "Windows free: {} of {} GB",
+                gb(host_free),
+                gb((machine - held).max(0.0))
+            ),
+            wsl,
+        ];
+    }
+    match (number(free_key), number(capacity_key)) {
+        (Some(free), Some(capacity)) => {
+            vec![format!("{os} free: {} of {} GB", gb(free), gb(capacity))]
+        }
+        _ => Vec::new(),
+    }
+}
+
 fn environment(event: &Value) -> String {
     let platform = text(event, "platform").unwrap_or_default();
     let source = text(event, "source").unwrap_or_default();
@@ -307,28 +351,7 @@ pub fn concise_message(event: &Value) -> String {
         .unwrap_or("This machine")
         .to_owned();
     let mut lines = vec![headline, environment];
-    // Each OS gets its own line: Windows counts the whole WSL VM as used, but memory WSL holds
-    // and does not use is still free for work inside WSL.
-    if let (Some(free), Some(capacity)) =
-        (number(event, "headroom_mb"), number(event, "capacity_mb"))
-    {
-        let vm = number(event, "vm_held_mb")
-            .map(|held| format!(" (WSL VM holds {} GB of it)", gb(held)))
-            .unwrap_or_default();
-        lines.push(format!(
-            "{os} free: {} of {} GB{vm}",
-            gb(free),
-            gb(capacity)
-        ));
-    }
-    if let (Some(held), Some(used)) = (number(event, "vm_held_mb"), number(event, "guest_used_mb"))
-    {
-        lines.push(format!(
-            "WSL free: {} of {} GB",
-            gb((held - used).max(0.0)),
-            gb(held)
-        ));
-    }
+    lines.extend(memory_lines(event, &os, "headroom_mb", "capacity_mb"));
     if count("restricted") > 0 {
         lines.push(format!("Restricted agents: {}", count("restricted")));
     }
@@ -600,14 +623,16 @@ mod tests {
         let event = json!({
             "type":"pressure-episode", "status":"active", "source":"windows-LAPTOP-1",
             "platform":"windows", "headroom_mb":1551, "capacity_mb":16108,
-            "vm_held_mb":9830, "guest_used_mb":3297, "restricted":0, "paused":0,
+            "vm_held_mb":9830, "guest_used_mb":3297, "host_free_mb":1551, "machine_mb":16108,
+            "restricted":0, "paused":0,
             "message":"[Calando] MEMORY PROTECTION ACTIVE\nWhy: long prose"
         });
         assert_eq!(
             concise_message(&event),
             "Memory protection on\n\
              Windows (LAPTOP-1)\n\
-             Windows free: 1.5 of 15.7 GB (WSL VM holds 9.6 GB of it)\n\
+             Total free: 7.9 of 15.7 GB\n\
+             Windows free: 1.5 of 6.1 GB\n\
              WSL free: 6.4 of 9.6 GB\n\
              Action: New heavy work is on hold. Running work continues."
         );
