@@ -49,7 +49,7 @@ try {
     if ((Get-Content -Raw -LiteralPath (Join-Path $InstallRoot "version")).Trim() -ne "first") {
         throw "First release source was not installed"
     }
-    if (-not (Test-Path -LiteralPath (Join-Path $InstallRoot ".memory-supervisor-release-source"))) {
+    if (-not (Test-Path -LiteralPath (Join-Path $InstallRoot ".calando-release-source"))) {
         throw "Release ownership marker is missing"
     }
 
