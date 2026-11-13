@@ -12,7 +12,7 @@ use std::thread;
 use crate::config::{
     load_notification_config, notification_config_path, state_dir, telegram_enabled,
 };
-use crate::events::{acknowledge_event, concise_message, event_should_notify};
+use crate::events::{acknowledge_event, concise_message, event_should_push};
 use crate::storage::write_atomic_json;
 
 const USER_AGENT: &str = "calando";
@@ -240,7 +240,7 @@ pub fn dispatch_event(
     event: &Value,
     config: &BTreeMap<String, String>,
 ) -> BTreeMap<String, String> {
-    let status = if event_should_notify(event) && telegram_enabled(config) {
+    let status = if event_should_push(event) && telegram_enabled(config) {
         notify_telegram(&concise_message(event), config)
     } else {
         "skipped".to_owned()

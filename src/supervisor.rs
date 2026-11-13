@@ -4173,6 +4173,21 @@ impl Supervisor {
         true
     }
 
+    /// The session whose lead is `pid`, as event audience fields.
+    fn lead_audience(&self, pid: u32) -> Vec<(String, Value)> {
+        self.ledger
+            .logical_agents
+            .values()
+            .find(|agent| agent.role == "lead" && agent.process_pid == Some(pid))
+            .map(|agent| {
+                vec![
+                    ("audience_provider".to_owned(), json!(agent.provider)),
+                    ("audience_sessions".to_owned(), json!([agent.session_id])),
+                ]
+            })
+            .unwrap_or_default()
+    }
+
     fn alert_and_suspend(
         &mut self,
         leaks: &[TrackedProcess],
@@ -4194,7 +4209,7 @@ impl Supervisor {
                     "detected",
                     &message,
                     &leak.identity,
-                    Map::from_iter([
+                    [
                         ("severity".to_owned(), Value::String("warning".to_owned())),
                         ("pid".to_owned(), json!(leak.pid)),
                         ("role".to_owned(), Value::String(leak.role.clone())),
@@ -4202,8 +4217,26 @@ impl Supervisor {
                             "cause".to_owned(),
                             Value::String("material-process-growth-observation".to_owned()),
                         ),
-                        ("importance".to_owned(), Value::String("detail".to_owned())),
-                    ]),
+                        // The lead's own session is told, in its next hook, that the growing
+                        // process is itself; anyone else only sees the record.
+                        (
+                            "importance".to_owned(),
+                            Value::String(
+                                if leak.role == "lead" {
+                                    "session"
+                                } else {
+                                    "detail"
+                                }
+                                .to_owned(),
+                            ),
+                        ),
+                        ("name".to_owned(), Value::String(leak.name.clone())),
+                        ("anon_mb".to_owned(), json!(leak.anon_mb)),
+                        ("slope_mb_s".to_owned(), json!(leak.slope_mb_s)),
+                    ]
+                    .into_iter()
+                    .chain(self.lead_audience(leak.pid))
+                    .collect::<Map<String, Value>>(),
                 );
             }
             if self.leak_action == "stop"

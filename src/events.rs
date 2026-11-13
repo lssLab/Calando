@@ -8,7 +8,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::storage::write_atomic_json;
 
-const ALLOWED_FIELDS: [&str; 32] = [
+const ALLOWED_FIELDS: [&str; 35] = [
     "source",
     "platform",
     "severity",
@@ -38,6 +38,9 @@ const ALLOWED_FIELDS: [&str; 32] = [
     "paused",
     "duration_s",
     "memory_lines",
+    "name",
+    "anon_mb",
+    "slope_mb_s",
     // Routing: which provider/session may see this event. Dropping these broadcast
     // session-scoped notices to every lead.
     "audience_provider",
@@ -263,6 +266,10 @@ pub fn concise_message(event: &Value) -> String {
         .unwrap_or_else(|| role.to_owned());
 
     let (headline, action): (String, String) = match (event_type, status) {
+        ("leak-suspect", _) if role == "lead" => (
+            "This session's own process is growing".to_owned(),
+            "If memory runs low, Calando pauses this session; the user can resume it.".to_owned(),
+        ),
         ("pressure-episode", "active") => (
             "Memory protection on".to_owned(),
             "New heavy work is on hold. Running work continues.".to_owned(),
@@ -334,6 +341,16 @@ pub fn concise_message(event: &Value) -> String {
     }
     if count("paused") > 0 {
         lines.push(format!("Paused processes: {}", count("paused")));
+    }
+    if event_type == "leak-suspect"
+        && let (Some(memory), Some(slope)) = (number(event, "anon_mb"), number(event, "slope_mb_s"))
+    {
+        lines.push(format!(
+            "Process: {} (PID {}) · {} GB, +{slope:.0} MB/s",
+            text(event, "name").unwrap_or("CLI"),
+            pid.unwrap_or_default(),
+            gb(memory)
+        ));
     }
     if event_type == "pressure-episode"
         && let Some(seconds) = number(event, "duration_s")
@@ -408,6 +425,11 @@ pub fn make_event(
         }
     }
     Value::Object(event)
+}
+
+/// A `session` notice is for the owning session's agent only, never a push to the person.
+pub fn event_should_push(event: &Value) -> bool {
+    event_should_notify(event) && event.get("importance").and_then(Value::as_str) != Some("session")
 }
 
 pub fn event_should_notify(event: &Value) -> bool {
@@ -627,6 +649,24 @@ mod tests {
              Duration: 33 s\n\
              Action: None. Normal operation resumed."
         );
+    }
+
+    #[test]
+    fn a_growing_lead_is_told_it_is_its_own_process_and_nothing_is_pushed() {
+        let event = json!({
+            "type":"leak-suspect", "status":"detected", "source":"wsl-Ubuntu-LAPTOP-1",
+            "platform":"wsl", "pid":4242, "role":"lead", "name":"claude", "anon_mb":5939,
+            "slope_mb_s":3.2, "importance":"session"
+        });
+        assert_eq!(
+            concise_message(&event),
+            "This session's own process is growing\n\
+             WSL (Ubuntu-LAPTOP-1)\n\
+             Process: claude (PID 4242) · 5.8 GB, +3 MB/s\n\
+             Action: If memory runs low, Calando pauses this session; the user can resume it."
+        );
+        assert!(event_should_notify(&event));
+        assert!(!event_should_push(&event));
     }
 
     #[test]
