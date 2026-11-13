@@ -349,6 +349,15 @@ fn claude_candidate_paths(home: &Path, search_path: Option<&OsStr>) -> Vec<(Path
         }
     }
 
+    // NVM_DIR and friends describe the current user's shell, so they apply only when the
+    // search is for that user's home (a test or `--home` names another one).
+    let own_home = ["HOME", "USERPROFILE"]
+        .into_iter()
+        .filter_map(env::var_os)
+        .any(|value| Path::new(&value) == home);
+    if !own_home {
+        return paths;
+    }
     for variable in ["NVM_SYMLINK", "VOLTA_HOME"] {
         if let Some(root) = env::var_os(variable) {
             let root = PathBuf::from(root);
@@ -2613,10 +2622,9 @@ trusted_hash = 'sha256:windows'
 
         migrate_install_names(&home).unwrap();
 
-        let config: Value = serde_json::from_slice(
-            &fs::read(home.join(".config/memory-supervisor/config.json")).unwrap(),
-        )
-        .unwrap();
+        let config: Value =
+            serde_json::from_slice(&fs::read(home.join(".config/calando/config.json")).unwrap())
+                .unwrap();
         assert_eq!(
             config,
             json!({
@@ -2625,18 +2633,18 @@ trusted_hash = 'sha256:windows'
             })
         );
         assert_eq!(
-            fs::read_to_string(home.join(".config/memory-supervisor/notifications.conf"))
+            fs::read_to_string(home.join(".config/calando/notifications.conf"))
                 .unwrap()
                 .trim(),
             "MEMORY_SUPERVISOR_NOTIFICATION_CHANNELS=\"telegram\"\nMEMORY_SUPERVISOR_TELEGRAM_BOT_TOKEN=\"secret\""
         );
         assert!(
             home.join(".cache")
-                .join("memory-supervisor")
+                .join("calando")
                 .join("runtime.json")
                 .is_file()
         );
-        assert!(home.join(".memory-supervisor/state-dir").is_file());
+        assert!(home.join(".calando/state-dir").is_file());
         assert!(!old_config.exists());
         fs::remove_dir_all(home).unwrap();
     }
@@ -2714,7 +2722,7 @@ trusted_hash = 'sha256:windows'
             .join(".memory-supervisor")
             .join("instances");
         assert_eq!(
-            fs::read_to_string(home.join(".memory-supervisor/federation-dir"))
+            fs::read_to_string(home.join(".calando/federation-dir"))
                 .unwrap()
                 .trim(),
             new_federation.to_string_lossy()

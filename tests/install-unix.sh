@@ -56,7 +56,17 @@ clean_install() (
 
   export HOME=$home
   export CODEX_HOME=$codex_home
-  export PATH="$fake_bin:/usr/bin:/bin"
+  # System tools without a Claude Code or Codex the machine itself has installed, so only the
+  # fakes above are found.
+  system_bin="$sandbox/system-bin"
+  mkdir -p "$system_bin"
+  for tool in /usr/bin/* /bin/*; do
+    name=${tool##*/}
+    case "$name" in claude|claude.exe|codex) continue ;; esac
+    [ -e "$system_bin/$name" ] || ln -s "$tool" "$system_bin/$name"
+  done
+  export PATH="$fake_bin:$system_bin"
+  unset NVM_DIR NVM_SYMLINK VOLTA_HOME
   export MEMORY_SUPERVISOR_BINARY_SOURCE=$BINARY
   export MEMORY_SUPERVISOR_SERVICE_MODE=fallback
   export MEMORY_SUPERVISOR_DIR=$state
@@ -80,7 +90,8 @@ clean_install() (
     --provider claude --binary "$installed" --check
   "$installed" integration hooks --target "$codex_home/hooks.json" \
     --provider codex --binary "$installed" --check
-  grep -Fq -- "--hook-source '$home/.codex/hooks.json'" "$home/.codex/hooks.json"
+  # A second route in ~/.codex would make Codex run every hook twice.
+  ! grep -Eq 'calando|memory-supervisor' "$home/.codex/hooks.json"
   [ "$(readlink "$home/.local/bin/memory-supervisor")" = "$installed" ]
   [ "$(readlink "$home/.local/bin/memory-status")" = "$installed" ]
   [ "$(readlink "$home/.local/bin/memory-control")" = "$foreign" ]
