@@ -114,7 +114,13 @@ Remove-Item -Force -LiteralPath $OldRuntime -ErrorAction SilentlyContinue
 if ([IO.Path]::GetFullPath($Binary) -eq [IO.Path]::GetFullPath($OwnedBinary)) {
     Remove-Item -Force -LiteralPath $OwnedBinary -ErrorAction SilentlyContinue
     Remove-Item -Force -LiteralPath "$OwnedBinary.previous" -ErrorAction SilentlyContinue
-    Remove-Item -Force -LiteralPath $RuntimeDir -ErrorAction SilentlyContinue
+    # Binaries the installer renamed aside; one still running stays until the next sign-in.
+    Get-ChildItem -LiteralPath $RuntimeDir -Filter ".calando.old.*.exe" -ErrorAction SilentlyContinue |
+        Remove-Item -Force -ErrorAction SilentlyContinue
+    if ((Test-Path -LiteralPath $RuntimeDir) -and
+        -not (Get-ChildItem -Force -LiteralPath $RuntimeDir -ErrorAction SilentlyContinue)) {
+        Remove-Item -Force -LiteralPath $RuntimeDir -ErrorAction SilentlyContinue
+    }
 }
 Remove-Item -Force -LiteralPath (Join-Path $PointerDir "binary") -ErrorAction SilentlyContinue
 Remove-Item -Force -LiteralPath (Join-Path $PointerDir "install-root") -ErrorAction SilentlyContinue
