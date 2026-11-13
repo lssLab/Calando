@@ -112,7 +112,16 @@ Remove-Item -Force -LiteralPath (Join-Path $OldRuntime "memory-supervisor.exe") 
 Remove-Item -Force -LiteralPath $OldRuntime -ErrorAction SilentlyContinue
 
 if ([IO.Path]::GetFullPath($Binary) -eq [IO.Path]::GetFullPath($OwnedBinary)) {
-    Remove-Item -Force -LiteralPath $OwnedBinary -ErrorAction SilentlyContinue
+    # Stopping the task does not wait for the daemon to exit; a running binary cannot be
+    # deleted, only renamed.
+    for ($Attempt = 0; $Attempt -lt 50 -and (Test-Path -LiteralPath $OwnedBinary); $Attempt++) {
+        Remove-Item -Force -LiteralPath $OwnedBinary -ErrorAction SilentlyContinue
+        if (Test-Path -LiteralPath $OwnedBinary) { Start-Sleep -Milliseconds 100 }
+    }
+    if (Test-Path -LiteralPath $OwnedBinary) {
+        Move-Item -Force -LiteralPath $OwnedBinary `
+            -Destination (Join-Path $RuntimeDir (".calando.old." + $PID + ".exe")) -ErrorAction SilentlyContinue
+    }
     Remove-Item -Force -LiteralPath "$OwnedBinary.previous" -ErrorAction SilentlyContinue
     # Binaries the installer renamed aside; one still running stays until the next sign-in.
     Get-ChildItem -LiteralPath $RuntimeDir -Filter ".calando.old.*.exe" -ErrorAction SilentlyContinue |
