@@ -603,8 +603,15 @@ fn resume_lists_paused_sessions_and_resumes_the_chosen_pid() {
     .unwrap();
     let listed = sandbox.command().arg("resume").output().unwrap();
     let listed_text = String::from_utf8_lossy(&listed.stdout);
-    assert!(listed_text.contains("1) PID 4242  claude (lead) · 6.2 GB"), "{listed_text}");
-    assert_eq!(listed.status.code(), Some(1), "non-interactive caller must choose a PID");
+    assert!(
+        listed_text.contains("1) PID 4242  claude (lead) · 6.2 GB"),
+        "{listed_text}"
+    );
+    assert_eq!(
+        listed.status.code(),
+        Some(1),
+        "non-interactive caller must choose a PID"
+    );
     let unknown = sandbox.command().args(["resume", "7"]).output().unwrap();
     assert_eq!(unknown.status.code(), Some(2));
 
@@ -636,5 +643,9 @@ fn resume_lists_paused_sessions_and_resumes_the_chosen_pid() {
     let request = responder.join().unwrap();
     assert_eq!(request["action"], "resume");
     assert_eq!(request["pid"], 4242);
-    assert!(resumed.status.success(), "{}", String::from_utf8_lossy(&resumed.stderr));
+    assert!(
+        resumed.status.success(),
+        "{}",
+        String::from_utf8_lossy(&resumed.stderr)
+    );
 }
