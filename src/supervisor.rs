@@ -364,13 +364,12 @@ fn incident_is_codex_app_physical(incident: &Value) -> bool {
 }
 
 fn extend_incident_audience(fields: &mut Map<String, Value>, incident: &Value) {
-    if !incident_is_codex_app_physical(incident) {
-        return;
+    if incident_is_codex_app_physical(incident) {
+        fields.insert(
+            "surface".to_owned(),
+            Value::String(APP_SERVER_SURFACE.to_owned()),
+        );
     }
-    fields.insert(
-        "surface".to_owned(),
-        Value::String(APP_SERVER_SURFACE.to_owned()),
-    );
     for key in ["audience_provider", "audience_sessions"] {
         if let Some(value) = incident.get(key) {
             fields.insert(key.to_owned(), value.clone());
@@ -1186,8 +1185,25 @@ impl Supervisor {
         status: &str,
         message: &str,
         dedupe_key: &str,
-        fields: Map<String, Value>,
+        mut fields: Map<String, Value>,
     ) {
+        // Every process event inherits its session audience from that PID's incident, so a
+        // process notice never reaches another session's agent.
+        if !fields.contains_key("audience_sessions")
+            && let Some(pid) = fields.get("pid").and_then(Value::as_u64)
+            && let Some(incident) = self
+                .ledger
+                .incidents
+                .iter()
+                .rev()
+                .find(|incident| incident.get("pid").and_then(Value::as_u64) == Some(pid))
+        {
+            for key in ["audience_provider", "audience_sessions"] {
+                if let Some(value) = incident.get(key) {
+                    fields.insert(key.to_owned(), value.clone());
+                }
+            }
+        }
         let event = self.notification_event(event_type, status, message, dedupe_key, fields);
         self.queue_notification_event(&event);
     }
@@ -3248,6 +3264,23 @@ impl Supervisor {
                 Value::String("codex".to_owned()),
             );
             object.insert("audience_sessions".to_owned(), json!([session_id]));
+        }
+        if !incident
+            .as_object()
+            .is_some_and(|object| object.contains_key("audience_sessions"))
+            && let Some(lead) =
+                self.ledger.logical_agents.values().find(|agent| {
+                    agent.role == "lead" && agent.process_pid == Some(candidate.root_pid)
+                })
+            && let Some(object) = incident.as_object_mut()
+        {
+            // A CLI process belongs to the session whose lead roots its tree; only that
+            // session hears about it, so other agents never learn its name or PID.
+            object.insert(
+                "audience_provider".to_owned(),
+                Value::String(lead.provider.clone()),
+            );
+            object.insert("audience_sessions".to_owned(), json!([lead.session_id]));
         }
         self.ledger.incidents.push(incident.clone());
         incident
@@ -7349,6 +7382,26 @@ mod tests {
             now += 1.0;
             calls += 1;
         }
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn process_events_inherit_the_owning_sessions_audience() {
+        let root = temp_directory("event-audience");
+        let mut supervisor = Supervisor::new(Some(root.join("runtime.json")));
+        supervisor.ledger.incidents.push(json!({
+            "id":"inc-7", "pid":7, "audience_provider":"claude", "audience_sessions":["s1"]
+        }));
+        supervisor.emit_event(
+            "process-pause",
+            "resumed",
+            "[Memory Supervisor] PROCESS RESUMED",
+            "resume:7",
+            Map::from_iter([("pid".to_owned(), json!(7))]),
+        );
+        let events = pending_events(&root, &BTreeSet::new());
+        assert_eq!(events[0]["audience_sessions"], json!(["s1"]));
+        assert_eq!(events[0]["audience_provider"], "claude");
         fs::remove_dir_all(root).unwrap();
     }
 

@@ -583,6 +583,25 @@ fn logical_notice(
     (!notices.is_empty()).then(|| notices.join(" "))
 }
 
+/// Other sessions are described only by count and the agents' total memory.
+fn agents_summary(state: &Value, session: &str) -> String {
+    let others: BTreeSet<&str> = state
+        .get("logical_agents")
+        .and_then(Value::as_object)
+        .into_iter()
+        .flat_map(|agents| agents.values())
+        .filter(|agent| agent.get("active").and_then(Value::as_bool) == Some(true))
+        .filter_map(|agent| agent.get("session_id").and_then(Value::as_str))
+        .filter(|id| *id != session)
+        .collect();
+    let memory = state
+        .get("tracked_total_rss_mb")
+        .and_then(Value::as_f64)
+        .map(|mb| format!(" · all agents use {:.1} GB", mb / 1024.0))
+        .unwrap_or_default();
+    format!("Other sessions: {}{memory}", others.len())
+}
+
 fn pressure_summary(state: &Value) -> String {
     let level = serde_json::to_value(gate_level(state))
         .ok()
@@ -892,8 +911,19 @@ fn consume_memory_notice(
         .map(Value::to_string)
         .collect::<Vec<_>>()
         .join(",");
+    // A process notice without a session audience belongs to someone else (or predates
+    // scoping): count it, but never pass another session's process name or PID to this agent.
+    let foreign =
+        |item: &Value| item.get("audience_sessions").is_none() && item.get("pid").is_some();
+    let foreign_count = selected_events
+        .iter()
+        .copied()
+        .chain(selected_incidents.iter().copied())
+        .filter(|item| foreign(item))
+        .count();
     let mut details = selected_events
         .iter()
+        .filter(|event| !foreign(event))
         .map(|event| {
             (
                 event
@@ -903,16 +933,27 @@ fn consume_memory_notice(
                 concise_message(event),
             )
         })
-        .chain(selected_incidents.iter().map(|incident| {
-            (
-                incident
-                    .get("updated_at")
-                    .and_then(Value::as_f64)
-                    .unwrap_or_default(),
-                incident_context(incident),
-            )
-        }))
+        .chain(
+            selected_incidents
+                .iter()
+                .filter(|incident| !foreign(incident))
+                .map(|incident| {
+                    (
+                        incident
+                            .get("updated_at")
+                            .and_then(Value::as_f64)
+                            .unwrap_or_default(),
+                        incident_context(incident),
+                    )
+                }),
+        )
         .collect::<Vec<_>>();
+    if foreign_count > 0 {
+        details.push((
+            f64::MAX,
+            format!("• Other sessions: {foreign_count} process notice(s), details not shared"),
+        ));
+    }
     if details.is_empty()
         && legacy_changed
         && let Some(incident) = incidents.last()
@@ -945,7 +986,10 @@ fn consume_memory_notice(
     } else {
         "no action needed; keep working".to_owned()
     };
-    let context = format!("[memory-supervisor] {detail}\nFor you: {guidance}.");
+    let context = format!(
+        "[memory-supervisor] {detail}\n{}\nFor you: {guidance}.",
+        agents_summary(state, &session)
+    );
     Some((context, detail))
 }
 
@@ -1669,7 +1713,8 @@ mod tests {
         let state = json!({
             "level":"GREEN", "recent_incidents":[{
                 "id":"inc-1","status":"resumed","source":"wsl-host","pid":42,
-                "name":"claude","reason":"runaway-memory","updated_at":now_epoch()
+                "name":"claude","reason":"runaway-memory","updated_at":now_epoch(),
+                "audience_sessions":["lead-1"]
             }]
         });
         let payload = json!({"source":"resume","session_id":"lead-1"});
@@ -1702,6 +1747,42 @@ mod tests {
     }
 
     #[test]
+    fn another_sessions_process_is_counted_without_its_name_or_pid() {
+        let directory = temp_directory();
+        let state = json!({
+            "level":"GREEN",
+            "recent_incidents":[{
+                "id":"inc-foreign","status":"suspended","source":"wsl-host","pid":4242,
+                "name":"secret-build","role":"worker","reason":"pressure-pause",
+                "updated_at":now_epoch(), "audience_sessions":["someone-else"]
+            }, {
+                "id":"inc-legacy","status":"suspended","source":"wsl-host","pid":4343,
+                "name":"legacy-tool","role":"worker","reason":"pressure-pause",
+                "updated_at":now_epoch()
+            }],
+            "logical_agents":{
+                "a":{"active":true,"session_id":"me"},
+                "b":{"active":true,"session_id":"someone-else"}
+            },
+            "tracked_total_rss_mb":4096,
+        });
+        let context = consume_memory_notice(
+            &directory,
+            "claude",
+            &json!({"session_id":"me"}),
+            &state,
+            true,
+        )
+        .unwrap()
+        .0;
+        assert!(!context.contains("secret-build") && !context.contains("4242"));
+        assert!(!context.contains("legacy-tool") && !context.contains("4343"));
+        assert!(context.contains("Other sessions: 1 process notice(s), details not shared"));
+        assert!(context.contains("Other sessions: 1 · all agents use 4.0 GB"));
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
     fn lead_receives_bounded_incident_batches_without_events_consuming_them() {
         let directory = temp_directory();
         let now = now_epoch();
@@ -1716,6 +1797,7 @@ mod tests {
                     "role":"worker",
                     "reason":"pressure-pause",
                     "updated_at":now - (5 - index) as f64,
+                    "audience_sessions":["lead-batched-incidents"],
                 })
             })
             .collect::<Vec<_>>();

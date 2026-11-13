@@ -8,7 +8,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::storage::write_atomic_json;
 
-const ALLOWED_FIELDS: [&str; 30] = [
+const ALLOWED_FIELDS: [&str; 33] = [
     "source",
     "platform",
     "severity",
@@ -39,6 +39,11 @@ const ALLOWED_FIELDS: [&str; 30] = [
     "duration_s",
     "vm_held_mb",
     "guest_used_mb",
+    // Routing: which provider/session may see this event. Dropping these broadcast
+    // session-scoped notices to every lead.
+    "audience_provider",
+    "audience_sessions",
+    "surface",
 ];
 const TRANSPORTS: [&str; 5] = ["hook", "terminal", "os", "discord", "telegram"];
 const DELIVERY_STATES: [&str; 4] = ["delivered", "failed", "skipped", "unavailable"];
