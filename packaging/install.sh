@@ -656,20 +656,13 @@ if command -v codex >/dev/null 2>&1 || [ -d "$CODEX_CONFIG_HOME" ]; then
   connect_provider codex codex "$CODEX_HOOK_TARGET" \
     "Codex 0.145.0+ with stable hooks enabled is required"
 fi
-# Older releases always wrote ~/.codex even when Codex was using a different CODEX_HOME. Keep an
-# already-installed standalone CLI route current so it gains source ownership, but never create a
-# second route merely because the default path exists.
+# Older releases also wrote ~/.codex when Codex used a different CODEX_HOME. Codex then also loads
+# that file as a project hook file under $HOME and runs every Calando hook twice, so remove it.
 if [ "$DEFAULT_CODEX_HOOK_TARGET" != "$CODEX_HOOK_TARGET" ] && \
   [ -f "$DEFAULT_CODEX_HOOK_TARGET" ] && \
   grep -Eq 'calando|memory-supervisor|hooks[/\\]gate' "$DEFAULT_CODEX_HOOK_TARGET"; then
-  legacy_merge=$("$INSTALLED_BINARY" integration hooks --target "$DEFAULT_CODEX_HOOK_TARGET" \
-    --provider codex --binary "$INSTALLED_BINARY")
-  printf '%s\n' "$legacy_merge"
-  case "$legacy_merge" in
-    *"updated: "*) HOOK_WIRING_CHANGED="$HOOK_WIRING_CHANGED codex" ;;
-  esac
   "$INSTALLED_BINARY" integration hooks --target "$DEFAULT_CODEX_HOOK_TARGET" \
-    --provider codex --binary "$INSTALLED_BINARY" --check
+    --provider codex --binary "$INSTALLED_BINARY" --remove
 fi
 if [ -n "$HOOK_WIRING_CHANGED" ]; then
   echo "Hook wiring changed for:${HOOK_WIRING_CHANGED}. Follow the provider-specific reload and trust steps below."

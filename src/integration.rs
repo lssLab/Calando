@@ -598,15 +598,17 @@ fn other_platform_routes(
     let mut kept = Map::new();
     for (event, _, timeout, matcher) in CODEX_HOOK_SPECS {
         let (command, command_windows) = existing_app_route(config, event);
+        // Keep only a route this tool writes for the other platform: a POSIX binary path or a
+        // Windows `.exe`. A no-op, or an old Windows route that named a Linux binary, goes too.
         let (command, command_windows) = if platform == "windows" {
             (
-                command.filter(|route| route != "true")?,
+                command.filter(|route| route.starts_with("'/"))?,
                 "exit 0".to_owned(),
             )
         } else {
             (
                 "true".to_owned(),
-                command_windows.filter(|route| route != "exit 0")?,
+                command_windows.filter(|route| route.contains(".exe"))?,
             )
         };
         let hook = json!({

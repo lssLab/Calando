@@ -506,19 +506,14 @@ try {
     if ((Test-Path (Split-Path $CodexHooks)) -or (Get-Command codex -ErrorAction SilentlyContinue)) {
         Connect-Provider "codex" "codex" $CodexHooks "Codex 0.145.0+ with stable hooks enabled is required"
     }
-    # Older releases always wrote ~/.codex even when Codex used a different CODEX_HOME. Refresh an
-    # existing owned CLI route so it receives source ownership, but never create a second route.
+    # Older releases also wrote ~/.codex when Codex used a different CODEX_HOME. Codex then also
+    # loads that file as a project hook file under the profile and runs every hook twice.
     if (-not $DefaultCodexHooks.Equals($CodexHooks, [StringComparison]::OrdinalIgnoreCase) -and
         (Test-Path -LiteralPath $DefaultCodexHooks -PathType Leaf) -and
         ([IO.File]::ReadAllText($DefaultCodexHooks) -match 'calando|memory-supervisor|hooks[/\\]gate')) {
-        $LegacyMerge = & $InstalledBinary integration hooks --target $DefaultCodexHooks `
-            --provider codex --binary $InstalledBinary | Out-String
-        if ($LASTEXITCODE -ne 0) { throw "legacy Codex hook merge failed" }
-        Write-Host $LegacyMerge.TrimEnd()
-        if ($LegacyMerge -match 'updated: ') { $script:HookWiringChanged += "codex" }
         & $InstalledBinary integration hooks --target $DefaultCodexHooks --provider codex `
-            --binary $InstalledBinary --check
-        if ($LASTEXITCODE -ne 0) { throw "legacy Codex hook verification failed" }
+            --binary $InstalledBinary --remove
+        if ($LASTEXITCODE -ne 0) { throw "duplicate Codex hook cleanup failed" }
     }
     if ($script:HookWiringChanged.Count -gt 0) {
         Write-Host "Hook wiring changed for: $($script:HookWiringChanged -join ' '). Follow the provider-specific reload and trust steps below."
