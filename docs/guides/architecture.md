@@ -1,7 +1,7 @@
 # Architecture and runtime topology
 
 <p align="center">
-  <strong>English</strong> · <a href="architecture.ko.md">한국어</a> · <a href="architecture.zh-CN.md">简体中文</a> · <a href="architecture.ja.md">日本語</a>
+  <strong>English</strong> · <a href="architecture.ko.md">한국어</a>
 </p>
 
 ## Terminology first

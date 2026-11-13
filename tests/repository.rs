@@ -163,12 +163,8 @@ fn public_tree_uses_only_product_documentation_directories() {
                 name,
                 "README.md"
                     | "README.ko.md"
-                    | "README.zh-CN.md"
-                    | "README.ja.md"
                     | "detailed-guide.md"
                     | "detailed-guide.ko.md"
-                    | "detailed-guide.zh-CN.md"
-                    | "detailed-guide.ja.md"
             )
         };
         assert!(allowed, "unexpected public documentation path: {name}");
@@ -206,10 +202,8 @@ fn repository_root_stays_small_and_support_files_stay_grouped() {
         "Cargo.lock",
         "Cargo.toml",
         "LICENSE",
-        "README.ja.md",
         "README.ko.md",
         "README.md",
-        "README.zh-CN.md",
         "SKILL.md",
         "bootstrap.ps1",
         "bootstrap.sh",
@@ -248,7 +242,7 @@ fn repository_root_stays_small_and_support_files_stay_grouped() {
 }
 
 #[test]
-fn public_documentation_has_all_four_languages() {
+fn public_documentation_has_english_and_korean() {
     let repository = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let root = repository.join("docs");
     let mut files = Vec::new();
@@ -260,12 +254,10 @@ fn public_documentation_has_all_four_languages() {
                 .and_then(|value| value.to_str())
                 .is_some_and(|name| {
                     name.ends_with(".ko.md")
-                        || name.ends_with(".zh-CN.md")
-                        || name.ends_with(".ja.md")
                 })
     }) {
         let stem = path.file_stem().and_then(|value| value.to_str()).unwrap();
-        for suffix in [".md", ".ko.md", ".zh-CN.md", ".ja.md"] {
+        for suffix in [".md", ".ko.md"] {
             let counterpart = path.with_file_name(format!("{stem}{suffix}"));
             assert!(
                 counterpart.is_file(),
@@ -281,7 +273,7 @@ fn public_documentation_has_all_four_languages() {
         repository.join(".github/SECURITY"),
         repository.join("integrations/codex/README"),
     ] {
-        for suffix in [".md", ".ko.md", ".zh-CN.md", ".ja.md"] {
+        for suffix in [".md", ".ko.md"] {
             let counterpart = PathBuf::from(format!("{}{suffix}", base.display()));
             assert!(
                 counterpart.is_file(),

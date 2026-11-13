@@ -1,7 +1,7 @@
 # Security policy
 
 <p align="center">
-  <strong>English</strong> · <a href="SECURITY.ko.md">한국어</a> · <a href="SECURITY.zh-CN.md">简体中文</a> · <a href="SECURITY.ja.md">日本語</a>
+  <strong>English</strong> · <a href="SECURITY.ko.md">한국어</a>
 </p>
 
 Memory Supervisor reads operating-system memory and process metadata, writes private local state,

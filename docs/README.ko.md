@@ -1,7 +1,7 @@
 # 문서 안내
 
 <p align="center">
-  <a href="README.md">English</a> · <strong>한국어</strong> · <a href="README.zh-CN.md">简体中文</a> · <a href="README.ja.md">日本語</a>
+  <a href="README.md">English</a> · <strong>한국어</strong>
 </p>
 
 처음부터 모든 문서를 읽을 필요는 없습니다. 사용 목적에 맞는 아래 세 문서 중 하나에서
@@ -43,4 +43,4 @@
 
 </details>
 
-모든 공개 문서는 영어 `.md`, 한국어 `.ko.md`, 중국어 간체 `.zh-CN.md`, 일본어 `.ja.md`로 제공합니다.
+모든 공개 문서는 영어 `.md`와 한국어 `.ko.md`로 제공합니다.

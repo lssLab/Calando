@@ -1,7 +1,7 @@
 # 아키텍처와 실행 구조
 
 <p align="center">
-  <a href="architecture.md">English</a> · <strong>한국어</strong> · <a href="architecture.zh-CN.md">简体中文</a> · <a href="architecture.ja.md">日本語</a>
+  <a href="architecture.md">English</a> · <strong>한국어</strong>
 </p>
 
 ## 먼저 용어부터 명확히 구분합니다

@@ -1,7 +1,7 @@
 # 기여 방법
 
 <p align="center">
-  <a href="CONTRIBUTING.md">English</a> · <strong>한국어</strong> · <a href="CONTRIBUTING.zh-CN.md">简体中文</a> · <a href="CONTRIBUTING.ja.md">日本語</a>
+  <a href="CONTRIBUTING.md">English</a> · <strong>한국어</strong>
 </p>
 
 변경은 제품의 중심 원칙을 지켜야 합니다. 측정된 위험이 실제로 가까워지기 전까지 유용한 작업을
@@ -18,7 +18,7 @@ bash tests/run.sh
 ```
 
 Windows 관련 변경은 `powershell -File .\tests\run.ps1`도 실행합니다. `docs/` 아래 문서는 영어
-`.md`, 한국어 `.ko.md`, 중국어 간체 `.zh-CN.md`, 일본어 `.ja.md`를 함께 수정하고, 상대 링크가
+`.md`와 한국어 `.ko.md`를 함께 수정하고, 상대 링크가
 유효한지 확인하며, 개인 경로·인증 정보나 공개 사용과 무관한 내부 문서를 포함하지 않습니다.
 
 Issue나 Pull Request에는 사용자에게 보이는 변화와 실행한 검증을 간단히 적습니다. 보안상 민감한

@@ -1,7 +1,7 @@
 # Claude Code usage
 
 <p align="center">
-  <strong>English</strong> · <a href="usage-claude.ko.md">한국어</a> · <a href="usage-claude.zh-CN.md">简体中文</a> · <a href="usage-claude.ja.md">日本語</a>
+  <strong>English</strong> · <a href="usage-claude.ko.md">한국어</a>
 </p>
 
 ## Supported contract

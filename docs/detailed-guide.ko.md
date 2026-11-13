@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="detailed-guide.md">English</a> · <strong>한국어</strong> · <a href="detailed-guide.zh-CN.md">简体中文</a> · <a href="detailed-guide.ja.md">日本語</a>
+  <a href="detailed-guide.md">English</a> · <strong>한국어</strong>
 </p>
 
 <p align="center">

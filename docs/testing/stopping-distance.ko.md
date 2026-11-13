@@ -1,7 +1,7 @@
 # 적응형 제동거리
 
 <p align="center">
-  <a href="stopping-distance.md">English</a> · <strong>한국어</strong> · <a href="stopping-distance.zh-CN.md">简体中文</a> · <a href="stopping-distance.ja.md">日本語</a>
+  <a href="stopping-distance.md">English</a> · <strong>한국어</strong>
 </p>
 
 Calando의 목적은 메모리 사용량을 낮게 유지하는 것이 아닙니다. 메모리 여유가 줄어도

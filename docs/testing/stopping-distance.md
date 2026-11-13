@@ -1,7 +1,7 @@
 # Adaptive stopping distance
 
 <p align="center">
-  <strong>English</strong> · <a href="stopping-distance.ko.md">한국어</a> · <a href="stopping-distance.zh-CN.md">简体中文</a> · <a href="stopping-distance.ja.md">日本語</a>
+  <strong>English</strong> · <a href="stopping-distance.ko.md">한국어</a>
 </p>
 
 Calando is not designed to keep memory use low. Existing work remains unrestricted while

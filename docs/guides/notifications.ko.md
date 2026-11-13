@@ -1,7 +1,7 @@
 # 알림 — 터미널, Hook, Telegram
 
 <p align="center">
-  <a href="notifications.md">English</a> · <strong>한국어</strong> · <a href="notifications.zh-CN.md">简体中文</a> · <a href="notifications.ja.md">日本語</a>
+  <a href="notifications.md">English</a> · <strong>한국어</strong>
 </p>
 
 Calando의 알림 경로는 세 가지다.

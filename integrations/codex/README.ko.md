@@ -1,7 +1,7 @@
 # Codex 어댑터
 
 <p align="center">
-  <a href="README.md">English</a> · <strong>한국어</strong> · <a href="README.zh-CN.md">简体中文</a> · <a href="README.ja.md">日本語</a>
+  <a href="README.md">English</a> · <strong>한국어</strong>
 </p>
 
 보통은 최상위 한 줄 설치기를 쓰고, 업그레이드나 나중에 추가한 Codex 설치에는 `calando update`를

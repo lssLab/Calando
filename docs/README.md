@@ -1,7 +1,7 @@
 # Documentation
 
 <p align="center">
-  <strong>English</strong> · <a href="README.ko.md">한국어</a> · <a href="README.zh-CN.md">简体中文</a> · <a href="README.ja.md">日本語</a>
+  <strong>English</strong> · <a href="README.ko.md">한국어</a>
 </p>
 
 You do not need to read every document. Start with the one of these three that matches what you
@@ -43,5 +43,4 @@ To read the original detailed README continuously from beginning to end, use the
 
 </details>
 
-Every public document is provided in English `.md`, Korean `.ko.md`, Simplified Chinese
-`.zh-CN.md`, and Japanese `.ja.md`.
+Every public document is provided in English `.md` and Korean `.ko.md`.

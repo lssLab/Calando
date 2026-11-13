@@ -1,7 +1,7 @@
 # 보안 정책
 
 <p align="center">
-  <a href="SECURITY.md">English</a> · <strong>한국어</strong> · <a href="SECURITY.zh-CN.md">简体中文</a> · <a href="SECURITY.ja.md">日本語</a>
+  <a href="SECURITY.md">English</a> · <strong>한국어</strong>
 </p>
 
 Memory Supervisor는 운영체제의 메모리·프로세스 정보만 확인하고 비공개 로컬 상태를 기록하며,
