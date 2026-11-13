@@ -302,9 +302,13 @@ fn off_resumes_every_paused_process_before_turning_off() {
                     let request_id = request["request_id"].as_str().unwrap();
                     fs::write(&runtime, br#"{"stopped":{}}"#).unwrap();
                     fs::create_dir_all(control.join("results")).unwrap();
-                    fs::write(
+                    // Like the daemon, write the result atomically; the CLI may read it at
+                    // any moment.
+                    let partial = control.join("results").join(format!("{request_id}.tmp"));
+                    fs::write(&partial, br#"{"ok":true}"#).unwrap();
+                    fs::rename(
+                        &partial,
                         control.join("results").join(format!("{request_id}.json")),
-                        br#"{"ok":true}"#,
                     )
                     .unwrap();
                     return request;
@@ -627,9 +631,12 @@ fn resume_lists_paused_sessions_and_resumes_the_chosen_pid() {
                     let request: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
                     let request_id = request["request_id"].as_str().unwrap();
                     fs::create_dir_all(control.join("results")).unwrap();
-                    fs::write(
+                    // Like the daemon, write the result atomically.
+                    let partial = control.join("results").join(format!("{request_id}.tmp"));
+                    fs::write(&partial, br#"{"ok":true}"#).unwrap();
+                    fs::rename(
+                        &partial,
                         control.join("results").join(format!("{request_id}.json")),
-                        br#"{"ok":true}"#,
                     )
                     .unwrap();
                     return request;
