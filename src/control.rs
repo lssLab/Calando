@@ -443,14 +443,36 @@ fn maintain_installation(action: &str) -> i32 {
             "Reapplying the service and all detected CLI connections..."
         }
     );
-    let status = if cfg!(windows) {
-        Command::new("powershell.exe")
-            .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-File"])
-            .arg(script)
-            .status()
+    let mut command = if cfg!(windows) {
+        let mut command = Command::new("powershell.exe");
+        command.args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-File"]);
+        command
     } else {
-        Command::new("/bin/sh").arg(script).status()
+        Command::new("/bin/sh")
     };
+    command.arg(script);
+    // Reapplying a release install reuses this binary: the installer would otherwise download
+    // one from the release without the signed-list check.
+    let reuse = (action != "uninstall"
+        && !root.join(".git").is_dir()
+        && env::var_os("MEMORY_SUPERVISOR_BINARY_SOURCE").is_none())
+    .then(|| {
+        let copy = env::temp_dir().join(format!(
+            "calando-current-{}{}",
+            std::process::id(),
+            env::consts::EXE_SUFFIX
+        ));
+        fs::copy(env::current_exe().ok()?, &copy).ok()?;
+        Some(copy)
+    })
+    .flatten();
+    if let Some(copy) = &reuse {
+        command.env("MEMORY_SUPERVISOR_BINARY_SOURCE", copy);
+    }
+    let status = command.status();
+    if let Some(copy) = &reuse {
+        let _ = fs::remove_file(copy);
+    }
     match status {
         Ok(status) if status.success() && update_status == 0 => 0,
         Ok(_) => 1,
