@@ -6308,6 +6308,14 @@ impl Supervisor {
             ("psi_some_avg10".to_owned(), json!(pressure.some_avg10)),
             ("psi_full_avg10".to_owned(), json!(pressure.full_avg10)),
             ("platform".to_owned(), Value::String(self.platform.clone())),
+            ("vm_held_mb".to_owned(), json!(self.vm_held_mb)),
+            (
+                "guest_used_mb".to_owned(),
+                json!(
+                    self.vm_held_mb
+                        .and_then(|_| co_resident_wsl_used_mb(&fresh_federated_states(30.0)))
+                ),
+            ),
             ("instance".to_owned(), Value::String(self.instance.clone())),
             ("targets".to_owned(), json!(TARGETS)),
             (

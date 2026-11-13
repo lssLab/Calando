@@ -602,6 +602,48 @@ fn agents_summary(state: &Value, session: &str) -> String {
     format!("Other sessions: {}{memory}", others.len())
 }
 
+/// Free memory per OS for a person: Windows counts the whole WSL VM as used, but what WSL holds
+/// and does not use is still free inside WSL.
+fn memory_lines(state: &Value) -> String {
+    let gb = |mb: f64| format!("{:.1}", mb / 1024.0);
+    let number = |key: &str| state.get(key).and_then(Value::as_f64);
+    let os = match state.get("platform").and_then(Value::as_str) {
+        Some("windows") => "Windows",
+        Some("wsl") => "WSL",
+        Some("darwin" | "macos") => "macOS",
+        _ => "Linux",
+    };
+    let mut lines = match (number("mem_available_mb"), number("memory_capacity_mb")) {
+        (Some(free), Some(capacity)) => {
+            let vm = number("vm_held_mb")
+                .map(|held| format!(" (WSL VM holds {} GB of it)", gb(held)))
+                .unwrap_or_default();
+            format!("{os} free: {} of {} GB{vm}", gb(free), gb(capacity))
+        }
+        _ => format!("{os} free: unknown"),
+    };
+    if let (Some(held), Some(used)) = (number("vm_held_mb"), number("guest_used_mb")) {
+        lines.push_str(&format!(
+            "\nWSL free: {} of {} GB",
+            gb((held - used).max(0.0)),
+            gb(held)
+        ));
+    }
+    let level = serde_json::to_value(gate_level(state))
+        .ok()
+        .and_then(|value| value.as_str().map(str::to_owned))
+        .unwrap_or_else(|| "GREEN".to_owned());
+    lines.push_str(&format!(
+        "\nNew heavy work: {}",
+        if matches!(level.as_str(), "GREEN" | "YELLOW") {
+            "allowed"
+        } else {
+            "held"
+        }
+    ));
+    lines
+}
+
 fn pressure_summary(state: &Value) -> String {
     let level = serde_json::to_value(gate_level(state))
         .ok()
@@ -1129,8 +1171,8 @@ fn decide_with_session_health(
     {
         // Handled here and never sent to the model, so it costs no tokens or context.
         let mut status_lines = format!(
-            "Memory: {}\n{}",
-            pressure_summary(state),
+            "{}\n{}",
+            memory_lines(state),
             agents_summary(state, &session)
         );
         // Shown only on request, never pushed into the agent's context.
