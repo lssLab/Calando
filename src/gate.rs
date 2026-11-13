@@ -613,16 +613,22 @@ fn pressure_summary(state: &Value) -> String {
         .or_else(|| state.get("level"))
         .and_then(Value::as_str)
         .unwrap_or("GREEN");
-    let available = state
+    // Free memory and capacity must come from the same environment.
+    let (available, capacity) = if state
         .get("admission_mem_available_mb")
-        .or_else(|| state.get("mem_available_mb"))
-        .map(Value::to_string)
-        .unwrap_or_else(|| "?".to_owned());
-    let capacity = state
-        .get("admission_capacity_mb")
-        .or_else(|| state.get("memory_capacity_mb"))
-        .map(Value::to_string)
-        .unwrap_or_else(|| "?".to_owned());
+        .is_some_and(|value| !value.is_null())
+    {
+        ("admission_mem_available_mb", "admission_capacity_mb")
+    } else {
+        ("mem_available_mb", "memory_capacity_mb")
+    };
+    let [available, capacity] = [available, capacity].map(|key| {
+        state
+            .get(key)
+            .filter(|value| !value.is_null())
+            .map(Value::to_string)
+            .unwrap_or_else(|| "?".to_owned())
+    });
     let mut summary = format!(
         "admission={level} utilization={utilization} MemAvailable={available}MB capacity={capacity}MB leak_suspects={}",
         list(state.get("leak_suspects")).len()

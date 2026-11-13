@@ -74,9 +74,24 @@ fn save(directory: &Path, provider: &str, session: &str, control: &SessionContro
         if let Some(cap_mb) = control.cap_mb {
             entry.insert("cap_mb".to_owned(), json!(cap_mb));
         }
+        entry.insert("at".to_owned(), json!(crate::platform::now_epoch()));
         all.insert(key, Value::Object(entry));
     }
     write_atomic_json(&sessions_path(directory), &Value::Object(all), 0o600, true).is_ok()
+}
+
+/// Drops settings of sessions that are gone: not `alive` and not changed for `older_than_s`.
+pub fn prune(directory: &Path, alive: impl Fn(&str, &str) -> bool, now: f64, older_than_s: f64) {
+    let mut all = load_all(directory);
+    let before = all.len();
+    all.retain(|key, value| {
+        let (provider, session) = key.split_once(':').unwrap_or((key, ""));
+        alive(provider, session)
+            || now - value.get("at").and_then(Value::as_f64).unwrap_or_default() < older_than_s
+    });
+    if all.len() != before {
+        let _ = write_atomic_json(&sessions_path(directory), &Value::Object(all), 0o600, true);
+    }
 }
 
 /// The words after `/calando` or `$calando`, or `None` when the prompt is not a Calando command.
@@ -263,6 +278,16 @@ mod tests {
 
         handle(&directory, "claude", "a", &["on"], "", &state, false);
         assert_eq!(all_controls(&directory).len(), 1);
+        let later = crate::platform::now_epoch() + 8.0 * 86_400.0;
+        prune(
+            &directory,
+            |_, session| session == "c",
+            later,
+            7.0 * 86_400.0,
+        );
+        assert_eq!(all_controls(&directory).len(), 1);
+        prune(&directory, |_, _| false, later, 7.0 * 86_400.0);
+        assert!(all_controls(&directory).is_empty());
         fs::remove_dir_all(directory).unwrap();
     }
 }

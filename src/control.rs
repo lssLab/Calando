@@ -802,10 +802,8 @@ impl BudgetPeer {
 }
 
 struct BudgetView {
-    own_instance: String,
     own_capacity_mb: f64,
     physical_mb: f64,
-    physical_source: String,
     peers: Vec<BudgetPeer>,
     own_cap_mb: Option<f64>,
 }
@@ -816,10 +814,6 @@ impl BudgetView {
             .iter()
             .filter_map(|peer| peer.cap_mb)
             .fold(0.0, |total, cap| total + cap)
-    }
-
-    fn theoretical_mb(&self) -> f64 {
-        self.own_capacity_mb.min(self.physical_mb)
     }
 
     fn current_mb(&self) -> f64 {
@@ -946,82 +940,43 @@ fn collect_budget_view(now: f64) -> Result<BudgetView, String> {
         }
     }
     let peers: Vec<_> = peers.into_values().collect();
-    let (physical_mb, physical_source) = peers
+    let physical_mb = peers
         .iter()
-        .filter_map(|peer| Some((peer.capacity_mb?, peer.instance.as_str())))
-        .chain([(own_capacity_mb, own_instance.as_str())])
-        .max_by(|left, right| left.0.total_cmp(&right.0))
-        .map(|(capacity, instance)| (capacity, instance.to_owned()))
-        .unwrap_or((own_capacity_mb, own_instance.clone()));
+        .filter_map(|peer| peer.capacity_mb)
+        .fold(own_capacity_mb, f64::max);
     Ok(BudgetView {
-        own_instance,
         own_capacity_mb,
         physical_mb,
-        physical_source,
         peers,
         own_cap_mb,
     })
 }
 
 fn show_budget(view: &BudgetView) -> i32 {
-    println!("CLI memory budget — kernel {}", view.own_instance);
-    println!("  this kernel capacity: {}", mb_gib(view.own_capacity_mb));
     println!(
-        "  physical machine estimate: {} (largest known kernel: {})",
-        mb_gib(view.physical_mb),
-        view.physical_source
-    );
-    if view.peers.is_empty() {
-        println!(
-            "  other kernels: none detected in the federation directory; install the supervisor \
-             in every kernel (host, WSL, VM, isolated container) so budgets share one physical \
-             total"
-        );
-    } else {
-        println!("  other kernels' explicit budgets:");
-        for peer in &view.peers {
-            let budget = peer
-                .cap_mb
-                .map(mb_gib)
-                .unwrap_or_else(|| "OFF (default kernel allocation is not a claim)".to_owned());
-            let capacity = peer
-                .capacity_mb
-                .map(|value| format!(", capacity {}", mb_gib(value)))
-                .unwrap_or_default();
-            println!(
-                "    {}: {budget}{capacity}{}",
-                peer.instance,
-                peer.stale_note()
-            );
-        }
-    }
-    println!("  budgeted elsewhere: {}", mb_gib(view.other_claims_mb()));
-    println!(
-        "  theoretical maximum here (if no other kernel kept a budget): {}",
-        mb_gib(view.theoretical_mb())
-    );
-    println!("  currently possible here: {}", mb_gib(view.current_mb()));
-    println!(
-        "  this kernel's budget: {}",
+        "Memory cap here: {}",
         view.own_cap_mb
             .map(mb_gib)
-            .unwrap_or_else(|| "OFF (adaptive policy only)".to_owned())
+            .unwrap_or_else(|| "off (Calando protects memory automatically)".to_owned())
     );
+    println!("Largest cap possible now: {}", mb_gib(view.current_mb()));
+    for peer in view.peers.iter().filter(|peer| peer.cap_mb.is_some()) {
+        println!(
+            "Cap in {}: {}{}",
+            peer.instance,
+            peer.cap_mb.map(mb_gib).unwrap_or_default(),
+            peer.stale_note()
+        );
+    }
     let total = view.other_claims_mb() + view.own_cap_mb.unwrap_or_default();
-    println!(
-        "  explicit budgets across kernels: {} of the {} physical estimate ({:.0}%)",
-        mb_gib(total),
-        mb_gib(view.physical_mb),
-        100.0 * total / view.physical_mb
-    );
     if total > view.physical_mb {
         println!(
-            "  warning: explicit budgets across kernels total {} and exceed the physical machine \
-             estimate {}; reduce one so the machine cannot be over-committed",
+            "Warning: caps across environments total {}, more than this machine's {}.",
             mb_gib(total),
             mb_gib(view.physical_mb)
         );
     }
+    println!("Set: calando cap <GB>    Remove: calando cap off");
     0
 }
 
@@ -1290,10 +1245,8 @@ mod tests {
             .filter_map(|peer| peer.capacity_mb)
             .fold(own_capacity, f64::max);
         BudgetView {
-            own_instance: "wsl".to_owned(),
             own_capacity_mb: own_capacity,
             physical_mb,
-            physical_source: "host".to_owned(),
             peers,
             own_cap_mb: None,
         }
@@ -1318,11 +1271,9 @@ mod tests {
     #[test]
     fn budget_totals_separate_theoretical_from_currently_possible() {
         let unconstrained = view(7941.0, Some(16108.0), &[]);
-        assert_eq!(unconstrained.theoretical_mb(), 7941.0);
         assert_eq!(unconstrained.current_mb(), 7941.0);
 
         let host_claimed = view(7941.0, Some(16108.0), &[12288.0]);
-        assert_eq!(host_claimed.theoretical_mb(), 7941.0);
         assert_eq!(host_claimed.current_mb(), 16108.0 - 12288.0);
 
         let small_claims = view(7941.0, Some(16108.0), &[4000.0, 2000.0]);

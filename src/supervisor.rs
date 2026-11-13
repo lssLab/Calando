@@ -906,6 +906,17 @@ impl Supervisor {
                 let _ = fs::remove_file(entry.path());
             }
         }
+        let agents = &self.ledger.logical_agents;
+        crate::session::prune(
+            &self.directory,
+            |provider, session| {
+                agents
+                    .values()
+                    .any(|agent| agent.provider == provider && agent.session_id == session)
+            },
+            now,
+            STALE_MARKER_S,
+        );
         if crate::topology::channel_is_host_local(&federation_dir()) {
             crate::status::prune_stale_at(&federation_dir(), STALE_MARKER_S / 3600.0, now);
         }

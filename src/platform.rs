@@ -78,7 +78,7 @@ pub fn sensor_health() -> SensorHealth {
         .unwrap_or_default()
 }
 
-fn now_epoch() -> f64 {
+pub fn now_epoch() -> f64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
