@@ -90,7 +90,7 @@ pub fn user_message(event: &Value) -> String {
         (
             "PROCESS PAUSED",
             "The exact PID and its in-memory session are preserved; this is not a crash.",
-            pid.map(|_| format!("To continue now: {}.", crate::status::RESUME_GUIDANCE))
+            pid.map(|pid| format!("To continue now: {}.", crate::status::resume_guidance(pid)))
                 .unwrap_or_else(|| "Check `calando status`.".to_owned()),
         )
     } else if action == "resumed" || status == "resumed" {
@@ -297,7 +297,9 @@ pub fn concise_message(event: &Value) -> String {
             "Guarded resume failed".to_owned(),
             format!(
                 "{process} is paused again. To continue, {}.",
-                crate::status::RESUME_GUIDANCE
+                crate::status::resume_guidance(
+                    number(event, "pid").map_or("<pid>".to_owned(), |pid| format!("{pid:.0}"))
+                )
             ),
         ),
         ("lead-probation", "resumed") => (

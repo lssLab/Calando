@@ -4,10 +4,7 @@ use std::env;
 use std::ffi::OsString;
 use std::fs;
 use std::io;
-#[cfg(windows)]
-use std::io::IsTerminal;
-#[cfg(unix)]
-use std::io::Write;
+use std::io::{IsTerminal, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::thread;
@@ -555,6 +552,106 @@ fn release_paused_processes() {
     }
 }
 
+/// Paused processes as `(pid, label)`, oldest first. The PID is the paused CLI process inside
+/// a terminal (Claude Code or Codex), not the terminal.
+fn paused_processes() -> Vec<(u32, String)> {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_secs_f64())
+        .unwrap_or_default();
+    let mut paused: Vec<(f64, u32, String)> = read_json_file(&state_dir().join("runtime.json"))
+        .and_then(|runtime| runtime.get("stopped")?.as_object().cloned())
+        .unwrap_or_default()
+        .iter()
+        .filter_map(|(pid, record)| {
+            let pid: u32 = pid.parse().ok()?;
+            let text = |key: &str| record.get(key).and_then(Value::as_str).unwrap_or("?");
+            let since = record
+                .get("suspended_at")
+                .and_then(Value::as_f64)
+                .unwrap_or(now);
+            let gb = record
+                .get("anon_mb")
+                .and_then(Value::as_f64)
+                .map(|mb| format!(" · {:.1} GB", mb / 1024.0))
+                .unwrap_or_default();
+            let minutes = ((now - since) / 60.0).max(0.0).round();
+            Some((
+                since,
+                pid,
+                format!(
+                    "{} ({}){gb} · paused {minutes:.0} min ago",
+                    text("name"),
+                    text("role")
+                ),
+            ))
+        })
+        .collect();
+    paused.sort_by(|left, right| left.0.total_cmp(&right.0));
+    paused
+        .into_iter()
+        .map(|(_, pid, label)| (pid, label))
+        .collect()
+}
+
+fn resume(arguments: &[String]) -> i32 {
+    let paused = paused_processes();
+    if paused.is_empty() {
+        println!("Nothing is paused.");
+        return 0;
+    }
+    let chosen: Vec<u32> = match arguments.first().map(String::as_str) {
+        Some("all") => paused.iter().map(|(pid, _)| *pid).collect(),
+        Some(pid) => match pid.parse::<u32>() {
+            Ok(pid) if paused.iter().any(|(paused, _)| *paused == pid) => vec![pid],
+            _ => {
+                eprintln!("PID {pid} is not paused by Calando. Run `calando resume` to list them.");
+                return 2;
+            }
+        },
+        None => {
+            println!("Paused sessions:");
+            for (index, (pid, label)) in paused.iter().enumerate() {
+                println!("  {}) PID {pid}  {label}", index + 1);
+            }
+            if !io::stdin().is_terminal() {
+                println!("Run `calando resume <pid>` or `calando resume all`.");
+                return 1;
+            }
+            print!(
+                "Resume which? [1-{}, a = all, Enter = cancel]: ",
+                paused.len()
+            );
+            let _ = io::stdout().flush();
+            let mut line = String::new();
+            let _ = io::stdin().read_line(&mut line);
+            match line.trim().to_lowercase().as_str() {
+                "" => {
+                    println!("Cancelled; nothing changed.");
+                    return 0;
+                }
+                "a" | "all" => paused.iter().map(|(pid, _)| *pid).collect(),
+                number => match number
+                    .parse::<usize>()
+                    .ok()
+                    .and_then(|n| paused.get(n.checked_sub(1)?))
+                {
+                    Some((pid, _)) => vec![*pid],
+                    None => {
+                        eprintln!("Not on the list; nothing changed.");
+                        return 2;
+                    }
+                },
+            }
+        }
+    };
+    let mut code = 0;
+    for pid in chosen {
+        code = code.max(submit_control("resume", pid, 5.0));
+    }
+    code
+}
+
 fn lock(arguments: &[String]) -> i32 {
     let path = crate::config::lock_path();
     let result = match arguments.first().map(String::as_str) {
@@ -768,6 +865,7 @@ Usage: calando <command>
 
   status [--json]        Show memory, protection and agents
   on | off               Turn protection on or off for this environment
+  resume [<pid> | all]   Continue a paused session (lists them when no PID is given)
   telegram [CHAT_ID]     Send notices to Telegram (asks for the bot token)
   telegram off           Stop Telegram notices
   cap [<GB> | off]       Advanced: hard memory cap for all agents here (asks to confirm)
@@ -1103,6 +1201,7 @@ pub fn run_control(arguments: &[OsString]) -> i32 {
             0
         }
         "telegram" => telegram(&arguments[1..]),
+        "resume" => resume(&arguments[1..]),
         "cap" => cap(&arguments[1..]),
         "on" | "off" if arguments.len() == 1 => maintain_power(action),
         "lock" => lock(&arguments[1..]),

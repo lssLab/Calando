@@ -588,3 +588,53 @@ fn expired_green_lease_cannot_hide_a_red_peer_from_the_real_rust_gate() {
             .contains("pointer-peer")
     );
 }
+
+#[test]
+fn resume_lists_paused_sessions_and_resumes_the_chosen_pid() {
+    let sandbox = Sandbox::new("resume");
+    let runtime = sandbox.state.join("runtime.json");
+    let nothing = sandbox.command().arg("resume").output().unwrap();
+    assert!(String::from_utf8_lossy(&nothing.stdout).contains("Nothing is paused."));
+
+    fs::write(
+        &runtime,
+        br#"{"stopped":{"4242":{"name":"claude","role":"lead","anon_mb":6348,"suspended_at":1.0}}}"#,
+    )
+    .unwrap();
+    let listed = sandbox.command().arg("resume").output().unwrap();
+    let listed_text = String::from_utf8_lossy(&listed.stdout);
+    assert!(listed_text.contains("1) PID 4242  claude (lead) · 6.2 GB"), "{listed_text}");
+    assert_eq!(listed.status.code(), Some(1), "non-interactive caller must choose a PID");
+    let unknown = sandbox.command().args(["resume", "7"]).output().unwrap();
+    assert_eq!(unknown.status.code(), Some(2));
+
+    let control = sandbox.state.join("control");
+    let responder = std::thread::spawn(move || {
+        for _ in 0..400 {
+            if let Ok(entries) = fs::read_dir(&control) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.extension().and_then(|value| value.to_str()) != Some("json") {
+                        continue;
+                    }
+                    let request: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+                    let request_id = request["request_id"].as_str().unwrap();
+                    fs::create_dir_all(control.join("results")).unwrap();
+                    fs::write(
+                        control.join("results").join(format!("{request_id}.json")),
+                        br#"{"ok":true}"#,
+                    )
+                    .unwrap();
+                    return request;
+                }
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        panic!("resume did not ask the daemon")
+    });
+    let resumed = sandbox.command().args(["resume", "4242"]).output().unwrap();
+    let request = responder.join().unwrap();
+    assert_eq!(request["action"], "resume");
+    assert_eq!(request["pid"], 4242);
+    assert!(resumed.status.success(), "{}", String::from_utf8_lossy(&resumed.stderr));
+}

@@ -379,6 +379,13 @@ fn extend_incident_audience(fields: &mut Map<String, Value>, incident: &Value) {
     }
 }
 
+fn display_pid(incident: &Value) -> String {
+    incident
+        .get("pid")
+        .and_then(Value::as_u64)
+        .map_or("<pid>".to_owned(), |pid| pid.to_string())
+}
+
 fn incident_notice(incident: &Value, phase: &str, transition_source: &str) -> String {
     let pid = value_u32(incident, "pid");
     let name = incident
@@ -443,7 +450,7 @@ fn incident_notice(incident: &Value, phase: &str, transition_source: &str) -> St
             match recovery {
                 "lead-probation" => "After sustained machine recovery, the supervisor will attempt one guarded automatic resume and watch the same PID. Run `calando status` from another terminal for the live decision.".to_owned(),
                 "automatic-pressure-recovery" => "The supervisor will resume one paused process at a time after sustained recovery. Run `calando status` from another terminal for the live decision.".to_owned(),
-                _ => format!("To continue: {}.", crate::status::RESUME_GUIDANCE),
+                _ => format!("To continue: {}.", crate::status::resume_guidance(display_pid(incident))),
             },
         ),
         "probation" => (
@@ -454,7 +461,7 @@ fn incident_notice(incident: &Value, phase: &str, transition_source: &str) -> St
         "probation_failed" => (
             "PROCESS PAUSED AGAIN",
             "The guarded resume relapsed, so the same PID was reversibly paused again.".to_owned(),
-            format!("It grew again after one automatic resume. To continue: {}.", crate::status::RESUME_GUIDANCE),
+            format!("It grew again after one automatic resume. To continue: {}.", crate::status::resume_guidance(display_pid(incident))),
         ),
         "pressure_resumed" | "recovery_confirmed" => (
             "PROCESS RESUMED",

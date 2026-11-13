@@ -36,8 +36,9 @@ everything fails open.
    heavy workload; the admission action is what limits new work.
 2. `Process paused`: do not recreate or resume that worker. Calando resumes pressure pauses one at
    a time after memory recovers; a lead paused for runaway growth gets one guarded automatic resume.
-3. A paused lead that Calando will not resume: tell the user to close that terminal and continue
-   with the CLI's own resume (`claude --resume`, `codex resume`), or run `calando off`. When a
+3. A paused lead that Calando will not resume: the user runs `calando resume <pid>` (or
+   `calando resume` to pick from a list) in another terminal, or closes that terminal and continues
+   with the CLI's own resume (`claude --resume`, `codex resume`). When a
    session is resumed, its first hook says that its previous process ended and that subagent
    results from that run may be missing.
 

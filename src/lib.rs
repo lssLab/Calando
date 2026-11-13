@@ -59,7 +59,7 @@ where
         Some("gate") => Ok(Command::Gate(rest)),
         Some("status") => Ok(Command::Status(rest)),
         Some("control") => Ok(Command::Control(rest)),
-        Some("on" | "off" | "telegram" | "cap" | "lock" | "update" | "uninstall") => {
+        Some("on" | "off" | "resume" | "telegram" | "cap" | "lock" | "update" | "uninstall") => {
             Ok(Command::Control(remaining))
         }
         Some("notify") => Ok(Command::Notify(rest)),
@@ -90,7 +90,10 @@ mod tests {
             resolve_command(["calando", "cap", "off"].map(OsString::from)).unwrap(),
             Command::Control(vec![OsString::from("cap"), OsString::from("off")])
         );
-        assert!(resolve_command(["calando", "resume", "42"].map(OsString::from)).is_err());
+        assert_eq!(
+            resolve_command(["calando", "resume", "42"].map(OsString::from)).unwrap(),
+            Command::Control(vec![OsString::from("resume"), OsString::from("42")])
+        );
         assert_eq!(
             resolve_command(["memory-supervisor", "off"].map(OsString::from)).unwrap(),
             Command::Control(vec![OsString::from("off")])

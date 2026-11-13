@@ -23,7 +23,13 @@ use crate::platform::{
 use crate::policy::Level;
 
 /// The one way back from a pause Calando will not undo by itself.
-pub const RESUME_GUIDANCE: &str = "close this terminal and reopen the session with your CLI's resume (`claude --resume`, `codex resume`), or run `calando off` to resume it in place";
+/// What a person does to continue a paused process; the PID is the paused CLI process inside
+/// that terminal, not the terminal itself.
+pub fn resume_guidance(pid: impl std::fmt::Display) -> String {
+    format!(
+        "run `calando resume {pid}` in another terminal, or close this terminal and reopen the session with your CLI's resume (`claude --resume`, `codex resume`)"
+    )
+}
 
 fn now_epoch() -> f64 {
     SystemTime::now()
@@ -460,7 +466,12 @@ pub fn human(status: &Value) -> String {
                 )
             ));
         }
-        lines.push(format!("To continue now: {RESUME_GUIDANCE}."));
+        let target = if stopped.len() == 1 {
+            stopped[0].to_string()
+        } else {
+            "<pid>".to_owned()
+        };
+        lines.push(format!("To continue now: {}.", resume_guidance(target)));
         lines.push(String::new());
     } else if probation.and_then(|value| value.get("status").and_then(Value::as_str))
         == Some("monitoring")
@@ -1483,7 +1494,7 @@ mod tests {
         let first = output.lines().take(10).collect::<Vec<_>>().join("\n");
         assert!(first.contains("This is not a terminal crash"));
         assert!(first.contains("codex (lead), PID 42"));
-        assert!(output.contains("calando off"));
+        assert!(output.contains("calando resume 42"));
     }
 
     #[test]
@@ -1728,7 +1739,7 @@ mod tests {
             }]
         }));
         assert!(output.contains("PID 42") && output.contains("PID 43"));
-        assert!(output.contains("calando off"));
+        assert!(output.contains("calando resume <pid>"));
         assert!(output.contains("Recent action notice: PROCESS PAUSED"));
         assert!(output.contains("Notice delivery: hook=delivered, telegram=failed"));
         assert!(!output.contains("Some("));
