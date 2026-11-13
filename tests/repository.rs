@@ -161,10 +161,7 @@ fn public_tree_uses_only_product_documentation_directories() {
         } else {
             matches!(
                 name,
-                "README.md"
-                    | "README.ko.md"
-                    | "detailed-guide.md"
-                    | "detailed-guide.ko.md"
+                "README.md" | "README.ko.md" | "detailed-guide.md" | "detailed-guide.ko.md"
             )
         };
         assert!(allowed, "unexpected public documentation path: {name}");
@@ -252,9 +249,7 @@ fn public_documentation_has_english_and_korean() {
             && !path
                 .file_name()
                 .and_then(|value| value.to_str())
-                .is_some_and(|name| {
-                    name.ends_with(".ko.md")
-                })
+                .is_some_and(|name| name.ends_with(".ko.md"))
     }) {
         let stem = path.file_stem().and_then(|value| value.to_str()).unwrap();
         for suffix in [".md", ".ko.md"] {
