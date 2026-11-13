@@ -97,8 +97,7 @@ fn request_json(
         .spawn()
         .map_err(|error| {
             if error.kind() == io::ErrorKind::NotFound {
-                "curl is unavailable; reinstall Memory Supervisor to repair prerequisites"
-                    .to_owned()
+                "curl is unavailable; reinstall Calando to repair prerequisites".to_owned()
             } else {
                 "connection process could not start".to_owned()
             }
@@ -321,7 +320,7 @@ fn parse_event(arguments: &[OsString]) -> Result<(Value, Option<PathBuf>), Strin
             }
             "--help" | "-h" => {
                 return Err(
-                    "USAGE: memory-supervisor notify [--event-json JSON|--event-file PATH] [--result PATH] [MESSAGE]"
+                    "USAGE: calando notify [--event-json JSON|--event-file PATH] [--result PATH] [MESSAGE]"
                         .to_owned(),
                 );
             }
@@ -341,11 +340,7 @@ fn parse_event(arguments: &[OsString]) -> Result<(Value, Option<PathBuf>), Strin
     if event.get("message").and_then(Value::as_str).is_none() {
         event.as_object_mut().unwrap().insert(
             "message".to_owned(),
-            Value::String(
-                message.unwrap_or_else(|| {
-                    "Claude Code & Codex CLI Memory Supervisor alert".to_owned()
-                }),
-            ),
+            Value::String(message.unwrap_or_else(|| "Calando alert".to_owned())),
         );
     }
     Ok((event, result))

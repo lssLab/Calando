@@ -277,7 +277,7 @@ fn telegram_discovery_error(error: &str) -> i32 {
         eprintln!("The token was rejected. Copy the current token from @BotFather and try again.");
     } else if error.contains("HTTP 409") {
         eprintln!(
-            "This bot already has a webhook or another getUpdates client. Use a dedicated bot for Memory Supervisor; no existing webhook was changed."
+            "This bot already has a webhook or another getUpdates client. Use a dedicated bot for Calando; no existing webhook was changed."
         );
     }
     eprintln!("Nothing was saved.");
@@ -303,13 +303,18 @@ fn installation_root() -> PathBuf {
         .or_else(|| env::var_os("USERPROFILE"))
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("."));
-    if let Ok(value) = fs::read_to_string(home.join(".memory-supervisor").join("install-root")) {
+    if let Ok(value) = fs::read_to_string(crate::config::pointer_dir_in(&home).join("install-root"))
+    {
         let value = value.trim();
         if !value.is_empty() {
             return PathBuf::from(value);
         }
     }
-    home.join(".local").join("share").join("memory-supervisor")
+    crate::config::renamed(
+        &home.join(".local").join("share"),
+        "calando",
+        "memory-supervisor",
+    )
 }
 
 fn maintenance_script(root: &Path, name: &str) -> PathBuf {
@@ -371,7 +376,7 @@ fn maintain_installation(action: &str) -> i32 {
     let root = installation_root();
     let mut update_status = 0;
     if action == "update" {
-        println!("Updating Memory Supervisor source...");
+        println!("Updating Calando source...");
         if root.join(".git").is_dir() {
             update_status = Command::new("git")
                 .args(["-C"])
@@ -420,7 +425,7 @@ fn maintain_installation(action: &str) -> i32 {
     println!(
         "{}",
         if action == "uninstall" {
-            "Removing Memory Supervisor while preserving state and notification settings..."
+            "Removing Calando while preserving state and notification settings..."
         } else {
             "Reapplying the service and all detected CLI connections..."
         }
@@ -751,9 +756,7 @@ fn hard_cap(arguments: &[String]) -> i32 {
     println!("{message}; preserved other settings");
     let status = maintain_installation("apply");
     if status != 0 {
-        eprintln!(
-            "hard-cap setting was saved but service reload failed; run `memory-supervisor update`"
-        );
+        eprintln!("hard-cap setting was saved but service reload failed; run `calando update`");
     }
     status
 }
@@ -872,8 +875,7 @@ fn read_json_file(path: &Path) -> Option<Value> {
 fn collect_budget_view(now: f64) -> Result<BudgetView, String> {
     let state = read_json_file(&state_dir().join("state.json")).ok_or(
         "local supervisor state is unavailable; start or repair the daemon with \
-         `memory-supervisor update` (unvalidated MB setting remains available with \
-         `memory-supervisor hard-cap set <MB>`)",
+         `calando update`",
     )?;
     let age = now - state.get("ts").and_then(Value::as_f64).unwrap_or_default();
     if !(-5.0..=10.0).contains(&age) {

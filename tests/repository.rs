@@ -1,4 +1,4 @@
-use memory_supervisor::integration::desired_hooks;
+use calando::integration::desired_hooks;
 use serde_json::Value;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -44,11 +44,7 @@ fn repository_json_and_skill_metadata_are_valid_without_a_script_runtime() {
     let skill = fs::read_to_string(root.join("SKILL.md")).unwrap();
     assert!(skill.starts_with("---\n"));
     let frontmatter = skill.split("---").nth(1).unwrap_or_default();
-    assert!(
-        frontmatter
-            .lines()
-            .any(|line| line == "name: memory-supervisor")
-    );
+    assert!(frontmatter.lines().any(|line| line == "name: calando"));
 }
 
 #[test]
@@ -342,7 +338,7 @@ fn installers_separate_codex_cli_and_app_reload_instructions() {
         assert!(source.contains("Codex CLI:"), "{installer}");
         assert!(source.contains("Codex App:"), "{installer}");
         assert!(
-            source.contains("Confirm that all seven Memory Supervisor entries are trusted and on")
+            source.contains("Confirm that all seven Calando entries are trusted and on")
                 && source.contains("Then close /hooks and continue the current work"),
             "{installer} must give the concise current-CLI procedure"
         );
@@ -368,11 +364,11 @@ fn installers_separate_codex_cli_and_app_reload_instructions() {
         );
         assert!(
             source.contains("integration resolve-claude")
-                && source.contains("any existing Memory Supervisor hook was preserved"),
+                && source.contains("any existing Calando hook was preserved"),
             "{installer} must resolve supported Claude installations without deleting a hook after a failed version probe"
         );
         assert!(
-            source.contains("Run memory-status --connections anyway"),
+            source.contains("Run calando status anyway"),
             "{installer} must not treat unchanged wiring as proof of healthy trust"
         );
         assert!(
@@ -417,9 +413,9 @@ fn public_bootstrap_uses_verified_release_bundles_without_a_git_prerequisite() {
     let windows = fs::read_to_string(root.join("bootstrap.ps1")).unwrap();
     for (name, source) in [("bootstrap.sh", unix), ("bootstrap.ps1", windows)] {
         assert!(
-            source.contains("memory-supervisor-source")
+            source.contains("calando-source")
                 && source.contains(".sha256")
-                && source.contains(".memory-supervisor-release-source"),
+                && source.contains(".calando-release-source"),
             "{name} must verify and own the version-matched release source bundle"
         );
         assert!(
@@ -430,14 +426,14 @@ fn public_bootstrap_uses_verified_release_bundles_without_a_git_prerequisite() {
     for installer in ["packaging/install.sh", "packaging/install.ps1"] {
         let source = fs::read_to_string(root.join(installer)).unwrap();
         assert!(
-            source.contains(".memory-supervisor-release-source"),
+            source.contains(".calando-release-source"),
             "{installer} must download the matching release binary for a release bundle"
         );
     }
     let package =
         fs::read_to_string(root.join("packaging/release/package-release-source.sh")).unwrap();
-    assert!(package.contains("memory-supervisor-source.tar.gz"));
-    assert!(package.contains("memory-supervisor-source.zip"));
+    assert!(package.contains("calando-source.tar.gz"));
+    assert!(package.contains("calando-source.zip"));
     let verify =
         fs::read_to_string(root.join("packaging/release/verify-release-assets.sh")).unwrap();
     for target in [

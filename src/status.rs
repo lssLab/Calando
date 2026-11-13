@@ -339,11 +339,11 @@ fn display(value: Option<&Value>, default: &str) -> String {
 
 pub fn human(status: &Value) -> String {
     if status.get("power").and_then(Value::as_str) == Some("off") {
-        return "memory-supervisor: OFF\nprotection: intentionally disabled; connected AI CLI hooks pass through without restricting work\nnext: memory-supervisor on".to_owned();
+        return "calando: OFF\nprotection: intentionally disabled; connected AI CLI hooks pass through without restricting work\nnext: calando on".to_owned();
     }
     if status.get("running").and_then(Value::as_bool) != Some(true) {
         return format!(
-            "memory-supervisor: NOT RUNNING\nstate: {}\nreason: {}",
+            "calando: NOT RUNNING\nstate: {}\nreason: {}",
             display(status.get("state_path"), "unknown"),
             display(status.get("error"), "state is stale")
         );
@@ -365,7 +365,7 @@ pub fn human(status: &Value) -> String {
     let probation = status.get("probation").filter(|value| value.is_object());
     let mut lines = Vec::new();
     if !stopped.is_empty() {
-        lines.push("[Memory Supervisor] PROCESS PAUSED".to_owned());
+        lines.push("[Calando] PROCESS PAUSED".to_owned());
         lines.push(format!(
             "Meaning: {} CLI process(es) are reversibly paused. This is not a terminal crash; each PID and in-memory session is preserved.",
             stopped.len()
@@ -467,7 +467,7 @@ pub fn human(status: &Value) -> String {
     {
         let probation = probation.unwrap();
         lines.extend([
-            "[Memory Supervisor] GUARDED RESUME".to_owned(),
+            "[Calando] GUARDED RESUME".to_owned(),
             format!(
                 "State: lead PID {} is running under one-time probation; new fan-out remains held.",
                 display(probation.get("pid"), "?")
@@ -486,13 +486,13 @@ pub fn human(status: &Value) -> String {
             )
             && event.get("message").and_then(Value::as_str).is_some()
     }) {
-        lines.push("[Memory Supervisor] LATEST LEAD RECOVERY EVENT".to_owned());
+        lines.push("[Calando] LATEST LEAD RECOVERY EVENT".to_owned());
         lines.extend(user_message(event).lines().map(str::to_owned));
         lines.push(String::new());
     } else if !restricted_logical_agents(status).is_empty() {
         let restricted = restricted_logical_agents(status);
         lines.extend([
-            "[Memory Supervisor] LOGICAL CUSHION ACTIVE".to_owned(),
+            "[Calando] LOGICAL CUSHION ACTIVE".to_owned(),
             format!(
                 "Meaning: {} logical agent(s) have only named future work restricted; their CLI process is still running and result delivery remains open.",
                 restricted.len()
@@ -525,9 +525,9 @@ pub fn human(status: &Value) -> String {
         let exceeded = status["admission_cli_hard_cap_status"] == "exceeded";
         lines.extend([
             if exceeded {
-                "[Memory Supervisor] EXPLICIT CLI HARD CAP REACHED"
+                "[Calando] EXPLICIT CLI HARD CAP REACHED"
             } else {
-                "[Memory Supervisor] EXPLICIT CLI HARD CAP NEAR"
+                "[Calando] EXPLICIT CLI HARD CAP NEAR"
             }
             .to_owned(),
             format!(
@@ -549,7 +549,7 @@ pub fn human(status: &Value) -> String {
         Some("ORANGE" | "RED")
     ) {
         lines.extend([
-            "[Memory Supervisor] NEW FAN-OUT HELD".to_owned(),
+            "[Calando] NEW FAN-OUT HELD".to_owned(),
             format!(
                 "Decision: action={} · distress={} · attribution estimate={}.",
                 display(
@@ -577,7 +577,7 @@ pub fn human(status: &Value) -> String {
         ]);
     } else {
         lines.extend([
-            "[Memory Supervisor] NORMAL".to_owned(),
+            "[Calando] NORMAL".to_owned(),
             "Effect: existing work and new fan-out are allowed within the current adaptive safety margin."
                 .to_owned(),
             String::new(),
@@ -769,8 +769,8 @@ pub fn human(status: &Value) -> String {
         let title = rendered
             .lines()
             .next()
-            .unwrap_or("[Memory Supervisor] ACTION RECORDED")
-            .trim_start_matches("[Memory Supervisor] ");
+            .unwrap_or("[Calando] ACTION RECORDED")
+            .trim_start_matches("[Calando] ");
         lines.push(format!("Recent action notice: {title}"));
         if let Some(deliveries) = latest.get("deliveries").and_then(Value::as_object) {
             let summary = ["hook", "terminal", "telegram"]
@@ -815,7 +815,7 @@ pub fn human(status: &Value) -> String {
         .is_some_and(|value| !value.is_null())
     {
         lines.push(format!(
-            "pending control recovery: {} — verify the PID identity, then retry the same memory-supervisor action in the owning OS",
+            "pending control recovery: {} — verify the PID identity, then retry `calando off` in the owning OS",
             display(status.get("pending_control"), "?")
         ));
     }
@@ -867,7 +867,7 @@ fn provider_status_with_claude_path(
             "claude",
             "claude",
             ".claude",
-            ".claude/skills/memory-supervisor/SKILL.md",
+            ".claude/skills/calando/SKILL.md",
             ".claude/settings.json",
             "Claude Code 2.1.217+",
             "the supported Claude Code version, skill, and user hook are connected; interactive workspace trust is required before settings-file hooks run and is not verified here",
@@ -877,7 +877,7 @@ fn provider_status_with_claude_path(
             "codex",
             "codex",
             ".codex",
-            ".agents/skills/memory-supervisor/SKILL.md",
+            ".agents/skills/calando/SKILL.md",
             ".codex/hooks.json",
             "Codex 0.145.0+ with hooks stable true",
             "all seven hooks are present, enabled, and trusted",
@@ -943,13 +943,13 @@ fn provider_status_with_claude_path(
                 )
             } else {
                 format!(
-                    "version: supported — {identity}; skill: {skill_state}; hook: {hook_state}; missing/stale: {}; run `memory-supervisor update`",
+                    "version: supported — {identity}; skill: {skill_state}; hook: {hook_state}; missing/stale: {}; run `calando update`",
                     missing.join(", ")
                 )
             }
         } else {
             format!(
-                "version: NEEDS ATTENTION — {}; skill: {skill_state}; hook: {}; update Claude Code, then run `memory-supervisor update`",
+                "version: NEEDS ATTENTION — {}; skill: {skill_state}; hook: {}; update Claude Code, then run `calando update`",
                 claude
                     .as_ref()
                     .map(|discovery| discovery.failure_summary())
@@ -971,7 +971,7 @@ fn provider_status_with_claude_path(
         )
     } else {
         format!(
-            "missing/stale: {}; run `memory-supervisor update`; requires {requirement}",
+            "missing/stale: {}; run `calando update`; requires {requirement}",
             missing.join(", ")
         )
     };
@@ -1009,11 +1009,11 @@ pub fn connection_status(status: &Value) -> Value {
     let binary = env::current_exe().unwrap_or_else(|_| {
         home.join(".local")
             .join("lib")
-            .join("memory-supervisor")
+            .join("calando")
             .join(if cfg!(windows) {
-                "memory-supervisor.exe"
+                "calando.exe"
             } else {
-                "memory-supervisor"
+                "calando"
             })
     });
     let providers = vec![
@@ -1051,7 +1051,7 @@ pub fn connection_status(status: &Value) -> Value {
 
 pub fn human_connections(report: &Value) -> String {
     let mut lines = vec![
-        "Memory Supervisor connections:".to_owned(),
+        "Calando connections:".to_owned(),
         format!(
             "  {:14} {}",
             "Core daemon",
@@ -1124,7 +1124,7 @@ pub fn human_connections(report: &Value) -> String {
     ));
     lines.push(
         if report.get("power").and_then(Value::as_str) == Some("off") {
-            "Result: off by owner; connectors remain installed and pass through. Run `memory-supervisor on` to resume protection."
+            "Result: off by owner; connectors remain installed and pass through. Run `calando on` to resume protection."
         } else if report.get("daemon").and_then(Value::as_str) != Some("CONNECTED") {
             "Result: core daemon needs attention."
         } else if report.get("ready").and_then(Value::as_bool) != Some(true) {
@@ -1268,7 +1268,7 @@ pub fn human_all(statuses: &[Value], directory: &Path) -> String {
 }
 
 fn usage() -> &'static str {
-    "USAGE: memory-status [--json] [--connections] [--all [--prune-stale-hours HOURS]]"
+    "Usage: calando status [--json]"
 }
 
 pub fn run_status(arguments: &[OsString]) -> i32 {
@@ -1367,11 +1367,24 @@ pub fn run_status(arguments: &[OsString]) -> i32 {
         eprintln!("--prune-stale-hours requires --all\n{}", usage());
         return 2;
     }
-    let status = read_status();
+    // One screen: this environment, its CLI connections, and every other environment.
+    let mut status = read_status();
+    let report = connection_status(&status);
+    let directory = federation_dir();
+    let environments = all_statuses_at(&directory, now_epoch());
     if json_output {
+        if let Some(object) = status.as_object_mut() {
+            object.insert("connections".to_owned(), report);
+            object.insert("environments".to_owned(), json!(environments));
+        }
         println!("{}", serde_json::to_string_pretty(&status).unwrap());
     } else {
-        println!("{}", human(&status));
+        println!(
+            "{}\n\n{}\n\n{}",
+            human(&status),
+            human_connections(&report),
+            human_all(&environments, &directory)
+        );
     }
     if status.get("ok").and_then(Value::as_bool) == Some(true) {
         0
@@ -1442,8 +1455,8 @@ mod tests {
         assert_eq!(status["running"], false);
         assert_eq!(status["power"], "off");
         let output = human(&status);
-        assert!(output.starts_with("memory-supervisor: OFF"));
-        assert!(output.contains("memory-supervisor on"));
+        assert!(output.starts_with("calando: OFF"));
+        assert!(output.contains("calando on"));
     }
 
     #[test]
@@ -1486,7 +1499,7 @@ mod tests {
             },
             "leak_suspects":[{"pid":42}], "stopped_pids":[], "recent_incidents":[]
         }));
-        assert!(output.starts_with("[Memory Supervisor] LOGICAL CUSHION ACTIVE"));
+        assert!(output.starts_with("[Calando] LOGICAL CUSHION ACTIVE"));
         assert!(output.contains("Authoritative epoch: 12"));
         assert!(output.contains("claude:s1:a1 | state=LIGHT_WORK_ONLY"));
         assert!(output.contains("CLI process is still running"));
@@ -1529,7 +1542,7 @@ mod tests {
             use std::os::unix::fs::PermissionsExt;
             fs::set_permissions(&claude, fs::Permissions::from_mode(0o755)).unwrap();
         }
-        let skill = home.join(".claude/skills/memory-supervisor");
+        let skill = home.join(".claude/skills/calando");
         fs::create_dir_all(&skill).unwrap();
         fs::write(
             skill.join("SKILL.md"),
@@ -1591,7 +1604,7 @@ mod tests {
             use std::os::unix::fs::PermissionsExt;
             fs::set_permissions(&claude, fs::Permissions::from_mode(0o755)).unwrap();
         }
-        let skill = home.join(".claude/skills/memory-supervisor");
+        let skill = home.join(".claude/skills/calando");
         fs::create_dir_all(&skill).unwrap();
         fs::write(
             skill.join("SKILL.md"),
@@ -1724,7 +1737,7 @@ mod tests {
         assert!(probation.contains("GUARDED RESUME"));
         assert!(probation.contains("new fan-out remains held"));
 
-        let lead_message = "[Memory Supervisor] PROCESS RESUMED\nAgent context: next hook boundary";
+        let lead_message = "[Calando] PROCESS RESUMED\nAgent context: next hook boundary";
         let recent = human(&json!({
             "running":true, "level":"GREEN", "admission_level":"GREEN", "platform":"linux",
             "stopped_pids":[], "notification_events":[{
@@ -1732,7 +1745,7 @@ mod tests {
                 "message":lead_message,"created_at":now_epoch()
             }]
         }));
-        assert!(recent.starts_with("[Memory Supervisor] LATEST LEAD RECOVERY EVENT"));
+        assert!(recent.starts_with("[Calando] LATEST LEAD RECOVERY EVENT"));
         assert!(recent.contains(lead_message));
     }
 

@@ -8,6 +8,6 @@ cargo build --manifest-path "$ROOT/Cargo.toml" --release --locked
 for file in \
   "$ROOT"/*.sh "$ROOT"/packaging/*.sh "$ROOT"/packaging/release/*.sh \
   "$ROOT"/runtime/hooks/*.sh "$ROOT"/runtime/notifications/*.sh \
-  "$ROOT"/runtime/bin/memory-status "$ROOT"/runtime/bin/memory-supervisor; do
+  ; do
   /bin/sh -n "$file"
 done

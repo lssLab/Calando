@@ -253,7 +253,7 @@ fn fail_open_notice(directory: &Path, state: &Value) -> Option<String> {
     }
     let _ = fs::write(&marker, format!("{now}"));
     Some(
-        "[Memory Supervisor] PROTECTION UNAVAILABLE\nThe supervisor daemon state is missing or stale, so admission is failing open and the exact-PID backstop is not running.\nNext: run `memory-status`, then `memory-supervisor update`; restart the service if needed."
+        "[Calando] PROTECTION UNAVAILABLE\nThe supervisor daemon state is missing or stale, so admission is failing open and the exact-PID backstop is not running.\nNext: run `calando status`, then `calando update`; restart the service if needed."
             .to_owned(),
     )
 }
@@ -542,7 +542,7 @@ fn logical_notice(
     let mut notices = Vec::new();
     if new_control && !stale_recovery {
         notices.push(format!(
-            "[memory-supervisor] Logical control epoch {epoch}. Your state is {own_state:?} ({reason}). Current restricted roster: {roster}. Keep result/message/status/recovery paths open, do not recreate a restricted worker, and report this control change to the user."
+            "[calando] Logical control epoch {epoch}. Your state is {own_state:?} ({reason}). Current restricted roster: {roster}. Keep result/message/status/recovery paths open, do not recreate a restricted worker, and report this control change to the user."
         ));
     }
     if !blocked.is_empty() {
@@ -564,7 +564,7 @@ fn logical_notice(
                 let reason = agent
                     .get("last_blocked_reason")
                     .and_then(Value::as_str)
-                    .unwrap_or("memory-supervisor policy");
+                    .unwrap_or("calando policy");
                 let reason: String = reason
                     .split_whitespace()
                     .collect::<Vec<_>>()
@@ -577,7 +577,7 @@ fn logical_notice(
             .collect::<Vec<_>>()
             .join("; ");
         notices.push(format!(
-            "[memory-supervisor] Lead handoff: {entries}. These subagent results may be partial; verify completion and retry only after the current admission and logical state permit it."
+            "[calando] Lead handoff: {entries}. These subagent results may be partial; verify completion and retry only after the current admission and logical state permit it."
         ));
     }
     (!notices.is_empty()).then(|| notices.join(" "))
@@ -995,7 +995,7 @@ fn consume_memory_notice(
         "no action needed; keep working".to_owned()
     };
     let context = format!(
-        "[memory-supervisor] {detail}\n{}\nFor you: {guidance}.",
+        "[calando] {detail}\n{}\nFor you: {guidance}.",
         agents_summary(state, &session)
     );
     Some((context, detail))
@@ -1082,7 +1082,7 @@ fn admission_deferred_reason(state: &Value) -> String {
         .map(|source| format!(" from {source}"))
         .unwrap_or_default();
     format!(
-        "[Memory Supervisor] NEW FAN-OUT HELD — ADMISSION_DEFERRED\nWhy: shared admission is {level}{source}; available memory is {available}/{capacity} MiB.\nEffect: this new spawn is blocked, existing work continues, and no process was paused by this decision.\nNext: finish existing workers or use sequential work, then retry after `memory-status` shows GREEN or YELLOW."
+        "[Calando] NEW FAN-OUT HELD — ADMISSION_DEFERRED\nWhy: shared admission is {level}{source}; available memory is {available}/{capacity} MiB.\nEffect: this new spawn is blocked, existing work continues, and no process was paused by this decision.\nNext: finish existing workers or use sequential work, then retry after `calando status` shows GREEN or YELLOW."
     )
 }
 
@@ -1195,7 +1195,7 @@ fn decide_with_session_health(
             Some(context(
                 "SessionStart",
                 &format!(
-                    "[memory-supervisor] Active. Current: {}. New heavy work is held only under measured memory danger; you are told when it affects you.{suffix}",
+                    "[calando] Active. Current: {}. New heavy work is held only under measured memory danger; you are told when it affects you.{suffix}",
                     pressure_summary(state)
                 ),
                 notice_user,
@@ -1214,7 +1214,7 @@ fn decide_with_session_health(
                 );
                 let (recovered, refreshed) = hold_until_codex_app_open(directory, hold);
                 if !recovered && codex_app_surface_gate(&refreshed, provider) {
-                    let message = "[Memory Supervisor] CODEX APP NEW HEAVY WORK HELD\nWhy: shared App memory is still approaching its calculated recovery boundary.\nEffect: this new high-memory or fan-out start was not run; work already running, results, messages, status, stop and recovery remain available.\nNext: continue delivering the current result, then retry after the App cushion reopens.";
+                    let message = "[Calando] CODEX APP NEW HEAVY WORK HELD\nWhy: shared App memory is still approaching its calculated recovery boundary.\nEffect: this new high-memory or fan-out start was not run; work already running, results, messages, status, stop and recovery remain available.\nNext: continue delivering the current result, then retry after the App cushion reopens.";
                     queue_hook_event(
                         directory,
                         payload,
@@ -1245,7 +1245,7 @@ fn decide_with_session_health(
                 );
                 let (recovered, refreshed) = hold_until_ok(directory, hold, true);
                 if !recovered {
-                    let message = "[Memory Supervisor] NEW FAN-OUT HELD\nEffect: This spawn was blocked; existing work continues and no process was paused by this decision.\nNext: Run `memory-status` and retry after admission returns to GREEN or YELLOW.";
+                    let message = "[Calando] NEW FAN-OUT HELD\nEffect: This spawn was blocked; existing work continues and no process was paused by this decision.\nNext: Run `calando status` and retry after admission returns to GREEN or YELLOW.";
                     queue_hook_event(
                         directory,
                         payload,
@@ -1274,7 +1274,7 @@ fn decide_with_session_health(
                 );
                 let (recovered, refreshed) = hold_until_ok(directory, hold, true);
                 if !recovered {
-                    let message = "[Memory Supervisor] HEAVY START HELD\nEffect: the calculated memory braking boundary is active, so this new high-memory start was not run; existing work continues and no process was paused by this decision.\nNext: run `memory-status` and retry after admission reopens.";
+                    let message = "[Calando] HEAVY START HELD\nEffect: the calculated memory braking boundary is active, so this new high-memory start was not run; existing work continues and no process was paused by this decision.\nNext: run `calando status` and retry after admission reopens.";
                     queue_hook_event(
                         directory,
                         payload,
@@ -1307,7 +1307,7 @@ fn decide_with_session_health(
                         .unwrap_or("attributed memory boundary risk");
                     let edit = class == ToolClass::Edit;
                     let message = format!(
-                        "[Memory Supervisor] LOGICAL WORK CUSHION ACTIVE\nTarget state: {logical_state:?}, epoch {epoch}.\nWhy: {reason}.\nEffect: this {:?} start was not run; result, message, status, stop, and recovery paths remain open.{}\nNext: follow the current state, then retry only after a newer epoch reopens it.",
+                        "[Calando] LOGICAL WORK CUSHION ACTIVE\nTarget state: {logical_state:?}, epoch {epoch}.\nWhy: {reason}.\nEffect: this {:?} start was not run; result, message, status, stop, and recovery paths remain open.{}\nNext: follow the current state, then retry only after a newer epoch reopens it.",
                         class,
                         if edit {
                             " The edit was not queued; reread and replan it after recovery."
@@ -1342,7 +1342,7 @@ fn decide_with_session_health(
             if recovered {
                 return None;
             }
-            let message = "[Memory Supervisor] WORKER START DELAYED\nEffect: The RED fallback delayed this worker start; the lead remains running.\nNext: Run `memory-status` and avoid additional fan-out until recovery.";
+            let message = "[Calando] WORKER START DELAYED\nEffect: The RED fallback delayed this worker start; the lead remains running.\nNext: Run `calando status` and avoid additional fan-out until recovery.";
             queue_hook_event(
                 directory,
                 payload,
@@ -1355,7 +1355,7 @@ fn decide_with_session_health(
             Some(context(
                 "SubagentStart",
                 &format!(
-                    "[memory-supervisor] RED fallback delayed this worker start. Current: {}. Do not add recursive fan-out; finish or drain existing work first.",
+                    "[calando] RED fallback delayed this worker start. Current: {}. Do not add recursive fan-out; finish or drain existing work first.",
                     pressure_summary(&state)
                 ),
                 Some(message),
@@ -1405,7 +1405,7 @@ fn decide_with_session_health(
                 Some(context(
                     event,
                     &format!(
-                        "[memory-supervisor] Current: {}. Existing work continues, but do not create new agent/workflow fan-out until admission returns to GREEN or YELLOW. Use `memory-status` for the evidence.",
+                        "[calando] Current: {}. Existing work continues, but do not create new agent/workflow fan-out until admission returns to GREEN or YELLOW. Use `calando status` for the evidence.",
                         pressure_summary(state)
                     ),
                     None,
@@ -1883,7 +1883,7 @@ mod tests {
                 "type":"pressure-episode",
                 "status":"active",
                 "importance":"important",
-                "message":"[Memory Supervisor] MEMORY PROTECTION ACTIVE",
+                "message":"[Calando] MEMORY PROTECTION ACTIVE",
                 "created_at":now - 10.0,
             }],
         });
@@ -1926,7 +1926,7 @@ mod tests {
                 "type":"pressure-episode",
                 "status":"active",
                 "importance":"important",
-                "message":"[Memory Supervisor] MEMORY PROTECTION ACTIVE",
+                "message":"[Calando] MEMORY PROTECTION ACTIVE",
                 "created_at":now_epoch() - 10.0,
             }],
         });
@@ -1975,7 +1975,7 @@ mod tests {
             startup["hookSpecificOutput"]["additionalContext"]
                 .as_str()
                 .unwrap()
-                .starts_with("[memory-supervisor] Active.")
+                .starts_with("[calando] Active.")
         );
         let setup = decide_with_session_health(
             "codex",
@@ -1986,7 +1986,7 @@ mod tests {
             &mut config,
             Some((
                 "Tell the user now: SubagentStop is disabled.",
-                "[Memory Supervisor] PROTECTION SETUP NEEDS ATTENTION",
+                "[Calando] PROTECTION SETUP NEEDS ATTENTION",
             )),
         )
         .unwrap();
@@ -1998,7 +1998,7 @@ mod tests {
         );
         assert_eq!(
             setup["systemMessage"],
-            "[Memory Supervisor] PROTECTION SETUP NEEDS ATTENTION"
+            "[Calando] PROTECTION SETUP NEEDS ATTENTION"
         );
         assert!(
             decide(
@@ -2041,7 +2041,7 @@ mod tests {
                 .contains("GREEN or YELLOW")
         );
 
-        let message = "[Memory Supervisor] GUARDED RESUME\nState: same PID under probation.";
+        let message = "[Calando] GUARDED RESUME\nState: same PID under probation.";
         let event_state = json!({
             "level":"GREEN",
             "notification_events":[{
@@ -2110,13 +2110,13 @@ mod tests {
                 {
                     "event_id":"episode-start", "type":"pressure-episode",
                     "status":"active", "importance":"important",
-                    "message":"[Memory Supervisor] MEMORY PROTECTION ACTIVE\nWhy: test danger.",
+                    "message":"[Calando] MEMORY PROTECTION ACTIVE\nWhy: test danger.",
                     "created_at":now_epoch()-2.0
                 },
                 {
                     "event_id":"episode-end", "type":"pressure-episode",
                     "status":"recovered", "importance":"important",
-                    "message":"[Memory Supervisor] MEMORY PROTECTION RECOVERED\nWhy: test recovery.",
+                    "message":"[Calando] MEMORY PROTECTION RECOVERED\nWhy: test recovery.",
                     "created_at":now_epoch()-1.0
                 }
             ]

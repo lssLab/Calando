@@ -180,7 +180,10 @@ fn wsl_windows_home() -> Option<PathBuf> {
         .ok()?
         .filter_map(Result::ok)
         .map(|entry| entry.path())
-        .filter(|path| path.join(".memory-supervisor").join("instances").is_dir());
+        .filter(|path| {
+            path.join(".calando").join("instances").is_dir()
+                || path.join(".memory-supervisor").join("instances").is_dir()
+        });
     let first = candidates.next();
     if first.is_some() && candidates.next().is_none() {
         return first;
@@ -208,23 +211,35 @@ pub fn federation_dir() -> PathBuf {
     if let Some(path) = env::var_os("MEMORY_SUPERVISOR_FEDERATION_DIR") {
         return expand_user(PathBuf::from(path));
     }
-    if let Ok(value) =
-        fs::read_to_string(home_dir().join(".memory-supervisor").join("federation-dir"))
-    {
+    if let Ok(value) = fs::read_to_string(crate::config::pointer_dir().join("federation-dir")) {
         let value = value.trim();
         if !value.is_empty() {
             return expand_user(value);
         }
     }
-    if let Some(home) = wsl_windows_home() {
-        return home.join(".memory-supervisor").join("instances");
-    }
-    if crate::topology::detect() == crate::topology::Topology::VmDynamic
+    let base = if let Some(home) = wsl_windows_home() {
+        home
+    } else if crate::topology::detect() == crate::topology::Topology::VmDynamic
         && let Some(shared) = vm_shared_folder()
     {
-        return shared.join(".memory-supervisor").join("instances");
-    }
-    home_dir().join(".memory-supervisor").join("instances")
+        shared
+    } else {
+        home_dir()
+    };
+    crate::config::pointer_dir_in(&base).join("instances")
+}
+
+/// While a peer still runs a pre-0.3 release it publishes under `.memory-supervisor`, so the
+/// reader also looks there until every environment has moved to `.calando`.
+fn legacy_federation_dir(current: &Path) -> Option<PathBuf> {
+    let base = current.parent()?;
+    (base.file_name()? == ".calando")
+        .then(|| {
+            base.parent()
+                .map(|home| home.join(".memory-supervisor").join("instances"))
+        })
+        .flatten()
+        .filter(|legacy| legacy.is_dir())
 }
 
 /// A dynamic VM federates with its host over the hypervisor's shared folder. Probe the common
@@ -240,7 +255,20 @@ fn vm_shared_folder() -> Option<PathBuf> {
 }
 
 pub fn fresh_federated_states(max_age_s: f64) -> Vec<Value> {
-    fresh_federated_states_at(&federation_dir(), now_epoch(), max_age_s)
+    let current = federation_dir();
+    let now = now_epoch();
+    let mut states = fresh_federated_states_at(&current, now, max_age_s);
+    if let Some(legacy) = legacy_federation_dir(&current) {
+        for state in fresh_federated_states_at(&legacy, now, max_age_s) {
+            if !states
+                .iter()
+                .any(|known| known.get("instance") == state.get("instance"))
+            {
+                states.push(state);
+            }
+        }
+    }
+    states
 }
 
 fn fresh_federated_states_at(directory: &Path, now: f64, max_age_s: f64) -> Vec<Value> {

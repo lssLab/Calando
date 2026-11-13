@@ -1,10 +1,10 @@
 #![cfg(target_os = "linux")]
 
-use memory_supervisor::app_guard::{launch_independent, phase_path};
-use memory_supervisor::codex_app::is_codex_app_server;
-use memory_supervisor::platform::{list_processes, process_by_pid, process_state, resume_process};
-use memory_supervisor::policy::process_identity;
-use memory_supervisor::storage::{ensure_private_dir, write_atomic_json};
+use calando::app_guard::{launch_independent, phase_path};
+use calando::codex_app::is_codex_app_server;
+use calando::platform::{list_processes, process_by_pid, process_state, resume_process};
+use calando::policy::process_identity;
+use calando::storage::{ensure_private_dir, write_atomic_json};
 use serde_json::json;
 use std::ffi::OsString;
 use std::fs;
@@ -124,7 +124,7 @@ fn transient_systemd_guard_owns_the_pause_and_resume_outside_the_callers_cgroup(
         control_base.as_os_str().to_owned(),
     ];
     launch_independent(
-        std::path::Path::new(env!("CARGO_BIN_EXE_memory-supervisor")),
+        std::path::Path::new(env!("CARGO_BIN_EXE_calando")),
         &arguments,
         "linux",
         pid,

@@ -6,7 +6,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$PointerDir = Join-Path $HOME ".memory-supervisor"
+$PointerDir = Join-Path $HOME ".calando"
 $Marker = Join-Path $PointerDir "power-off"
 $Binary = if ($env:MEMORY_SUPERVISOR_BINARY) {
     $env:MEMORY_SUPERVISOR_BINARY
@@ -14,16 +14,16 @@ $Binary = if ($env:MEMORY_SUPERVISOR_BINARY) {
     ([IO.File]::ReadAllText((Join-Path $PointerDir "binary"))).Trim()
 } else { $null }
 if (-not $Binary -or -not (Test-Path -LiteralPath $Binary -PathType Leaf)) {
-    throw "Installed Memory Supervisor binary is missing; run memory-supervisor update"
+    throw "Installed Calando binary is missing; run calando update"
 }
 $StateDir = if ($env:MEMORY_SUPERVISOR_DIR) {
     $env:MEMORY_SUPERVISOR_DIR
 } elseif (Test-Path -LiteralPath (Join-Path $PointerDir "state-dir") -PathType Leaf) {
     ([IO.File]::ReadAllText((Join-Path $PointerDir "state-dir"))).Trim()
-} else { Join-Path $HOME ".cache\memory-supervisor" }
+} else { Join-Path $HOME ".cache\calando" }
 $TaskName = if ($env:MEMORY_SUPERVISOR_TASK_NAME) {
     $env:MEMORY_SUPERVISOR_TASK_NAME
-} else { "MemorySupervisor" }
+} else { "Calando" }
 if ($TaskName -notmatch '^[A-Za-z0-9_.-]{1,100}$') {
     throw "MEMORY_SUPERVISOR_TASK_NAME must contain only letters, numbers, dot, underscore, or hyphen"
 }
@@ -34,7 +34,7 @@ if (-not $Task -or @($Task.Actions).Count -ne 1 -or
         [IO.Path]::GetFullPath($Binary),
         [StringComparison]::OrdinalIgnoreCase
     ) -or [string]$Task.Actions[0].Arguments -ne "daemon --foreground --detach-console") {
-    throw "Owned Memory Supervisor scheduled task is missing; run memory-supervisor update"
+    throw "Owned Calando scheduled task is missing; run calando update"
 }
 $Utf8 = [Text.UTF8Encoding]::new($false)
 
@@ -92,16 +92,16 @@ if ($Action -eq "off") {
             $Restored = Test-FreshState
         } catch { }
         if ($Restored) {
-            throw "Memory Supervisor could not be turned off; it remains ON with fresh protection: $OffFailure"
+            throw "Calando could not be turned off; it remains ON with fresh protection: $OffFailure"
         }
         Write-OffMarker
         try { Stop-OwnedTask } catch { }
         Remove-StateFile (Join-Path $StateDir "admission-green.lease")
-        throw "Memory Supervisor could not restore fresh ON protection; it remains OFF: $OffFailure"
+        throw "Calando could not restore fresh ON protection; it remains OFF: $OffFailure"
     }
     Remove-StateFile (Join-Path $StateDir "admission-green.lease")
-    Write-Host "Memory Supervisor is OFF. The scheduled task stays disabled across restarts; installed CLI hooks pass through."
-    Write-Host "Run 'memory-supervisor on' once to restore protection."
+    Write-Host "Calando is OFF. The scheduled task stays disabled across restarts; installed CLI hooks pass through."
+    Write-Host "Run 'calando on' once to restore protection."
     exit 0
 }
 
@@ -114,7 +114,7 @@ try {
 } catch {
     Write-OffMarker
     try { Stop-OwnedTask } catch { }
-    throw "Memory Supervisor did not return to a fresh running state; it remains off: $($_.Exception.Message)"
+    throw "Calando did not return to a fresh running state; it remains off: $($_.Exception.Message)"
 }
-Write-Host "Memory Supervisor is ON. Protection is running and stays enabled across restarts."
+Write-Host "Calando is ON. Protection is running and stays enabled across restarts."
 Write-Host "Installed Claude Code and Codex connections remain in place."

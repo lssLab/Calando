@@ -430,7 +430,9 @@ fn is_supervisor_hook(value: &Value) -> bool {
         .filter_map(|key| hook.get(key).and_then(Value::as_str))
         .any(|command| {
             let command = command.to_lowercase().replace('\\', "/");
-            command.contains("memory-supervisor") || command.contains("hooks/gate")
+            command.contains("calando")
+                || command.contains("memory-supervisor")
+                || command.contains("hooks/gate")
         })
 }
 
@@ -1045,8 +1047,7 @@ impl CodexHookHealth {
 
     pub fn summary(&self) -> String {
         if self.ready() {
-            return "all seven Memory Supervisor hooks are present, enabled, and trusted"
-                .to_owned();
+            return "all seven Calando hooks are present, enabled, and trusted".to_owned();
         }
         let mut issues = Vec::new();
         for (label, events) in [
@@ -1090,16 +1091,16 @@ impl CodexHookHealth {
                 "already trusted; the user must personally {location} and turn on {disabled_list}; `Trust all` does not change an off switch"
             ),
             (true, true, _) => format!(
-                "the user must personally {location}, trust new or changed Memory Supervisor entries, and separately turn on {disabled_list}; trust and on/off are separate settings"
+                "the user must personally {location}, trust new or changed Calando entries, and separately turn on {disabled_list}; trust and on/off are separate settings"
             ),
             (false, true, _) => format!(
-                "the user must personally {location} and trust new or changed Memory Supervisor entries"
+                "the user must personally {location} and trust new or changed Calando entries"
             ),
             (false, false, true) => format!(
                 "after repair, the user must personally {location} and review entries Codex marks as new or changed"
             ),
             (false, false, false) => format!(
-                "the user must personally {location} and verify all Memory Supervisor entries are on and trusted"
+                "the user must personally {location} and verify all Calando entries are on and trusted"
             ),
         };
         let split = if self.split_enable_state_events.is_empty() {
@@ -1131,16 +1132,16 @@ impl CodexHookHealth {
         let review = self.review_action(surface);
         match (definitions, state, self.config_error.is_some()) {
             (_, _, true) => format!(
-                "repair the malformed Codex config beside {}, run `memory-supervisor update`, then {review}",
+                "repair the malformed Codex config beside {}, run `calando update`, then {review}",
                 self.target,
             ),
-            (true, _, false) => format!(
-                "run `memory-supervisor update`, then {review}; confirm with `memory-status --connections`"
-            ),
-            (false, true, false) => {
-                format!("{review}; confirm with `memory-status --connections`")
+            (true, _, false) => {
+                format!("run `calando update`, then {review}; confirm with `calando status`")
             }
-            (false, false, false) => "run `memory-status --connections` again".to_owned(),
+            (false, true, false) => {
+                format!("{review}; confirm with `calando status`")
+            }
+            (false, false, false) => "run `calando status` again".to_owned(),
         }
     }
 
@@ -1151,10 +1152,10 @@ impl CodexHookHealth {
         let summary = self.summary();
         let remediation = self.remediation(surface);
         let context = format!(
-            "[memory-supervisor] Protection setup needs attention. SessionStart reached Memory Supervisor, but the full hook set is not ready ({summary}). The daemon still measures memory, but any affected admission, agent tracking, tool control, or lead handoff must be treated as unavailable and fail-open. Tell the user now. Fix: {remediation}."
+            "[calando] Protection setup needs attention. SessionStart reached Calando, but the full hook set is not ready ({summary}). The daemon still measures memory, but any affected admission, agent tracking, tool control, or lead handoff must be treated as unavailable and fail-open. Tell the user now. Fix: {remediation}."
         );
         let user = format!(
-            "[Memory Supervisor] PROTECTION SETUP NEEDS ATTENTION\nConnected: this SessionStart hook reached Memory Supervisor.\nIncomplete: {summary}.\nEffect: memory measurement continues, but the affected hook-based protections cannot be guaranteed.\nNext: {remediation}."
+            "[Calando] PROTECTION SETUP NEEDS ATTENTION\nConnected: this SessionStart hook reached Calando.\nIncomplete: {summary}.\nEffect: memory measurement continues, but the affected hook-based protections cannot be guaranteed.\nNext: {remediation}."
         );
         Some((context, user))
     }
@@ -1219,7 +1220,7 @@ pub fn current_codex_hook_target() -> Option<PathBuf> {
     Some(PathBuf::from(home).join(".codex").join("hooks.json"))
 }
 
-/// A Memory Supervisor user hook can also be rediscovered as a project hook when another Codex
+/// A Calando user hook can also be rediscovered as a project hook when another Codex
 /// home opens that user's home directory. Only the hook belonging to the current CODEX_HOME may
 /// make decisions; the other route is deliberately a no-op.
 pub fn codex_hook_source_is_authoritative(source: &Path) -> bool {
@@ -1908,11 +1909,57 @@ pub fn migrate_install_names(home: &Path) -> Result<(), String> {
     rewrite_legacy_json(&current.join("config.json"))?;
     rewrite_legacy_notifications(&current.join("notifications.conf"))
         .map_err(|error| error.to_string())?;
+    rename_to_calando(home).map_err(|error| error.to_string())
+}
+
+/// 0.3 renamed every folder from `memory-supervisor` to `calando`. Each old folder moves once;
+/// on Unix a link is left at the old name so a process still running the previous release
+/// keeps finding its files.
+fn rename_to_calando(home: &Path) -> io::Result<()> {
+    let moves = [
+        (home.join(".memory-supervisor"), home.join(".calando")),
+        (
+            home.join(".config").join("memory-supervisor"),
+            home.join(".config").join("calando"),
+        ),
+        (
+            home.join(".cache").join("memory-supervisor"),
+            home.join(".cache").join("calando"),
+        ),
+    ];
+    for (old, new) in &moves {
+        if fs::symlink_metadata(old).is_ok_and(|meta| meta.file_type().is_symlink()) {
+            continue;
+        }
+        if move_if_absent(old, new)? {
+            #[cfg(unix)]
+            std::os::unix::fs::symlink(new, old)?;
+        }
+    }
+    let pointers = home.join(".calando");
+    for name in ["state-dir", "federation-dir", "install-root"] {
+        let path = pointers.join(name);
+        let Ok(raw) = fs::read_to_string(&path) else {
+            continue;
+        };
+        let target = PathBuf::from(raw.trim());
+        for (old, new) in &moves {
+            if let Ok(rest) = target.strip_prefix(old) {
+                let moved = if rest.as_os_str().is_empty() {
+                    new.clone()
+                } else {
+                    new.join(rest)
+                };
+                write_atomic_text(&path, &format!("{}\n", moved.display()), 0o600)?;
+                break;
+            }
+        }
+    }
     Ok(())
 }
 
 fn integration_usage() -> &'static str {
-    "USAGE:\n  memory-supervisor integration hooks --target PATH --provider claude|codex --binary PATH [--remove|--check]\n  memory-supervisor integration app-hooks --target PATH --binary PATH [--platform windows|wsl|linux|darwin] [--remove|--check]\n  memory-supervisor integration resolve-claude [--home PATH]\n  memory-supervisor integration check-claude [--command PATH]\n  memory-supervisor integration check-codex [--command PATH]\n  memory-supervisor integration migrate-names [--home PATH]\n  memory-supervisor integration path state|federation"
+    "USAGE:\n  calando integration hooks --target PATH --provider claude|codex --binary PATH [--remove|--check]\n  calando integration app-hooks --target PATH --binary PATH [--platform windows|wsl|linux|darwin] [--remove|--check]\n  calando integration resolve-claude [--home PATH]\n  calando integration check-claude [--command PATH]\n  calando integration check-codex [--command PATH]\n  calando integration migrate-names [--home PATH]\n  calando integration path state|federation"
 }
 
 fn resolve_claude_command(arguments: &[String]) -> i32 {
@@ -1960,9 +2007,9 @@ fn hooks_command(arguments: &[String]) -> i32 {
                     "--root" => {
                         let root = PathBuf::from(value);
                         binary = Some(root.join("bin").join(if cfg!(windows) {
-                            "memory-supervisor.exe"
+                            "calando.exe"
                         } else {
-                            "memory-supervisor"
+                            "calando"
                         }));
                     }
                     _ => unreachable!(),
@@ -2577,8 +2624,15 @@ trusted_hash = 'sha256:windows'
 
         migrate_install_names(&home).unwrap();
 
-        let current = home.join(".memory-supervisor");
-        let new_state = home.join(".cache").join("memory-supervisor");
+        let current = home.join(".calando");
+        let new_state = home.join(".cache").join("calando");
+        #[cfg(unix)]
+        assert!(
+            fs::symlink_metadata(home.join(".memory-supervisor"))
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
         let new_federation = current.join("instances");
         assert_eq!(
             fs::read_to_string(current.join("state-dir"))
@@ -2853,7 +2907,7 @@ trusted_hash = 'sha256:windows'
 
         let root = temp_directory();
         let target = root.join("codex-home/hooks.json");
-        let binary = PathBuf::from(r"C:\Users\owner\memory-supervisor.exe");
+        let binary = PathBuf::from(r"C:\Users\owner\calando.exe");
         assert!(update_codex_app_hooks(&target, &binary, "windows", false).unwrap());
         assert!(verify_codex_app_hooks(&target, &binary, "windows").unwrap());
         let value: Value = serde_json::from_slice(&fs::read(&target).unwrap()).unwrap();
@@ -2862,7 +2916,7 @@ trusted_hash = 'sha256:windows'
         assert!(
             hook["commandWindows"]
                 .as_str()
-                .is_some_and(|command| command.contains("memory-supervisor.exe"))
+                .is_some_and(|command| command.contains("calando.exe"))
         );
         fs::remove_dir_all(root).unwrap();
     }
@@ -2892,11 +2946,11 @@ trusted_hash = 'sha256:windows'
 
     #[test]
     fn codex_windows_hook_uses_the_powershell_call_operator_and_escapes_paths() {
-        let binary = Path::new(r"C:\Users\O'Owner\Memory Supervisor\memory-supervisor.exe");
+        let binary = Path::new(r"C:\Users\O'Owner\Calando\memory-supervisor.exe");
         let target = Path::new(r"C:\Users\O'Owner\.codex\hooks.json");
         assert_eq!(
             codex_windows_command(binary, "SessionStart", target),
-            r"& 'C:\Users\O''Owner\Memory Supervisor\memory-supervisor.exe' gate codex SessionStart --hook-source 'C:\Users\O''Owner\.codex\hooks.json'"
+            r"& 'C:\Users\O''Owner\Calando\memory-supervisor.exe' gate codex SessionStart --hook-source 'C:\Users\O''Owner\.codex\hooks.json'"
         );
     }
 

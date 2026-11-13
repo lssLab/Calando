@@ -6,20 +6,28 @@ $Root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
 $RuntimeDir = if ($env:MEMORY_SUPERVISOR_RUNTIME_DIR) {
     $env:MEMORY_SUPERVISOR_RUNTIME_DIR
 } else {
-    Join-Path $HOME ".local\lib\memory-supervisor"
+    Join-Path $HOME ".local\lib\calando"
 }
-$InstalledBinary = Join-Path $RuntimeDir "memory-supervisor.exe"
-$PointerDir = Join-Path $HOME ".memory-supervisor"
+$InstalledBinary = Join-Path $RuntimeDir "calando.exe"
+# 0.3 renamed every path from memory-supervisor to calando; until migrate-names runs below,
+# an existing install is still found under its old name.
+$OldBinary = Join-Path $HOME ".local\lib\memory-supervisor\memory-supervisor.exe"
+$PointerDir = if (Test-Path -LiteralPath (Join-Path $HOME ".calando")) {
+    Join-Path $HOME ".calando"
+} elseif (Test-Path -LiteralPath (Join-Path $HOME ".memory-supervisor")) {
+    Join-Path $HOME ".memory-supervisor"
+} else { Join-Path $HOME ".calando" }
+$LegacyTaskName = "MemorySupervisor"
 $PoweredOff = Test-Path -LiteralPath (Join-Path $PointerDir "power-off")
 $TaskName = if ($env:MEMORY_SUPERVISOR_TASK_NAME) {
     $env:MEMORY_SUPERVISOR_TASK_NAME
 } else {
-    "MemorySupervisor"
+    "Calando"
 }
 if ($TaskName -notmatch '^[A-Za-z0-9_.-]{1,100}$') {
     throw "MEMORY_SUPERVISOR_TASK_NAME must contain only letters, numbers, dot, underscore, or hyphen"
 }
-$Temporary = Join-Path ([IO.Path]::GetTempPath()) ("memory-supervisor-install-" + [guid]::NewGuid().ToString("N"))
+$Temporary = Join-Path ([IO.Path]::GetTempPath()) ("calando-install-" + [guid]::NewGuid().ToString("N"))
 $Utf8 = [Text.UTF8Encoding]::new($false)
 $Cutover = $false
 $Success = $false
@@ -171,14 +179,15 @@ function Get-RuntimeCandidate {
     $Cargo = Get-Command cargo -ErrorAction SilentlyContinue
     if ($Cargo -and
         (Test-Path -LiteralPath (Join-Path $Root "Cargo.toml")) -and
+        -not (Test-Path -LiteralPath (Join-Path $Root ".calando-release-source")) -and
         -not (Test-Path -LiteralPath (Join-Path $Root ".memory-supervisor-release-source"))) {
-        Write-Host "building the current Memory Supervisor source with Rust"
+        Write-Host "building the current Calando source with Rust"
         & $Cargo.Source build --manifest-path (Join-Path $Root "Cargo.toml") --release --locked
         if ($LASTEXITCODE -ne 0) { throw "Rust release build failed" }
-        return (Join-Path $Root "target\release\memory-supervisor.exe")
+        return (Join-Path $Root "target\release\calando.exe")
     }
     $Target = Get-ReleaseTarget
-    $Asset = "memory-supervisor-$Target.exe"
+    $Asset = "calando-$Target.exe"
     $Base = if ($env:MEMORY_SUPERVISOR_RELEASE_BASE_URL) {
         $env:MEMORY_SUPERVISOR_RELEASE_BASE_URL.TrimEnd("/")
     } else {
@@ -237,7 +246,8 @@ function Wait-OwnedRuntimeStopped {
 }
 
 function Restore-PreviousRuntime {
-    Write-Warning "Activation failed; restoring the previous Memory Supervisor runtime"
+    Write-Warning "Activation failed; restoring the previous Calando runtime"
+    if ($LegacyTask) { Start-ScheduledTask -TaskName $LegacyTaskName -ErrorAction SilentlyContinue }
     Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
     if (-not $HadTask) {
         Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
@@ -313,6 +323,19 @@ try {
         $HadBinary = $true
     }
     $Cutover = $true
+    # Stop the pre-0.3 task so its daemon releases the folders migrate-names moves. It is
+    # removed only after the new task has published fresh state.
+    $LegacyTask = Get-ScheduledTask -TaskName $LegacyTaskName -ErrorAction SilentlyContinue
+    if ($LegacyTask -and $TaskName -ne $LegacyTaskName -and @($LegacyTask.Actions).Count -eq 1 -and
+        [string]::Equals([string]$LegacyTask.Actions[0].Execute, $OldBinary, [StringComparison]::OrdinalIgnoreCase)) {
+        Stop-ScheduledTask -TaskName $LegacyTaskName -ErrorAction SilentlyContinue
+        for ($Attempt = 0; $Attempt -lt 50; $Attempt++) {
+            if (-not @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
+                $_.ExecutablePath -and [string]::Equals([string]$_.ExecutablePath, $OldBinary, [StringComparison]::OrdinalIgnoreCase)
+            })) { break }
+            Start-Sleep -Milliseconds 100
+        }
+    } else { $LegacyTask = $null }
     if ($ExistingTask) {
         Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
         if (-not (Wait-OwnedRuntimeStopped)) {
@@ -320,13 +343,19 @@ try {
         }
     }
 
-    $NewBinary = Join-Path $RuntimeDir (".memory-supervisor.new." + $PID + ".exe")
+    $NewBinary = Join-Path $RuntimeDir (".calando.new." + $PID + ".exe")
     Copy-Item -Force -LiteralPath $Candidate -Destination $NewBinary
     Move-Item -Force -LiteralPath $NewBinary -Destination $InstalledBinary
     $BinaryReplaced = $true
 
     & $InstalledBinary integration migrate-names
     if ($LASTEXITCODE -ne 0) { throw "install-name migration failed" }
+    $PointerDir = Join-Path $HOME ".calando"
+    # A session that started before this update still calls the old hook path.
+    if (Test-Path -LiteralPath $OldBinary -PathType Leaf) {
+        try { Copy-Item -Force -LiteralPath $InstalledBinary -Destination $OldBinary }
+        catch { Write-Warning "The old hook path is busy; sessions started before this update need a restart" }
+    }
     $StateDir = (& $InstalledBinary integration path state | Select-Object -Last 1).Trim()
     $FederationDir = (& $InstalledBinary integration path federation | Select-Object -Last 1).Trim()
     if (-not $StateDir -or -not $FederationDir) { throw "runtime paths could not be resolved" }
@@ -350,7 +379,7 @@ try {
         -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero) `
         -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
     Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $Trigger `
-        -Settings $Settings -Description "Claude Code & Codex CLI Memory Supervisor" -Force | Out-Null
+        -Settings $Settings -Description "Calando memory protection for Claude Code and Codex" -Force | Out-Null
     if ($PoweredOff) {
         Disable-ScheduledTask -TaskName $TaskName | Out-Null
         if ([string](Get-ScheduledTask -TaskName $TaskName).State -ne "Disabled") {
@@ -383,8 +412,11 @@ try {
         }
         $Activated = $true
     }
+    if ($LegacyTask) {
+        Unregister-ScheduledTask -TaskName $LegacyTaskName -Confirm:$false -ErrorAction SilentlyContinue
+    }
     # Remove the pre-rename task only after the Rust task has published fresh state.
-    $LegacyTask = if ($TaskName -eq "MemorySupervisor") {
+    $LegacyTask = if ($TaskName -eq "Calando") {
         Get-ScheduledTask -TaskName "ClaudeMemoryGovernor" -ErrorAction SilentlyContinue
     } else { $null }
     if ($LegacyTask -and @($LegacyTask.Actions).Count -eq 1) {
@@ -453,7 +485,7 @@ try {
             if ($LASTEXITCODE -ne 0) { throw "$Provider stale hook cleanup failed" }
         }
         if ($Provider -eq "claude") {
-            Write-Warning "$Provider integration skipped: $Requirement; any existing Memory Supervisor hook was preserved"
+            Write-Warning "$Provider integration skipped: $Requirement; any existing Calando hook was preserved"
         } else {
             Write-Warning "$Provider integration skipped: $Requirement"
         }
@@ -478,7 +510,7 @@ try {
     # existing owned CLI route so it receives source ownership, but never create a second route.
     if (-not $DefaultCodexHooks.Equals($CodexHooks, [StringComparison]::OrdinalIgnoreCase) -and
         (Test-Path -LiteralPath $DefaultCodexHooks -PathType Leaf) -and
-        ([IO.File]::ReadAllText($DefaultCodexHooks) -match 'memory-supervisor|hooks[/\\]gate')) {
+        ([IO.File]::ReadAllText($DefaultCodexHooks) -match 'calando|memory-supervisor|hooks[/\\]gate')) {
         $LegacyMerge = & $InstalledBinary integration hooks --target $DefaultCodexHooks `
             --provider codex --binary $InstalledBinary | Out-String
         if ($LASTEXITCODE -ne 0) { throw "legacy Codex hook merge failed" }
@@ -494,74 +526,65 @@ try {
             Write-Host "Claude Code: USER ACTION REQUIRED for an untrusted workspace. There is no per-hook approval, but interactive Claude holds every settings-file hook until the user accepts workspace trust for the current folder or a parent. Accept only a folder you trust. /hooks is read-only. An already-trusted running session normally reloads the User Settings hook; restart only if it does not appear."
         }
         if ($script:HookWiringChanged -contains "codex") {
-            Write-Host "Codex CLI: USER ACTION REQUIRED. Open /hooks in the CLI you are using. Confirm that all seven Memory Supervisor entries are trusted and on; trust only entries marked for review and enable only entries that are off. Then close /hooks and continue the current work. Restarting does not grant trust."
-            Write-Host "Codex App: USER ACTION REQUIRED. The user must personally use Settings > Hooks, not /hooks, to trust every new or changed Memory Supervisor entry and enable any disabled entry. Restarting cannot grant trust; applying the change reloads every existing task currently loaded by the shared App Server, so continue an existing task with its next request."
+            Write-Host "Codex CLI: USER ACTION REQUIRED. Open /hooks in the CLI you are using. Confirm that all seven Calando entries are trusted and on; trust only entries marked for review and enable only entries that are off. Then close /hooks and continue the current work. Restarting does not grant trust."
+            Write-Host "Codex App: USER ACTION REQUIRED. The user must personally use Settings > Hooks, not /hooks, to trust every new or changed Calando entry and enable any disabled entry. Restarting cannot grant trust; applying the change reloads every existing task currently loaded by the shared App Server, so continue an existing task with its next request."
             Write-Host "Shared CODEX_HOME edge case: if another process already saved approval and this running surface has no change left to save, restart only that pre-existing App or CLI once so it reads the shared trust record."
         }
     } else {
-        Write-Host "Hook wiring unchanged: a binary-only update does not create new Codex trust. Run memory-status --connections anyway; any existing Codex disabled or untrusted state still requires the user action it reports."
+        Write-Host "Hook wiring unchanged: a binary-only update does not create new Codex trust. Run calando status anyway; any existing Codex disabled or untrusted state still requires the user action it reports."
     }
 
-    Write-Host "[5/7] install skills and user commands"
+    Write-Host "[5/7] install the calando skill (/calando, `$calando)"
     function Test-SupervisorSkillPath {
         param([string]$Path)
         $Manifest = Join-Path $Path "SKILL.md"
         return ((Test-Path -LiteralPath $Manifest) -and
-            ([IO.File]::ReadAllText($Manifest) -match '(?m)^name: (memory-governor|memory-supervisor)$'))
+            ([IO.File]::ReadAllText($Manifest) -match '(?m)^name: (memory-governor|memory-supervisor|calando)$'))
     }
-    function Install-SkillJunction {
+    function Remove-SupervisorSkill {
         param([string]$Path)
-        New-Item -ItemType Directory -Force -Path (Split-Path $Path) | Out-Null
         $Item = Get-Item -Force -LiteralPath $Path -ErrorAction SilentlyContinue
-        if ($Item) {
-            if ($Item.Attributes -band [IO.FileAttributes]::ReparsePoint) {
-                $Target = @($Item.Target) | Select-Object -First 1
-                if ($Target -and ([IO.Path]::GetFullPath($Target) -eq [IO.Path]::GetFullPath($Root))) { return }
-                if (Test-SupervisorSkillPath $Path) { [IO.Directory]::Delete($Path) }
-                else { Write-Warning "Preserving existing foreign skill link: $Path"; return }
-            } else { Write-Warning "Preserving existing non-link skill: $Path"; return }
-        }
-        New-Item -ItemType Junction -Path $Path -Target $Root | Out-Null
+        if (-not $Item -or -not (Test-SupervisorSkillPath $Path)) { return $false }
+        if ($Item.Attributes -band [IO.FileAttributes]::ReparsePoint) { [IO.Directory]::Delete($Path) }
+        else { Remove-Item -Recurse -Force -LiteralPath $Path }
+        return $true
     }
-    foreach ($Path in @(
-        (Join-Path $HOME ".claude\skills\memory-governor"),
-        (Join-Path $HOME ".agents\skills\memory-governor"),
-        (Join-Path $HOME ".codex\skills\memory-governor")
+    # A copy, not a junction: an agent's skill must not point into a writable checkout.
+    function Install-Skill {
+        param([string]$Path)
+        if ((Test-Path -LiteralPath $Path) -and -not (Remove-SupervisorSkill $Path)) {
+            Write-Warning "Preserving existing foreign skill: $Path"; return
+        }
+        New-Item -ItemType Directory -Force -Path (Join-Path $Path "agents") | Out-Null
+        Copy-Item -LiteralPath (Join-Path $Root "SKILL.md") -Destination (Join-Path $Path "SKILL.md")
+        Copy-Item -LiteralPath (Join-Path $Root "agents\reference.md"), (Join-Path $Root "agents\openai.yaml") `
+            -Destination (Join-Path $Path "agents")
+    }
+    foreach ($SkillRoot in @(".claude\skills", ".agents\skills", ".codex\skills")) {
+        foreach ($Old in @("memory-governor", "memory-supervisor")) {
+            Remove-SupervisorSkill (Join-Path (Join-Path $HOME $SkillRoot) $Old) | Out-Null
+        }
+    }
+    Install-Skill (Join-Path $HOME ".claude\skills\calando")
+    Install-Skill (Join-Path $HOME ".agents\skills\calando")
+    if (Test-Path (Join-Path $HOME ".codex")) {
+        Install-Skill (Join-Path $HOME ".codex\skills\calando")
+    }
+    foreach ($OldCommand in @(
+        (Join-Path $HOME ".claude\commands\memory-status.md"),
+        (Join-Path $HOME ".codex\prompts\memory-status.md")
     )) {
-        $Item = Get-Item -Force -LiteralPath $Path -ErrorAction SilentlyContinue
-        if ($Item -and ($Item.Attributes -band [IO.FileAttributes]::ReparsePoint) -and
-            (Test-SupervisorSkillPath $Path)) { [IO.Directory]::Delete($Path) }
-    }
-    Install-SkillJunction (Join-Path $HOME ".claude\skills\memory-supervisor")
-    Install-SkillJunction (Join-Path $HOME ".agents\skills\memory-supervisor")
-    if (Test-Path (Join-Path $HOME ".codex")) {
-        Install-SkillJunction (Join-Path $HOME ".codex\skills\memory-supervisor")
-    }
-
-    function Install-CommandFile {
-        param([string]$Source, [string]$Path)
-        New-Item -ItemType Directory -Force -Path (Split-Path $Path) | Out-Null
-        $Item = Get-Item -Force -LiteralPath $Path -ErrorAction SilentlyContinue
-        if ($Item) {
-            if (-not $Item.PSIsContainer -and -not ($Item.Attributes -band [IO.FileAttributes]::ReparsePoint) -and
-                [IO.File]::ReadAllText($Path) -eq [IO.File]::ReadAllText($Source)) { return }
-            Write-Warning "Preserving customized or non-regular command path: $Path"
-            return
+        if ((Test-Path -LiteralPath $OldCommand -PathType Leaf) -and
+            ([IO.File]::ReadAllText($OldCommand) -match 'memory-status')) {
+            Remove-Item -Force -LiteralPath $OldCommand
         }
-        Copy-Item -LiteralPath $Source -Destination $Path
-    }
-    Install-CommandFile (Join-Path $Root "integrations\claude\memory-status.md") `
-        (Join-Path $HOME ".claude\commands\memory-status.md")
-    if (Test-Path (Join-Path $HOME ".codex")) {
-        Install-CommandFile (Join-Path $Root "integrations\codex\memory-status.md") `
-            (Join-Path $HOME ".codex\prompts\memory-status.md")
     }
 
     $Bin = Join-Path $HOME ".local\bin"
     New-Item -ItemType Directory -Force -Path $Bin | Out-Null
     function Install-OwnedLauncher {
         param([string]$Path, [string]$Subcommand)
-        $Marker = "Memory Supervisor managed command"
+        $Marker = "Calando managed command"
         $Item = Get-Item -Force -LiteralPath $Path -ErrorAction SilentlyContinue
         if ($Item) {
             if ($Item.PSIsContainer -or ($Item.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
@@ -569,6 +592,7 @@ try {
             }
             $Existing = [IO.File]::ReadAllText($Path)
             if ($Existing.IndexOf($Marker, [StringComparison]::OrdinalIgnoreCase) -lt 0 -and
+                $Existing.IndexOf("Memory Supervisor managed command", [StringComparison]::OrdinalIgnoreCase) -lt 0 -and
                 $Existing.IndexOf("memory-status.py", [StringComparison]::OrdinalIgnoreCase) -lt 0 -and
                 $Existing.IndexOf("memory-control.py", [StringComparison]::OrdinalIgnoreCase) -lt 0) {
                 Write-Warning "Preserving existing foreign command: $Path"; return
@@ -578,6 +602,8 @@ try {
         $Content = "@echo off`r`n@rem $Marker`r`n`"$InstalledBinary`"$Suffix %*`r`nexit /b %errorlevel%`r`n"
         [IO.File]::WriteAllText($Path, $Content, $Utf8)
     }
+    Install-OwnedLauncher (Join-Path $Bin "calando.cmd") ""
+    # Old command names stay as aliases through 0.3.x.
     Install-OwnedLauncher (Join-Path $Bin "memory-supervisor.cmd") ""
     Install-OwnedLauncher (Join-Path $Bin "memory-status.cmd") "status"
     foreach ($Legacy in @("memory-control.cmd", "cmg-status.cmd", "cmg-control.cmd", "codex-governed.cmd")) {
@@ -600,24 +626,24 @@ try {
     }
 
     Write-Host "[6/7] preserve private notification settings"
-    $NotifyDir = Join-Path $HOME ".config\memory-supervisor"
+    $NotifyDir = Join-Path $HOME ".config\calando"
     New-Item -ItemType Directory -Force -Path $NotifyDir | Out-Null
     $NotifyConfig = Join-Path $NotifyDir "notifications.conf"
     if (-not (Test-Path -LiteralPath $NotifyConfig)) {
         Copy-Item (Join-Path $Root "runtime\notifications\notifications.conf.example") $NotifyConfig
     }
     if (-not (Get-Command curl.exe -ErrorAction SilentlyContinue)) {
-        Write-Warning "Install curl before enabling Discord or Telegram notifications"
+        Write-Warning "Install curl before enabling Telegram notices"
     }
 
     Write-Host "[7/7] verify connections"
-    & $InstalledBinary status --connections
+    & $InstalledBinary status
     if ($LASTEXITCODE -ne 0) { throw "Connection smoke check failed" }
     $Success = $true
     if ($PoweredOff) {
-        Write-Host "OK. Memory Supervisor remains OFF across updates and restarts; run 'memory-supervisor on' once to restore protection."
+        Write-Host "OK. Calando remains OFF across updates and restarts; run 'calando on' once to restore protection."
     } else {
-        Write-Host "OK. Open a new terminal for PATH changes. Run memory-status --connections. If user action is reported, Codex CLI uses /hooks, Codex App uses Settings -> Hooks, and interactive Claude requires workspace trust before settings-file hooks run."
+        Write-Host "OK. Open a new terminal for PATH changes. Run calando status. If user action is reported, Codex CLI uses /hooks, Codex App uses Settings -> Hooks, and interactive Claude requires workspace trust before settings-file hooks run."
     }
 } catch {
     if ($Cutover -and -not $Success -and -not $Activated) {

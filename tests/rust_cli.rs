@@ -52,7 +52,7 @@ impl Sandbox {
     }
 
     fn command(&self) -> Command {
-        let mut command = Command::new(env!("CARGO_BIN_EXE_memory-supervisor"));
+        let mut command = Command::new(env!("CARGO_BIN_EXE_calando"));
         command
             .env("HOME", &self.home)
             .env("USERPROFILE", &self.home)
@@ -565,10 +565,7 @@ fn expired_green_lease_cannot_hide_a_red_peer_from_the_real_rust_gate() {
         .env("MEMORY_SUPERVISOR_DIR", &sandbox.state)
         .env_remove("MEMORY_SUPERVISOR_FEDERATION_DIR")
         .env("MEMORY_SUPERVISOR_CONFIG", &sandbox.config)
-        .env(
-            "MEMORY_SUPERVISOR_BINARY",
-            env!("CARGO_BIN_EXE_memory-supervisor"),
-        )
+        .env("MEMORY_SUPERVISOR_BINARY", env!("CARGO_BIN_EXE_calando"))
         .env("MEMORY_SUPERVISOR_PRETOOL_HOLD_S", "0")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())

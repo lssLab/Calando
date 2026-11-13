@@ -3,17 +3,17 @@ param()
 
 $ErrorActionPreference = "Stop"
 $Root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
-$PointerDir = Join-Path $HOME ".memory-supervisor"
+$PointerDir = Join-Path $HOME ".calando"
 $RuntimeDir = if ($env:MEMORY_SUPERVISOR_RUNTIME_DIR) {
     $env:MEMORY_SUPERVISOR_RUNTIME_DIR
 } else {
-    Join-Path $HOME ".local\lib\memory-supervisor"
+    Join-Path $HOME ".local\lib\calando"
 }
-$OwnedBinary = Join-Path $RuntimeDir "memory-supervisor.exe"
+$OwnedBinary = Join-Path $RuntimeDir "calando.exe"
 $TaskName = if ($env:MEMORY_SUPERVISOR_TASK_NAME) {
     $env:MEMORY_SUPERVISOR_TASK_NAME
 } else {
-    "MemorySupervisor"
+    "Calando"
 }
 if ($TaskName -notmatch '^[A-Za-z0-9_.-]{1,100}$') {
     throw "MEMORY_SUPERVISOR_TASK_NAME must contain only letters, numbers, dot, underscore, or hyphen"
@@ -69,7 +69,7 @@ if (Test-OwnedTask $Task) {
     Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
     Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
 }
-$Legacy = if ($TaskName -eq "MemorySupervisor") {
+$Legacy = if ($TaskName -eq "Calando") {
     Get-ScheduledTask -TaskName "ClaudeMemoryGovernor" -ErrorAction SilentlyContinue
 } else { $null }
 if ($Legacy -and @($Legacy.Actions).Count -eq 1 -and
@@ -78,20 +78,15 @@ if ($Legacy -and @($Legacy.Actions).Count -eq 1 -and
     Unregister-ScheduledTask -TaskName "ClaudeMemoryGovernor" -Confirm:$false
 }
 
-foreach ($Path in @(
-    (Join-Path $HOME ".claude\skills\memory-supervisor"),
-    (Join-Path $HOME ".agents\skills\memory-supervisor"),
-    (Join-Path $HOME ".codex\skills\memory-supervisor"),
-    (Join-Path $HOME ".claude\skills\memory-governor"),
-    (Join-Path $HOME ".agents\skills\memory-governor"),
-    (Join-Path $HOME ".codex\skills\memory-governor")
-)) {
-    $Item = Get-Item -Force -LiteralPath $Path -ErrorAction SilentlyContinue
-    if ($Item -and ($Item.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
-        $Target = @($Item.Target) | Select-Object -First 1
-        if ($Target -and ([IO.Path]::GetFullPath($Target) -eq [IO.Path]::GetFullPath($Root))) {
-            [IO.Directory]::Delete($Path)
-        }
+foreach ($SkillRoot in @(".claude\skills", ".agents\skills", ".codex\skills")) {
+    foreach ($Name in @("calando", "memory-supervisor", "memory-governor")) {
+        $Path = Join-Path (Join-Path $HOME $SkillRoot) $Name
+        $Manifest = Join-Path $Path "SKILL.md"
+        $Item = Get-Item -Force -LiteralPath $Path -ErrorAction SilentlyContinue
+        if (-not $Item -or -not (Test-Path -LiteralPath $Manifest) -or
+            [IO.File]::ReadAllText($Manifest) -notmatch '(?m)^name: (memory-governor|memory-supervisor|calando)$') { continue }
+        if ($Item.Attributes -band [IO.FileAttributes]::ReparsePoint) { [IO.Directory]::Delete($Path) }
+        else { Remove-Item -Recurse -Force -LiteralPath $Path }
     }
 }
 
@@ -100,29 +95,21 @@ function Remove-OwnedLauncher {
     $Item = Get-Item -Force -LiteralPath $Path -ErrorAction SilentlyContinue
     if (-not $Item -or $Item.PSIsContainer -or
         ($Item.Attributes -band [IO.FileAttributes]::ReparsePoint)) { return }
-    if ([IO.File]::ReadAllText($Path).IndexOf(
-        "Memory Supervisor managed command", [StringComparison]::OrdinalIgnoreCase
-    ) -ge 0) { Remove-Item -Force -LiteralPath $Path }
+    $Content = [IO.File]::ReadAllText($Path)
+    if ($Content.IndexOf("Calando managed command", [StringComparison]::OrdinalIgnoreCase) -ge 0 -or
+        $Content.IndexOf("Memory Supervisor managed command", [StringComparison]::OrdinalIgnoreCase) -ge 0) {
+        Remove-Item -Force -LiteralPath $Path
+    }
 }
 $Bin = Join-Path $HOME ".local\bin"
+Remove-OwnedLauncher (Join-Path $Bin "calando.cmd")
 Remove-OwnedLauncher (Join-Path $Bin "memory-supervisor.cmd")
 Remove-OwnedLauncher (Join-Path $Bin "memory-status.cmd")
 Remove-OwnedLauncher (Join-Path $Bin "memory-control.cmd")
 
-function Remove-UnchangedCommandFile {
-    param([string]$Path, [string]$Source)
-    $Item = Get-Item -Force -LiteralPath $Path -ErrorAction SilentlyContinue
-    if (-not $Item -or $Item.PSIsContainer -or
-        ($Item.Attributes -band [IO.FileAttributes]::ReparsePoint)) { return }
-    if ((Test-Path -LiteralPath $Source) -and
-        [IO.File]::ReadAllText($Path) -eq [IO.File]::ReadAllText($Source)) {
-        Remove-Item -Force -LiteralPath $Path
-    }
-}
-Remove-UnchangedCommandFile (Join-Path $HOME ".claude\commands\memory-status.md") `
-    (Join-Path $Root "integrations\claude\memory-status.md")
-Remove-UnchangedCommandFile (Join-Path $HOME ".codex\prompts\memory-status.md") `
-    (Join-Path $Root "integrations\codex\memory-status.md")
+$OldRuntime = Join-Path $HOME ".local\lib\memory-supervisor"
+Remove-Item -Force -LiteralPath (Join-Path $OldRuntime "memory-supervisor.exe") -ErrorAction SilentlyContinue
+Remove-Item -Force -LiteralPath $OldRuntime -ErrorAction SilentlyContinue
 
 if ([IO.Path]::GetFullPath($Binary) -eq [IO.Path]::GetFullPath($OwnedBinary)) {
     Remove-Item -Force -LiteralPath $OwnedBinary -ErrorAction SilentlyContinue

@@ -73,7 +73,7 @@ pub fn user_message(event: &Value) -> String {
     let obsolete_format = ["Some(", "Nones", "TTE=None", "TTE=Some("]
         .iter()
         .any(|token| stored.contains(token));
-    if stored.starts_with("[Memory Supervisor]") && !obsolete_format {
+    if stored.starts_with("[Calando]") && !obsolete_format {
         return truncate(stored, 2000);
     }
 
@@ -98,26 +98,27 @@ pub fn user_message(event: &Value) -> String {
         (
             "PROCESS RESUMED",
             "The preserved PID is running again under the current admission policy.",
-            "No recovery command is required; check `memory-status` before new fan-out.".to_owned(),
+            "No recovery command is required; check `calando status` before new fan-out."
+                .to_owned(),
         )
     } else if action == "manual-choice" || matches!(status, "critical" | "failed") {
         (
             "ACTION REQUIRED",
             "Automatic protection could not complete a safe state transition.",
-            "Preserve work and run `memory-status` for the exact recovery instruction.".to_owned(),
+            "Preserve work and run `calando status` for the exact recovery instruction.".to_owned(),
         )
     } else if action == "hold" || status == "hold" {
         (
             "NEW FAN-OUT HELD",
             "Only new fan-out is blocked; existing work continues and no process was paused by admission.",
-            "Wait for automatic recovery or use sequential work; `memory-status` shows the live decision."
+            "Wait for automatic recovery or use sequential work; `calando status` shows the live decision."
                 .to_owned(),
         )
     } else if action == "drain" || status == "drain" {
         (
             "DRAIN MODE ACTIVE",
             "New fan-out is blocked while existing work is contained under the current machine pressure.",
-            "Preserve work and check `memory-status`; a process pause is reported as a separate action."
+            "Preserve work and check `calando status`; a process pause is reported as a separate action."
                 .to_owned(),
         )
     } else if action == "probation" || status == "monitoring" {
@@ -131,7 +132,7 @@ pub fn user_message(event: &Value) -> String {
         (
             "MEMORY ACTION RECORDED",
             "The supervisor recorded a memory-policy state change.",
-            "Run `memory-status` for the current decision; no unreported process pause should be assumed."
+            "Run `calando status` for the current decision; no unreported process pause should be assumed."
                 .to_owned(),
         )
     };
@@ -175,7 +176,7 @@ pub fn user_message(event: &Value) -> String {
         .unwrap_or_default();
     truncate(
         &format!(
-            "[Memory Supervisor] {title}{target}\nWhy: {why}{headroom}.\nAttribution estimate: {attribution}.\nState: {effect}\nNext: {next}"
+            "[Calando] {title}{target}\nWhy: {why}{headroom}.\nAttribution estimate: {attribution}.\nState: {effect}\nNext: {next}"
         ),
         2000,
     )
@@ -227,7 +228,7 @@ pub fn concise_message(event: &Value) -> String {
     let count = |key: &str| event.get(key).and_then(Value::as_u64).unwrap_or_default();
     let stored_title = text(event, "message")
         .and_then(|message| message.lines().next())
-        .map(|line| line.trim_start_matches("[Memory Supervisor]").trim())
+        .map(|line| line.trim_start_matches("[Calando]").trim())
         .filter(|line| !line.is_empty())
         .map(|line| {
             let lower = line.to_lowercase();
@@ -294,9 +295,9 @@ pub fn concise_message(event: &Value) -> String {
         ),
         ("protection-degraded", _) | (_, "critical" | "failed") => (
             stored_title,
-            "Protection is degraded. Run memory-status.".to_owned(),
+            "Protection is degraded. Run `calando status`.".to_owned(),
         ),
-        _ => (stored_title, "Run memory-status for details.".to_owned()),
+        _ => (stored_title, "Run `calando status` for details.".to_owned()),
     };
 
     let mut lines = vec![headline, environment(event)];
@@ -583,7 +584,7 @@ mod tests {
             "type":"pressure-episode", "status":"active", "source":"windows-LAPTOP-1",
             "platform":"windows", "headroom_mb":1551, "capacity_mb":16108,
             "vm_held_mb":9830, "guest_used_mb":3297, "restricted":0, "paused":0,
-            "message":"[Memory Supervisor] MEMORY PROTECTION ACTIVE\nWhy: long prose"
+            "message":"[Calando] MEMORY PROTECTION ACTIVE\nWhy: long prose"
         });
         assert_eq!(
             concise_message(&event),
@@ -693,7 +694,7 @@ mod tests {
             "message":"Memory action changed to Hold; TTE=Some(45.4)s."
         });
         let rendered = user_message(&event);
-        assert!(rendered.starts_with("[Memory Supervisor] NEW FAN-OUT HELD"));
+        assert!(rendered.starts_with("[Calando] NEW FAN-OUT HELD"));
         assert!(rendered.contains("Only new fan-out is blocked"));
         assert!(rendered.contains("external activity likely dominated"));
         assert!(!rendered.contains("Some("));
@@ -706,6 +707,6 @@ mod tests {
             "cause":"runtime-persistence-failure",
             "message":"legacy failure"
         }));
-        assert!(degraded.starts_with("[Memory Supervisor] ACTION REQUIRED"));
+        assert!(degraded.starts_with("[Calando] ACTION REQUIRED"));
     }
 }

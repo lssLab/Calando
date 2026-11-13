@@ -7,11 +7,11 @@ OUTPUT=${1:-"$ROOT/dist"}
 REVISION=${2:-HEAD}
 mkdir -p "$OUTPUT"
 
-TAR_NAME=memory-supervisor-source.tar.gz
-ZIP_NAME=memory-supervisor-source.zip
-git -C "$ROOT" archive --format=tar.gz --prefix=memory-supervisor/ \
+TAR_NAME=calando-source.tar.gz
+ZIP_NAME=calando-source.zip
+git -C "$ROOT" archive --format=tar.gz --prefix=calando/ \
   --output="$OUTPUT/$TAR_NAME" "$REVISION"
-git -C "$ROOT" archive --format=zip --prefix=memory-supervisor/ \
+git -C "$ROOT" archive --format=zip --prefix=calando/ \
   --output="$OUTPUT/$ZIP_NAME" "$REVISION"
 
 write_checksum() {

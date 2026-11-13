@@ -12,6 +12,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "calando"
+version = "0.2.4"
+dependencies = [
+ "libc",
+ "serde",
+ "serde_json",
+ "sha2",
+ "toml",
+ "windows-sys",
+]
+
+[[package]]
 name = "cfg-if"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -95,18 +107,6 @@ name = "memchr"
 version = "2.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
-
-[[package]]
-name = "memory-supervisor"
-version = "0.2.4"
-dependencies = [
- "libc",
- "serde",
- "serde_json",
- "sha2",
- "toml",
- "windows-sys",
-]
 
 [[package]]
 name = "proc-macro2"

@@ -3,8 +3,15 @@
 set -eu
 
 RELEASE_BASE_URL=${MEMORY_SUPERVISOR_RELEASE_BASE_URL:-"https://github.com/lssLab/Calando/releases/latest/download"}
-SOURCE=${MEMORY_SUPERVISOR_INSTALL_ROOT:-"$HOME/.local/share/memory-supervisor"}
-SOURCE_MARKER=.memory-supervisor-release-source
+SOURCE=${MEMORY_SUPERVISOR_INSTALL_ROOT:-"$HOME/.local/share/calando"}
+SOURCE_MARKER=.calando-release-source
+# A pre-0.3 `memory-supervisor update` passes its old release folder; move it to the new name.
+LEGACY_SOURCE="$HOME/.local/share/memory-supervisor"
+RETIRE_LEGACY=0
+if [ "$SOURCE" = "$LEGACY_SOURCE" ] && [ -f "$LEGACY_SOURCE/.memory-supervisor-release-source" ]; then
+  SOURCE="$HOME/.local/share/calando"
+  RETIRE_LEGACY=1
+fi
 TEMP_DIR=""
 BACKUP=""
 SOURCE_REPLACED=0
@@ -77,8 +84,8 @@ command -v tar >/dev/null 2>&1 || {
   echo "the operating system has no archive extractor required for installation" >&2
   exit 1
 }
-TEMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/memory-supervisor-bootstrap.XXXXXX")
-ARCHIVE="$TEMP_DIR/memory-supervisor-source.tar.gz"
+TEMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/calando-bootstrap.XXXXXX")
+ARCHIVE="$TEMP_DIR/calando-source.tar.gz"
 CHECKSUM="$ARCHIVE.sha256"
 
 if [ -n "${MEMORY_SUPERVISOR_SOURCE_ARCHIVE_FILE:-}" ]; then
@@ -98,9 +105,9 @@ else
     exit 1
   }
   curl --proto '=https' --tlsv1.2 -fL \
-    "$RELEASE_BASE_URL/memory-supervisor-source.tar.gz" -o "$ARCHIVE"
+    "$RELEASE_BASE_URL/calando-source.tar.gz" -o "$ARCHIVE"
   curl --proto '=https' --tlsv1.2 -fL \
-    "$RELEASE_BASE_URL/memory-supervisor-source.tar.gz.sha256" -o "$CHECKSUM"
+    "$RELEASE_BASE_URL/calando-source.tar.gz.sha256" -o "$CHECKSUM"
 fi
 
 verify_checksum "$ARCHIVE" "$CHECKSUM" || {
@@ -133,3 +140,4 @@ chmod 600 "$SOURCE/$SOURCE_MARKER" 2>/dev/null || true
 
 /bin/sh "$SOURCE/install.sh"
 SUCCESS=1
+if [ "$RETIRE_LEGACY" -eq 1 ]; then rm -rf "$LEGACY_SOURCE"; fi

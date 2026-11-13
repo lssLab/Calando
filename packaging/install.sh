@@ -1,15 +1,21 @@
 #!/bin/sh
-# Memory Supervisor installer for Linux, WSL, and macOS. Windows uses packaging/install.ps1.
+# Calando installer for Linux, WSL, and macOS. Windows uses packaging/install.ps1.
 set -eu
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 DIR=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
-RUNTIME_DIR=${MEMORY_SUPERVISOR_RUNTIME_DIR:-"$HOME/.local/lib/memory-supervisor"}
-INSTALLED_BINARY="$RUNTIME_DIR/memory-supervisor"
-POINTER_DIR="$HOME/.memory-supervisor"
+# 0.3 renamed every path from memory-supervisor to calando; until migrate-names runs below,
+# an existing install is still found under its old name.
+renamed() {
+  if [ ! -e "$1/$2" ] && [ -e "$1/$3" ]; then printf '%s\n' "$1/$3"; else printf '%s\n' "$1/$2"; fi
+}
+RUNTIME_DIR=${MEMORY_SUPERVISOR_RUNTIME_DIR:-"$HOME/.local/lib/calando"}
+INSTALLED_BINARY="$RUNTIME_DIR/calando"
+OLD_BINARY="$HOME/.local/lib/memory-supervisor/memory-supervisor"
+POINTER_DIR=$(renamed "$HOME" .calando .memory-supervisor)
 POWERED_OFF=0
 if [ -e "$POINTER_DIR/power-off" ] || [ -L "$POINTER_DIR/power-off" ]; then POWERED_OFF=1; fi
-TEMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/memory-supervisor-install.XXXXXX")
+TEMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/calando-install.XXXXXX")
 SERVICE_KIND=""
 SERVICE_FILE=""
 HAD_SERVICE=0
@@ -128,15 +134,36 @@ remove_legacy_service() {
   fi
 }
 
+# Stop and remove the pre-0.3 `memory-supervisor` service so only one daemon runs.
+retire_previous_service() {
+  case "$SERVICE_KIND" in
+    systemd)
+      old="$HOME/.config/systemd/user/memory-supervisor.service"
+      if [ -f "$old" ] && [ ! -L "$old" ] && grep -Fq "Memory Supervisor" "$old"; then
+        systemctl --user disable --now memory-supervisor.service 2>/dev/null || true
+        rm -f "$old"
+        systemctl --user daemon-reload
+      fi
+      ;;
+    launchd)
+      old="$HOME/Library/LaunchAgents/io.github.lsslab.memory-supervisor.plist"
+      if [ -f "$old" ] && [ ! -L "$old" ] && grep -Fq "io.github.lsslab.memory-supervisor" "$old"; then
+        launchctl bootout "gui/$(id -u)" "$old" 2>/dev/null || true
+        rm -f "$old"
+      fi
+      ;;
+  esac
+}
+
 rollback() {
   [ "$CUTOVER" -eq 1 ] || return 0
-  echo "activation failed; restoring the previous Memory Supervisor runtime" >&2
+  echo "activation failed; restoring the previous Calando runtime" >&2
   if ! restore_python_rollback; then
     echo "warning: the emergency Python runtime could not be restored" >&2
   fi
   case "$SERVICE_KIND" in
     systemd)
-      systemctl --user stop memory-supervisor.service 2>/dev/null || true
+      systemctl --user stop calando.service 2>/dev/null || true
       ;;
     launchd)
       launchctl bootout "gui/$(id -u)" "$SERVICE_FILE" 2>/dev/null || true
@@ -171,9 +198,9 @@ rollback() {
         cp "$TEMP_DIR/previous-service" "$SERVICE_FILE"
         systemctl --user daemon-reload 2>/dev/null || true
         if [ "$POWERED_OFF" -eq 1 ]; then
-          systemctl --user disable --now memory-supervisor.service 2>/dev/null || true
+          systemctl --user disable --now calando.service 2>/dev/null || true
         else
-          systemctl --user enable --now memory-supervisor.service 2>/dev/null || true
+          systemctl --user enable --now calando.service 2>/dev/null || true
         fi
       else
         rm -f "$SERVICE_FILE"
@@ -184,9 +211,9 @@ rollback() {
       if [ "$HAD_SERVICE" -eq 1 ]; then
         cp "$TEMP_DIR/previous-service" "$SERVICE_FILE"
         if [ "$POWERED_OFF" -eq 1 ]; then
-          launchctl disable "gui/$(id -u)/io.github.lsslab.memory-supervisor" 2>/dev/null || true
+          launchctl disable "gui/$(id -u)/io.github.lsslab.calando" 2>/dev/null || true
         else
-          launchctl enable "gui/$(id -u)/io.github.lsslab.memory-supervisor" 2>/dev/null || true
+          launchctl enable "gui/$(id -u)/io.github.lsslab.calando" 2>/dev/null || true
           launchctl bootstrap "gui/$(id -u)" "$SERVICE_FILE" 2>/dev/null || true
         fi
       else
@@ -265,10 +292,10 @@ obtain_binary() {
     return
   fi
   if command -v cargo >/dev/null 2>&1 && [ -f "$DIR/Cargo.toml" ] && \
-    [ ! -f "$DIR/.memory-supervisor-release-source" ]; then
-    echo "building the current Memory Supervisor source with Rust" >&2
+    [ ! -f "$DIR/.calando-release-source" ] && [ ! -f "$DIR/.memory-supervisor-release-source" ]; then
+    echo "building the current Calando source with Rust" >&2
     cargo build --manifest-path "$DIR/Cargo.toml" --release --locked >&2
-    printf '%s\n' "$DIR/target/release/memory-supervisor"
+    printf '%s\n' "$DIR/target/release/calando"
     return
   fi
   target=$(release_target) || {
@@ -279,7 +306,7 @@ obtain_binary() {
     echo "curl is required to download the verified release binary" >&2
     return 1
   }
-  asset="memory-supervisor-$target"
+  asset="calando-$target"
   base=${MEMORY_SUPERVISOR_RELEASE_BASE_URL:-"https://github.com/lssLab/Calando/releases/latest/download"}
   echo "downloading verified release binary: $asset" >&2
   curl -fL "$base/$asset" -o "$TEMP_DIR/$asset" >&2
@@ -324,8 +351,7 @@ stop_fallback() {
 echo "[1/7] acquire and verify Rust runtime"
 for file in "$DIR/bootstrap.sh" "$DIR/install.sh" "$DIR/uninstall.sh" "$DIR/power.sh" \
   "$DIR/packaging/install.sh" "$DIR/packaging/uninstall.sh" "$DIR/packaging/power.sh" \
-  "$DIR/runtime/hooks/gate.sh" "$DIR/runtime/notifications/notify.sh" \
-  "$DIR/runtime/bin/memory-status" "$DIR/runtime/bin/memory-supervisor"; do
+  "$DIR/runtime/hooks/gate.sh" "$DIR/runtime/notifications/notify.sh"; do
   /bin/sh -n "$file"
 done
 CANDIDATE=$(obtain_binary)
@@ -337,15 +363,15 @@ if [ -n "${MEMORY_SUPERVISOR_DIR:-}" ]; then
 elif [ -r "$POINTER_DIR/state-dir" ]; then
   STATE_DIR=""
   IFS= read -r STATE_DIR < "$POINTER_DIR/state-dir" 2>/dev/null || true
-  [ -n "$STATE_DIR" ] || STATE_DIR="$HOME/.cache/memory-supervisor"
+  [ -n "$STATE_DIR" ] || STATE_DIR=$(renamed "$HOME/.cache" calando memory-supervisor)
 elif [ -r "$HOME/.memory-governor/state-dir" ]; then
   STATE_DIR=""
   IFS= read -r STATE_DIR < "$HOME/.memory-governor/state-dir" 2>/dev/null || true
   [ -n "$STATE_DIR" ] || STATE_DIR="$HOME/.cache/claude-governor"
 else
-  STATE_DIR="$HOME/.cache/memory-supervisor"
+  STATE_DIR=$(renamed "$HOME/.cache" calando memory-supervisor)
 fi
-FEDERATION_DIR=${MEMORY_SUPERVISOR_FEDERATION_DIR:-"$HOME/.memory-supervisor/instances"}
+FEDERATION_DIR=${MEMORY_SUPERVISOR_FEDERATION_DIR:-"$POINTER_DIR/instances"}
 if [ -r "$POINTER_DIR/install-root" ]; then
   PREVIOUS_ROOT=""
   IFS= read -r PREVIOUS_ROOT < "$POINTER_DIR/install-root" 2>/dev/null || true
@@ -376,12 +402,12 @@ fi
 
 case "$SERVICE_KIND" in
   systemd)
-    SERVICE_FILE="$HOME/.config/systemd/user/memory-supervisor.service"
+    SERVICE_FILE="$HOME/.config/systemd/user/calando.service"
     if [ -L "$SERVICE_FILE" ]; then
       echo "refusing to replace user-service link: $SERVICE_FILE" >&2
       exit 1
     elif [ -f "$SERVICE_FILE" ]; then
-      if ! grep -Fq "Claude Code & Codex CLI Memory Supervisor" "$SERVICE_FILE" && \
+      if ! grep -Fq "Calando memory protection" "$SERVICE_FILE" && \
          ! { grep -Fq "$PREVIOUS_ROOT/supervisor.py" "$SERVICE_FILE" && \
              grep -Fq "MEMORY_SUPERVISOR_DIR" "$SERVICE_FILE"; }; then
         echo "refusing to replace foreign user service: $SERVICE_FILE" >&2
@@ -393,16 +419,16 @@ case "$SERVICE_KIND" in
         prepare_python_rollback
       fi
       CUTOVER=1
-      systemctl --user stop memory-supervisor.service 2>/dev/null || true
+      systemctl --user stop calando.service 2>/dev/null || true
     fi
     ;;
   launchd)
-    SERVICE_FILE="$HOME/Library/LaunchAgents/io.github.lsslab.memory-supervisor.plist"
+    SERVICE_FILE="$HOME/Library/LaunchAgents/io.github.lsslab.calando.plist"
     if [ -L "$SERVICE_FILE" ]; then
       echo "refusing to replace launch-agent link: $SERVICE_FILE" >&2
       exit 1
     elif [ -f "$SERVICE_FILE" ]; then
-      grep -Fq "io.github.lsslab.memory-supervisor" "$SERVICE_FILE" || {
+      grep -Fq "io.github.lsslab.calando" "$SERVICE_FILE" || {
         echo "refusing to replace foreign launch agent: $SERVICE_FILE" >&2
         exit 1
       }
@@ -423,11 +449,17 @@ if [ -f "$STATE_DIR/state.json" ]; then
   HAD_STATE=1
 fi
 rm -f "$STATE_DIR/state.json" "$STATE_DIR/admission-green.lease"
-cp "$CANDIDATE" "$RUNTIME_DIR/.memory-supervisor.new.$$"
-chmod 755 "$RUNTIME_DIR/.memory-supervisor.new.$$"
-mv "$RUNTIME_DIR/.memory-supervisor.new.$$" "$INSTALLED_BINARY"
+cp "$CANDIDATE" "$RUNTIME_DIR/.calando.new.$$"
+chmod 755 "$RUNTIME_DIR/.calando.new.$$"
+mv "$RUNTIME_DIR/.calando.new.$$" "$INSTALLED_BINARY"
 
+retire_previous_service
 "$INSTALLED_BINARY" integration migrate-names
+POINTER_DIR="$HOME/.calando"
+# A session that started before this update still calls the old hook path.
+if [ -f "$OLD_BINARY" ] && [ ! -L "$OLD_BINARY" ]; then
+  ln -s "$INSTALLED_BINARY" "$OLD_BINARY.new.$$" && mv -f "$OLD_BINARY.new.$$" "$OLD_BINARY"
+fi
 if [ -n "${MEMORY_SUPERVISOR_DIR:-}" ]; then
   STATE_DIR=$(MEMORY_SUPERVISOR_DIR="$MEMORY_SUPERVISOR_DIR" \
     "$INSTALLED_BINARY" integration path state)
@@ -440,7 +472,7 @@ if [ -n "${MEMORY_SUPERVISOR_FEDERATION_DIR:-}" ]; then
 else
   FEDERATION_DIR=$("$INSTALLED_BINARY" integration path federation)
 fi
-mkdir -p "$POINTER_DIR" "$STATE_DIR" "$FEDERATION_DIR" "$HOME/.config/memory-supervisor"
+mkdir -p "$POINTER_DIR" "$STATE_DIR" "$FEDERATION_DIR" "$HOME/.config/calando"
 chmod 700 "$POINTER_DIR" "$STATE_DIR" 2>/dev/null || true
 
 systemd_escape() {
@@ -458,7 +490,7 @@ case "$SERVICE_KIND" in
     FED_ESC=$(systemd_escape "$FEDERATION_DIR")
     cat > "$SERVICE_FILE.tmp" <<EOF
 [Unit]
-Description=Claude Code & Codex CLI Memory Supervisor
+Description=Calando memory protection for Claude Code and Codex
 
 [Service]
 ExecStart="$BIN_ESC" daemon --foreground
@@ -473,15 +505,15 @@ EOF
     mv "$SERVICE_FILE.tmp" "$SERVICE_FILE"
     systemctl --user daemon-reload
     if [ "$POWERED_OFF" -eq 1 ]; then
-      systemctl --user disable --now memory-supervisor.service >/dev/null
-      if systemctl --user is-active --quiet memory-supervisor.service ||
-        systemctl --user is-enabled --quiet memory-supervisor.service; then
+      systemctl --user disable --now calando.service >/dev/null
+      if systemctl --user is-active --quiet calando.service ||
+        systemctl --user is-enabled --quiet calando.service; then
         echo "power state is OFF but the user service remains active or enabled" >&2
         exit 1
       fi
     else
-      systemctl --user enable memory-supervisor.service >/dev/null
-      systemctl --user restart memory-supervisor.service
+      systemctl --user enable calando.service >/dev/null
+      systemctl --user restart calando.service
     fi
     if [ "$POWERED_OFF" -eq 0 ] && command -v loginctl >/dev/null 2>&1 && \
       [ "$(loginctl show-user "$(id -un)" -p Linger --value 2>/dev/null || true)" != yes ] && \
@@ -501,7 +533,7 @@ EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
-<key>Label</key><string>io.github.lsslab.memory-supervisor</string>
+<key>Label</key><string>io.github.lsslab.calando</string>
 <key>ProgramArguments</key><array><string>$BIN_XML</string><string>daemon</string><string>--foreground</string></array>
 <key>RunAtLoad</key><true/><key>KeepAlive</key><true/>
 <key>EnvironmentVariables</key><dict>
@@ -514,14 +546,14 @@ EOF
 EOF
     mv "$SERVICE_FILE.tmp" "$SERVICE_FILE"
     if [ "$POWERED_OFF" -eq 1 ]; then
-      launchctl disable "gui/$(id -u)/io.github.lsslab.memory-supervisor"
+      launchctl disable "gui/$(id -u)/io.github.lsslab.calando"
       launchctl bootout "gui/$(id -u)" "$SERVICE_FILE" 2>/dev/null || true
-      if launchctl print "gui/$(id -u)/io.github.lsslab.memory-supervisor" >/dev/null 2>&1; then
+      if launchctl print "gui/$(id -u)/io.github.lsslab.calando" >/dev/null 2>&1; then
         echo "power state is OFF but the launch agent remains loaded" >&2
         exit 1
       fi
     else
-      launchctl enable "gui/$(id -u)/io.github.lsslab.memory-supervisor" 2>/dev/null || true
+      launchctl enable "gui/$(id -u)/io.github.lsslab.calando" 2>/dev/null || true
       launchctl bootstrap "gui/$(id -u)" "$SERVICE_FILE"
     fi
     ;;
@@ -608,7 +640,7 @@ connect_provider() {
       --binary "$INSTALLED_BINARY" --remove
   fi
   if [ "$provider" = claude ]; then
-    echo "$provider integration skipped: $requirement; any existing Memory Supervisor hook was preserved" >&2
+    echo "$provider integration skipped: $requirement; any existing Calando hook was preserved" >&2
   else
     echo "$provider integration skipped: $requirement" >&2
   fi
@@ -629,7 +661,7 @@ fi
 # second route merely because the default path exists.
 if [ "$DEFAULT_CODEX_HOOK_TARGET" != "$CODEX_HOOK_TARGET" ] && \
   [ -f "$DEFAULT_CODEX_HOOK_TARGET" ] && \
-  grep -Eq 'memory-supervisor|hooks[/\\]gate' "$DEFAULT_CODEX_HOOK_TARGET"; then
+  grep -Eq 'calando|memory-supervisor|hooks[/\\]gate' "$DEFAULT_CODEX_HOOK_TARGET"; then
   legacy_merge=$("$INSTALLED_BINARY" integration hooks --target "$DEFAULT_CODEX_HOOK_TARGET" \
     --provider codex --binary "$INSTALLED_BINARY")
   printf '%s\n' "$legacy_merge"
@@ -646,59 +678,42 @@ if [ -n "$HOOK_WIRING_CHANGED" ]; then
   esac
   case "$HOOK_WIRING_CHANGED" in
     *codex*)
-      echo "Codex CLI: USER ACTION REQUIRED. Open /hooks in the CLI you are using. Confirm that all seven Memory Supervisor entries are trusted and on; trust only entries marked for review and enable only entries that are off. Then close /hooks and continue the current work. Restarting does not grant trust."
-      echo "Codex App: USER ACTION REQUIRED. The user must personally use Settings > Hooks, not /hooks, to trust every new or changed Memory Supervisor entry and enable any disabled entry. Restarting cannot grant trust; applying the change reloads every existing task currently loaded by the shared App Server, so continue an existing task with its next request."
+      echo "Codex CLI: USER ACTION REQUIRED. Open /hooks in the CLI you are using. Confirm that all seven Calando entries are trusted and on; trust only entries marked for review and enable only entries that are off. Then close /hooks and continue the current work. Restarting does not grant trust."
+      echo "Codex App: USER ACTION REQUIRED. The user must personally use Settings > Hooks, not /hooks, to trust every new or changed Calando entry and enable any disabled entry. Restarting cannot grant trust; applying the change reloads every existing task currently loaded by the shared App Server, so continue an existing task with its next request."
       echo "Shared CODEX_HOME edge case: if another process already saved approval and this running surface has no change left to save, restart only that pre-existing App or CLI once so it reads the shared trust record."
       ;;
   esac
 else
-  echo "Hook wiring unchanged: a binary-only update does not create new Codex trust. Run memory-status --connections anyway; any existing Codex disabled or untrusted state still requires the user action it reports."
+  echo "Hook wiring unchanged: a binary-only update does not create new Codex trust. Run calando status anyway; any existing Codex disabled or untrusted state still requires the user action it reports."
 fi
 
-echo "[5/7] install skills and user commands"
+echo "[5/7] install the calando skill (/calando, \$calando)"
 is_supervisor_skill() {
-  [ -r "$1/SKILL.md" ] && grep -Eq '^name: (memory-governor|memory-supervisor)$' "$1/SKILL.md"
+  [ -r "$1/SKILL.md" ] && grep -Eq '^name: (memory-governor|memory-supervisor|calando)$' "$1/SKILL.md"
 }
-link_skill() {
+# A copy, not a link: an agent's skill must not point into a writable checkout.
+install_skill() {
   target=$1
-  mkdir -p "$(dirname "$target")"
-  if [ -L "$target" ]; then
-    if [ "$(readlink "$target")" = "$DIR" ]; then return; fi
-    if is_supervisor_skill "$target"; then rm -f "$target"; else
-      echo "preserving existing foreign skill link: $target" >&2; return
+  if [ -L "$target" ] || [ -e "$target" ]; then
+    if is_supervisor_skill "$target"; then rm -rf "$target"; else
+      echo "preserving existing foreign skill: $target" >&2; return
     fi
-  elif [ -e "$target" ]; then
-    echo "preserving existing non-link skill: $target" >&2
-    return
   fi
-  ln -s "$DIR" "$target"
+  mkdir -p "$target/agents"
+  cp "$DIR/SKILL.md" "$target/SKILL.md"
+  cp "$DIR/agents/reference.md" "$DIR/agents/openai.yaml" "$target/agents/"
 }
-for old in "$HOME/.claude/skills/memory-governor" \
-  "$HOME/.agents/skills/memory-governor" "$HOME/.codex/skills/memory-governor"; do
-  if [ -L "$old" ] && is_supervisor_skill "$old"; then rm -f "$old"; fi
+for old in memory-governor memory-supervisor; do
+  for root in "$HOME/.claude/skills" "$HOME/.agents/skills" "$HOME/.codex/skills"; do
+    if is_supervisor_skill "$root/$old"; then rm -rf "$root/$old"; fi
+  done
 done
-link_skill "$HOME/.claude/skills/memory-supervisor"
-link_skill "$HOME/.agents/skills/memory-supervisor"
-if [ -d "$HOME/.codex" ]; then link_skill "$HOME/.codex/skills/memory-supervisor"; fi
-
-install_command_file() {
-  source=$1
-  target=$2
-  mkdir -p "$(dirname "$target")"
-  if [ -L "$target" ] || [ -d "$target" ]; then
-    echo "preserving existing non-regular command path: $target" >&2
-  elif [ -f "$target" ] && ! cmp -s "$target" "$source"; then
-    echo "preserving customized command file: $target" >&2
-  elif [ ! -e "$target" ]; then
-    cp "$source" "$target"
-  fi
-}
-install_command_file "$DIR/integrations/claude/memory-status.md" \
-  "$HOME/.claude/commands/memory-status.md"
-if [ -d "$HOME/.codex" ]; then
-  install_command_file "$DIR/integrations/codex/memory-status.md" \
-    "$HOME/.codex/prompts/memory-status.md"
-fi
+install_skill "$HOME/.claude/skills/calando"
+install_skill "$HOME/.agents/skills/calando"
+if [ -d "$HOME/.codex" ]; then install_skill "$HOME/.codex/skills/calando"; fi
+for old in "$HOME/.claude/commands/memory-status.md" "$HOME/.codex/prompts/memory-status.md"; do
+  if [ -f "$old" ] && grep -Fq "memory-status" "$old"; then rm -f "$old"; fi
+done
 
 mkdir -p "$HOME/.local/bin"
 link_binary() {
@@ -706,7 +721,7 @@ link_binary() {
   if [ -L "$target" ]; then
     linked=$(readlink "$target")
     case "$linked" in
-      "$INSTALLED_BINARY"|"$DIR/bin/memory-supervisor"|"$DIR/bin/memory-status"|"$DIR/bin/memory-control"|\
+      "$INSTALLED_BINARY"|"$OLD_BINARY"|"$DIR/bin/memory-supervisor"|"$DIR/bin/memory-status"|\
       "$DIR/runtime/bin/memory-supervisor"|"$DIR/runtime/bin/memory-status"|"$DIR/runtime/bin/memory-control")
         rm -f "$target" ;;
       *)
@@ -728,6 +743,8 @@ link_binary() {
   fi
   ln -s "$INSTALLED_BINARY" "$target"
 }
+link_binary "$HOME/.local/bin/calando"
+# Old command names stay as aliases through 0.3.x.
 link_binary "$HOME/.local/bin/memory-supervisor"
 link_binary "$HOME/.local/bin/memory-status"
 for legacy in "$HOME/.local/bin/memory-control" "$HOME/.local/bin/cmg-status" \
@@ -747,21 +764,21 @@ for legacy in "$HOME/.local/bin/memory-control" "$HOME/.local/bin/cmg-status" \
 done
 
 echo "[6/7] preserve private notification settings"
-if [ ! -f "$HOME/.config/memory-supervisor/notifications.conf" ]; then
+if [ ! -f "$HOME/.config/calando/notifications.conf" ]; then
   cp "$DIR/runtime/notifications/notifications.conf.example" \
-    "$HOME/.config/memory-supervisor/notifications.conf"
+    "$HOME/.config/calando/notifications.conf"
 fi
-chmod 600 "$HOME/.config/memory-supervisor/notifications.conf" 2>/dev/null || true
+chmod 600 "$HOME/.config/calando/notifications.conf" 2>/dev/null || true
 command -v curl >/dev/null 2>&1 || \
-  echo "note: install curl before enabling Discord or Telegram notifications" >&2
+  echo "note: install curl before enabling Telegram notices" >&2
 
 echo "[7/7] verify connections"
 MEMORY_SUPERVISOR_DIR="$STATE_DIR" \
 MEMORY_SUPERVISOR_FEDERATION_DIR="$FEDERATION_DIR" \
-  "$INSTALLED_BINARY" status --connections
+  "$INSTALLED_BINARY" status
 SUCCESS=1
 if [ "$POWERED_OFF" -eq 1 ]; then
-  echo "OK. Memory Supervisor remains OFF across updates and restarts; run 'memory-supervisor on' once to restore protection."
+  echo "OK. Calando remains OFF across updates and restarts; run 'calando on' once to restore protection."
 else
-  echo "OK. Ensure $HOME/.local/bin is on PATH. Run memory-status --connections. If user action is reported, Codex CLI uses /hooks, Codex App uses Settings -> Hooks, and interactive Claude requires workspace trust before settings-file hooks run."
+  echo "OK. Ensure $HOME/.local/bin is on PATH. Run calando status. If user action is reported, Codex CLI uses /hooks, Codex App uses Settings -> Hooks, and interactive Claude requires workspace trust before settings-file hooks run."
 fi

@@ -53,7 +53,7 @@ fn mocked_darwin_kernel_signals_publish_the_exact_native_snapshot() {
     paths.extend(std::env::split_paths(&inherited_path));
     let path = std::env::join_paths(paths).unwrap();
 
-    let output = Command::new(env!("CARGO_BIN_EXE_memory-supervisor"))
+    let output = Command::new(env!("CARGO_BIN_EXE_calando"))
         .args(["daemon", "--once"])
         .env("PATH", path)
         .env("HOME", &sandbox.home)
@@ -111,7 +111,7 @@ fn mocked_darwin_pressure_sysctl_failure_degrades_protection() {
     paths.extend(std::env::split_paths(&inherited_path));
     let path = std::env::join_paths(paths).unwrap();
 
-    let output = Command::new(env!("CARGO_BIN_EXE_memory-supervisor"))
+    let output = Command::new(env!("CARGO_BIN_EXE_calando"))
         .args(["daemon", "--once"])
         .env("PATH", path)
         .env("HOME", &sandbox.home)

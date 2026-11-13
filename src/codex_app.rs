@@ -885,6 +885,7 @@ impl CodexAppLedger {
                         .iter()
                         .any(|root| descends_from(process.pid, *root, processes))
                     && !normalized_program(&process.name).contains("memory-supervisor")
+                    && !normalized_program(&process.name).contains("calando")
             })
             .map(|process| process.pid)
             .collect();

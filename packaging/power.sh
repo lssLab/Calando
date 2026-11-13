@@ -5,25 +5,25 @@ set -eu
 ACTION=${1:-}
 case "$ACTION" in
   on|off) ;;
-  *) echo "usage: memory-supervisor on|off" >&2; exit 2 ;;
+  *) echo "usage: calando on|off" >&2; exit 2 ;;
 esac
 
-POINTER_DIR="$HOME/.memory-supervisor"
+POINTER_DIR="$HOME/.calando"
 MARKER="$POINTER_DIR/power-off"
 BINARY=${MEMORY_SUPERVISOR_BINARY:-}
 if [ -z "$BINARY" ] && [ -r "$POINTER_DIR/binary" ]; then
   IFS= read -r BINARY < "$POINTER_DIR/binary" 2>/dev/null || true
 fi
-[ -x "$BINARY" ] || { echo "installed Memory Supervisor binary is missing; run memory-supervisor update" >&2; exit 1; }
+[ -x "$BINARY" ] || { echo "installed Calando binary is missing; run calando update" >&2; exit 1; }
 
 if [ -n "${MEMORY_SUPERVISOR_DIR:-}" ]; then
   STATE_DIR=$MEMORY_SUPERVISOR_DIR
 elif [ -r "$POINTER_DIR/state-dir" ]; then
   STATE_DIR=""
   IFS= read -r STATE_DIR < "$POINTER_DIR/state-dir" 2>/dev/null || true
-  [ -n "$STATE_DIR" ] || STATE_DIR="$HOME/.cache/memory-supervisor"
+  [ -n "$STATE_DIR" ] || STATE_DIR="$HOME/.cache/calando"
 else
-  STATE_DIR="$HOME/.cache/memory-supervisor"
+  STATE_DIR="$HOME/.cache/calando"
 fi
 if [ -n "${MEMORY_SUPERVISOR_FEDERATION_DIR:-}" ]; then
   FEDERATION_DIR=$MEMORY_SUPERVISOR_FEDERATION_DIR
@@ -50,20 +50,20 @@ case "${MEMORY_SUPERVISOR_SERVICE_MODE:-auto}" in
   *) echo "MEMORY_SUPERVISOR_SERVICE_MODE must be auto or fallback" >&2; exit 1 ;;
 esac
 
-UNIT="$HOME/.config/systemd/user/memory-supervisor.service"
-PLIST="$HOME/Library/LaunchAgents/io.github.lsslab.memory-supervisor.plist"
-LABEL="io.github.lsslab.memory-supervisor"
+UNIT="$HOME/.config/systemd/user/calando.service"
+PLIST="$HOME/Library/LaunchAgents/io.github.lsslab.calando.plist"
+LABEL="io.github.lsslab.calando"
 
 case "$SERVICE_KIND" in
   systemd)
-    [ ! -L "$UNIT" ] && [ -f "$UNIT" ] && grep -Fq "Claude Code & Codex CLI Memory Supervisor" "$UNIT" || {
-      echo "owned Memory Supervisor service is missing; run memory-supervisor update" >&2
+    [ ! -L "$UNIT" ] && [ -f "$UNIT" ] && grep -Fq "Calando memory protection" "$UNIT" || {
+      echo "owned Calando service is missing; run calando update" >&2
       exit 1
     }
     ;;
   launchd)
     [ ! -L "$PLIST" ] && [ -f "$PLIST" ] && grep -Fq "$LABEL" "$PLIST" || {
-      echo "owned Memory Supervisor launch agent is missing; run memory-supervisor update" >&2
+      echo "owned Calando launch agent is missing; run calando update" >&2
       exit 1
     }
     ;;
@@ -120,12 +120,12 @@ start_fallback() {
 service_off() {
   case "$SERVICE_KIND" in
     systemd)
-      systemctl --user disable --now memory-supervisor.service
-      if systemctl --user is-active --quiet memory-supervisor.service; then
+      systemctl --user disable --now calando.service
+      if systemctl --user is-active --quiet calando.service; then
         echo "owned supervisor service is still active" >&2
         return 1
       fi
-      if systemctl --user is-enabled --quiet memory-supervisor.service; then
+      if systemctl --user is-enabled --quiet calando.service; then
         echo "owned supervisor service is still enabled" >&2
         return 1
       fi
@@ -146,8 +146,8 @@ service_on() {
   case "$SERVICE_KIND" in
     systemd)
       systemctl --user daemon-reload
-      systemctl --user enable memory-supervisor.service >/dev/null
-      systemctl --user restart memory-supervisor.service
+      systemctl --user enable calando.service >/dev/null
+      systemctl --user restart calando.service
       ;;
     launchd)
       launchctl enable "gui/$(id -u)/$LABEL"
@@ -177,18 +177,18 @@ if [ "$ACTION" = off ]; then
   if ! service_off; then
     rm -f "$MARKER"
     if service_on >/dev/null 2>&1 && wait_fresh; then
-      echo "Memory Supervisor could not be turned off; it remains ON with fresh protection" >&2
+      echo "Calando could not be turned off; it remains ON with fresh protection" >&2
     else
       write_marker
       service_off >/dev/null 2>&1 || true
       rm -f "$STATE_DIR/admission-green.lease"
-      echo "Memory Supervisor could not restore fresh ON protection; it remains OFF" >&2
+      echo "Calando could not restore fresh ON protection; it remains OFF" >&2
     fi
     exit 1
   fi
   rm -f "$STATE_DIR/admission-green.lease"
-  echo "Memory Supervisor is OFF. Services stay disabled across restarts; installed CLI hooks pass through."
-  echo "Run 'memory-supervisor on' once to restore protection."
+  echo "Calando is OFF. Services stay disabled across restarts; installed CLI hooks pass through."
+  echo "Run 'calando on' once to restore protection."
   exit 0
 fi
 
@@ -196,8 +196,8 @@ rm -f "$MARKER" "$STATE_DIR/state.json" "$STATE_DIR/admission-green.lease"
 if ! service_on || ! wait_fresh; then
   write_marker
   service_off >/dev/null 2>&1 || true
-  echo "Memory Supervisor did not return to a fresh running state; it remains off" >&2
+  echo "Calando did not return to a fresh running state; it remains off" >&2
   exit 1
 fi
-echo "Memory Supervisor is ON. Protection is running and stays enabled across restarts."
+echo "Calando is ON. Protection is running and stays enabled across restarts."
 echo "Installed Claude Code and Codex connections remain in place."

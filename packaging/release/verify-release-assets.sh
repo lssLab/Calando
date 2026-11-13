@@ -4,12 +4,12 @@ set -eu
 
 DIRECTORY=${1:-dist}
 for name in \
-  memory-supervisor-source.tar.gz \
-  memory-supervisor-source.zip \
-  memory-supervisor-x86_64-unknown-linux-gnu \
-  memory-supervisor-x86_64-pc-windows-msvc.exe \
-  memory-supervisor-x86_64-apple-darwin \
-  memory-supervisor-aarch64-apple-darwin; do
+  calando-source.tar.gz \
+  calando-source.zip \
+  calando-x86_64-unknown-linux-gnu \
+  calando-x86_64-pc-windows-msvc.exe \
+  calando-x86_64-apple-darwin \
+  calando-aarch64-apple-darwin; do
   [ -f "$DIRECTORY/$name" ] || {
     echo "missing release asset: $name" >&2
     exit 1

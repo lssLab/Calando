@@ -97,7 +97,7 @@ fn installed_binary_matches(binary: &Path) -> bool {
 }
 
 fn installed_binary_matches_at(binary: &Path, home: &Path) -> bool {
-    let Ok(pointer) = fs::read_to_string(home.join(".memory-supervisor/binary")) else {
+    let Ok(pointer) = fs::read_to_string(crate::config::pointer_dir_in(home).join("binary")) else {
         return false;
     };
     let installed = PathBuf::from(pointer.trim());
@@ -441,8 +441,8 @@ fn incident_notice(incident: &Value, phase: &str, transition_source: &str) -> St
             "PROCESS PAUSED",
             "The PID and in-memory session are preserved. This is not a crash, and pausing does not immediately release its RAM.".to_owned(),
             match recovery {
-                "lead-probation" => "After sustained machine recovery, the supervisor will attempt one guarded automatic resume and watch the same PID. Run `memory-status` from another terminal for the live decision.".to_owned(),
-                "automatic-pressure-recovery" => "The supervisor will resume one paused process at a time after sustained recovery. Run `memory-status` from another terminal for the live decision.".to_owned(),
+                "lead-probation" => "After sustained machine recovery, the supervisor will attempt one guarded automatic resume and watch the same PID. Run `calando status` from another terminal for the live decision.".to_owned(),
+                "automatic-pressure-recovery" => "The supervisor will resume one paused process at a time after sustained recovery. Run `calando status` from another terminal for the live decision.".to_owned(),
                 _ => format!("To continue: {}.", crate::status::RESUME_GUIDANCE),
             },
         ),
@@ -464,12 +464,12 @@ fn incident_notice(incident: &Value, phase: &str, transition_source: &str) -> St
         "manual_resumed" | "external_resumed" => (
             "PROCESS RESUMED",
             "The same PID was resumed outside automatic recovery.".to_owned(),
-            "Run `memory-status` before new fan-out; the supervisor will continue enforcing the current policy.".to_owned(),
+            "Run `calando status` before new fan-out; the supervisor will continue enforcing the current policy.".to_owned(),
         ),
         _ => (
             "MEMORY EVENT",
             "A supervised process changed state.".to_owned(),
-            "Run `memory-status` for the current machine decision.".to_owned(),
+            "Run `calando status` for the current machine decision.".to_owned(),
         ),
     };
     let transition = if transition_source.is_empty() {
@@ -478,7 +478,7 @@ fn incident_notice(incident: &Value, phase: &str, transition_source: &str) -> St
         format!(" ({transition_source})")
     };
     format!(
-        "[Memory Supervisor] {label}{transition}\nTarget: {name} ({role}), PID {pid}\nWhy: {evidence}.\nAttribution estimate: {attribution_text}.\nState: {state}\nNext: {next}\nAgent context: delivered once at the next provider hook boundary; terminal, OS, and configured remote routes are attempted immediately."
+        "[Calando] {label}{transition}\nTarget: {name} ({role}), PID {pid}\nWhy: {evidence}.\nAttribution estimate: {attribution_text}.\nState: {state}\nNext: {next}\nAgent context: delivered once at the next provider hook boundary; terminal, OS, and configured remote routes are attempted immediately."
     )
 }
 
@@ -571,7 +571,7 @@ fn pressure_action_notice(
         _ => "the cause is not attributable from current evidence",
     };
     format!(
-        "[Memory Supervisor] {title}\nWhy: {evidence}.\nEffect: {effect}\nAttribution estimate: {attribution}.\nNext: `memory-status` shows the live decision and evidence."
+        "[Calando] {title}\nWhy: {evidence}.\nEffect: {effect}\nAttribution estimate: {attribution}.\nNext: `calando status` shows the live decision and evidence."
     )
 }
 
@@ -742,9 +742,9 @@ impl Supervisor {
         if !targets.is_empty() {
             let binary = env::current_exe().unwrap_or_else(|_| {
                 PathBuf::from(if cfg!(windows) {
-                    "memory-supervisor.exe"
+                    "calando.exe"
                 } else {
-                    "memory-supervisor"
+                    "calando"
                 })
             });
             let installed_binary = installed_binary_matches(&binary);
@@ -1300,7 +1300,7 @@ impl Supervisor {
                 "critical",
                 "pending",
                 format!(
-                    "[Memory Supervisor] MEMORY PROTECTION ACTIVE\nWhy: {} MiB of {} MiB remains{tte}; distress is {}; attribution is {}.\nEffect: the calculated braking boundary is active. New-work admission, logical cushions, and exact-PID pauses may proceed only as required; their individual steps are recorded without sending repeated remote alerts.\nCurrent containment: {restricted} live logical agents restricted; {paused} exact PIDs paused.\nNext: preserve work and use `memory-status` for live evidence. Recovery is announced only after the braking decision, logical restrictions, managed pauses, and probation are all clear.",
+                    "[Calando] MEMORY PROTECTION ACTIVE\nWhy: {} MiB of {} MiB remains{tte}; distress is {}; attribution is {}.\nEffect: the calculated braking boundary is active. New-work admission, logical cushions, and exact-PID pauses may proceed only as required; their individual steps are recorded without sending repeated remote alerts.\nCurrent containment: {restricted} live logical agents restricted; {paused} exact PIDs paused.\nNext: preserve work and use `calando status` for live evidence. Recovery is announced only after the braking decision, logical restrictions, managed pauses, and probation are all clear.",
                     assessment.mem_available_mb,
                     assessment.memory_capacity_mb,
                     assessment.distress,
@@ -1319,7 +1319,7 @@ impl Supervisor {
                 "warning",
                 "workers-gone",
                 format!(
-                    "[Memory Supervisor] MEMORY PROTECTION ENDED — WORKER LOSS DETECTED\nWhy: HOLD/DRAIN and all protection actuators are clear, but paused worker PIDs {pids} disappeared before a confirmed resume.\nEffect: machine protection has ended, but workload recovery is incomplete; affected subagent results may be missing or partial.\nNext: inspect the lead handoff and incident ledger, then deliberately resume the provider workflow or rerun only the incomplete tasks."
+                    "[Calando] MEMORY PROTECTION ENDED — WORKER LOSS DETECTED\nWhy: HOLD/DRAIN and all protection actuators are clear, but paused worker PIDs {pids} disappeared before a confirmed resume.\nEffect: machine protection has ended, but workload recovery is incomplete; affected subagent results may be missing or partial.\nNext: inspect the lead handoff and incident ledger, then deliberately resume the provider workflow or rerun only the incomplete tasks."
                 ),
             )
         } else {
@@ -1328,7 +1328,7 @@ impl Supervisor {
                 "recovered",
                 "info",
                 "clean",
-                "[Memory Supervisor] MEMORY PROTECTION RECOVERED\nWhy: the calculated braking decision is clear, every live logical agent is ACTIVE, and no App surface gate, supervisor-managed PID, or probation remains.\nEffect: the protection episode is complete; component actions remain in the event ledger, and normal admission may continue under the current decision.\nNext: no recovery command is required; check `memory-status` before new fan-out if the workload is still memory-heavy.".to_owned(),
+                "[Calando] MEMORY PROTECTION RECOVERED\nWhy: the calculated braking decision is clear, every live logical agent is ACTIVE, and no App surface gate, supervisor-managed PID, or probation remains.\nEffect: the protection episode is complete; component actions remain in the event ledger, and normal admission may continue under the current decision.\nNext: no recovery command is required; check `calando status` before new fan-out if the workload is still memory-heavy.".to_owned(),
             )
         };
         let guest_used_mb = self
@@ -1697,7 +1697,7 @@ impl Supervisor {
             "recovered"
         };
         let message = format!(
-            "[{}] {} -> {} ({direction}); MemAvailable {mem}MB; PSI {psi}; adaptive action={:?} (`memory-status`).",
+            "[{}] {} -> {} ({direction}); MemAvailable {mem}MB; PSI {psi}; adaptive action={:?} (`calando status`).",
             self.platform,
             name(previous),
             name(current),
@@ -2475,10 +2475,10 @@ impl Supervisor {
         }
         let message = if enabled {
             format!(
-                "[Memory Supervisor] CODEX APP CUSHION ENABLED\nWhy: {reason}.\nEffect: only new high-memory App tool starts are held; running work, results, messages, status and recovery remain available."
+                "[Calando] CODEX APP CUSHION ENABLED\nWhy: {reason}.\nEffect: only new high-memory App tool starts are held; running work, results, messages, status and recovery remain available."
             )
         } else {
-            "[Memory Supervisor] CODEX APP CUSHION RELEASED\nEffect: new high-memory App tool starts are available again after sustained recovery."
+            "[Calando] CODEX APP CUSHION RELEASED\nEffect: new high-memory App tool starts are available again after sustained recovery."
                 .to_owned()
         };
         let audience_sessions: Vec<_> = self
@@ -2937,12 +2937,12 @@ impl Supervisor {
             .collect::<Vec<_>>();
         let message = if tighten {
             format!(
-                "[Memory Supervisor] ADAPTIVE CUSHION BATCH APPLIED\nEpoch: {epoch}\nTargets: {} logical agents, {applied_steps} minimum steps\nWhy: {reason}.\nEffect: only the named future-work classes are restricted; running work and result, message, status, stop, and recovery paths stay open.\nCoordination: every lead receives epoch {epoch} and the exact current roster at its next hook boundary.",
+                "[Calando] ADAPTIVE CUSHION BATCH APPLIED\nEpoch: {epoch}\nTargets: {} logical agents, {applied_steps} minimum steps\nWhy: {reason}.\nEffect: only the named future-work classes are restricted; running work and result, message, status, stop, and recovery paths stay open.\nCoordination: every lead receives epoch {epoch} and the exact current roster at its next hook boundary.",
                 changes.len()
             )
         } else {
             format!(
-                "[Memory Supervisor] ADAPTIVE CUSHION BATCH RELAXED\nEpoch: {epoch}\nTargets: {} logical agents, {applied_steps} steps\nWhy: {reason}.\nEffect: the named future-work classes reopen on the recovery schedule while safety holds; remaining restrictions lift the same way.\nCoordination: every lead receives epoch {epoch} and the exact current roster at its next hook boundary.",
+                "[Calando] ADAPTIVE CUSHION BATCH RELAXED\nEpoch: {epoch}\nTargets: {} logical agents, {applied_steps} steps\nWhy: {reason}.\nEffect: the named future-work classes reopen on the recovery schedule while safety holds; remaining restrictions lift the same way.\nCoordination: every lead receives epoch {epoch} and the exact current roster at its next hook boundary.",
                 changes.len()
             )
         };
@@ -3379,7 +3379,7 @@ impl Supervisor {
                 self.emit_event(
                     "process-pause",
                     "resumed",
-                    "[Memory Supervisor] PROCESS RESUMED",
+                    "[Calando] PROCESS RESUMED",
                     &format!("session-cap-resume:{identity}"),
                     Map::from_iter([("pid".to_owned(), json!(pid))]),
                 );
@@ -3607,7 +3607,7 @@ impl Supervisor {
             );
         }
         let message = format!(
-            "[Memory Supervisor] CODEX APP LAST-RESORT BRAKE CANCELLED\n{explanation}\nEffect: no process remains paused by this attempt."
+            "[Calando] CODEX APP LAST-RESORT BRAKE CANCELLED\n{explanation}\nEffect: no process remains paused by this attempt."
         );
         self.emit_event(
             "codex-app-process-pause",
@@ -3776,7 +3776,7 @@ impl Supervisor {
             return false;
         }
         let prepared_message = format!(
-            "[Memory Supervisor] CODEX APP LAST-RESORT BRAKE PREPARED\nTarget PID: {}.\nScope: {}.\nEffect: the exact process is about to be paused reversibly after all smaller controls completed; recovery state is already durable.",
+            "[Calando] CODEX APP LAST-RESORT BRAKE PREPARED\nTarget PID: {}.\nScope: {}.\nEffect: the exact process is about to be paused reversibly after all smaller controls completed; recovery state is already durable.",
             candidate.pid,
             if shared_host {
                 "all threads in the shared App Server"
@@ -3981,7 +3981,7 @@ impl Supervisor {
                     self.emit_event(
                         "codex-app-process-pause",
                         "committed",
-                        "[Memory Supervisor] CODEX APP LAST-RESORT BRAKE COMMITTED\nThe independent recovery controller owns the pause and timed resume. Its OS signal acknowledgement is still being reconciled; no second pause signal will be issued.",
+                        "[Calando] CODEX APP LAST-RESORT BRAKE COMMITTED\nThe independent recovery controller owns the pause and timed resume. Its OS signal acknowledgement is still being reconciled; no second pause signal will be issued.",
                         &format!("app-pause-committed:{incident_id}"),
                         Map::from_iter([
                             ("severity".to_owned(), Value::String("warning".to_owned())),
@@ -4052,7 +4052,7 @@ impl Supervisor {
                 self.emit_event(
                     "codex-app-process-pause",
                     "recovery-pending",
-                    "[Memory Supervisor] CODEX APP BRAKE RECOVERY PENDING\nThe exact process was paused, but the final state write and immediate release failed. The durable prepared record remains available for automatic or owner recovery.",
+                    "[Calando] CODEX APP BRAKE RECOVERY PENDING\nThe exact process was paused, but the final state write and immediate release failed. The durable prepared record remains available for automatic or owner recovery.",
                     &format!("app-pause-recovery-pending:{incident_id}"),
                     Map::from_iter([
                         ("severity".to_owned(), Value::String("critical".to_owned())),
@@ -4087,7 +4087,7 @@ impl Supervisor {
             "one App-started child whose thread owner is unknown"
         };
         let message = format!(
-            "[Memory Supervisor] CODEX APP LAST-RESORT BRAKE\nTarget: {scope}, PID {}.\nWhy: all smaller effective controls completed and sustained App growth still approached the recovery boundary.\nEffect: the exact OS process is paused reversibly; no individual thread is blamed. All App leads receive recovery state at their next hook.",
+            "[Calando] CODEX APP LAST-RESORT BRAKE\nTarget: {scope}, PID {}.\nWhy: all smaller effective controls completed and sustained App growth still approached the recovery boundary.\nEffect: the exact OS process is paused reversibly; no individual thread is blamed. All App leads receive recovery state at their next hook.",
             candidate.pid
         );
         self.emit_event(
@@ -4135,7 +4135,7 @@ impl Supervisor {
         for leak in leaks {
             if self.warned.insert(leak.identity.clone()) {
                 let message = format!(
-                    "[Memory Supervisor] PROCESS GROWTH OBSERVED\nTarget: {} ({}), PID {}\nEvidence: {} MiB at an observed average of {} MiB/s.\nEffect: observation only; no process was paused. Run `memory-status` for current evidence.",
+                    "[Calando] PROCESS GROWTH OBSERVED\nTarget: {} ({}), PID {}\nEvidence: {} MiB at an observed average of {} MiB/s.\nEffect: observation only; no process was paused. Run `calando status` for current evidence.",
                     leak.name, leak.role, leak.pid, leak.anon_mb, leak.slope_mb_s
                 );
                 self.emit_event(
@@ -4855,7 +4855,7 @@ impl Supervisor {
                             "protection-degraded",
                             "critical",
                             &format!(
-                                "CRITICAL: lead pid={} relapsed and was paused, but the pause could not be persisted or rolled back. Run memory-status.",
+                                "CRITICAL: lead pid={} relapsed and was paused, but the pause could not be persisted or rolled back. Run `calando status`.",
                                 probation.pid
                             ),
                             &format!("probation-untracked:{}:{now:.3}", probation.identity),
@@ -4902,7 +4902,7 @@ impl Supervisor {
                         "protection-degraded",
                         "critical",
                         &format!(
-                            "Lead pid={} probation relapse pause was rolled back after a runtime persistence failure. Save work and run memory-status.",
+                            "Lead pid={} probation relapse pause was rolled back after a runtime persistence failure. Save work and run `calando status`.",
                             probation.pid
                         ),
                         &format!("probation-persistence:{}:{now:.3}", probation.identity),
@@ -5235,7 +5235,7 @@ impl Supervisor {
                 self.revoke_codex_app_generation(pid, now);
                 self.ledger.last_pressure_action_at = now;
                 let message = format!(
-                    "[Memory Supervisor] CODEX APP SERVER RESUMED\nThe previously paused App Server PID {pid} was resumed immediately because a new App Server generation (PID {replacement_pid}) appeared. Old thread ownership was discarded; the new generation must establish fresh hook evidence."
+                    "[Calando] CODEX APP SERVER RESUMED\nThe previously paused App Server PID {pid} was resumed immediately because a new App Server generation (PID {replacement_pid}) appeared. Old thread ownership was discarded; the new generation must establish fresh hook evidence."
                 );
                 let mut fields = Map::from_iter([
                     ("pid".to_owned(), json!(pid)),
@@ -5357,7 +5357,7 @@ impl Supervisor {
                         self.emit_event(
                             "codex-app-process-pause",
                             "resumed",
-                            "[Memory Supervisor] CODEX APP SERVER RESUMED\nThe independent pause controller ended before it could prove recovery, so the daemon immediately released the exact App Server and started a fresh live recovery window.",
+                            "[Calando] CODEX APP SERVER RESUMED\nThe independent pause controller ended before it could prove recovery, so the daemon immediately released the exact App Server and started a fresh live recovery window.",
                             &format!("app-guard-takeover:{}", value_string(&incident, "id")),
                             fields,
                         );
@@ -5413,7 +5413,7 @@ impl Supervisor {
                 self.emit_event(
                     "codex-app-process-pause",
                     "cancelled",
-                    "[Memory Supervisor] CODEX APP LAST-RESORT BRAKE CANCELLED\nA prepared App pause was found without a completed OS pause or a live committed controller. The running process was left untouched.",
+                    "[Calando] CODEX APP LAST-RESORT BRAKE CANCELLED\nA prepared App pause was found without a completed OS pause or a live committed controller. The running process was left untouched.",
                     &format!("app-pause-reconcile-cancelled:{}", value_string(&incident, "id")),
                     fields,
                 );
@@ -5541,7 +5541,7 @@ impl Supervisor {
                 }
                 if let Some(incident) = activated_incident {
                     let message = format!(
-                        "[Memory Supervisor] CODEX APP LAST-RESORT BRAKE\nTarget PID: {pid}.\nWhy: all smaller effective controls completed and sustained App growth still approached the recovery boundary.\nEffect: the independent controller confirmed the reversible OS pause; all App leads receive recovery state at their next hook."
+                        "[Calando] CODEX APP LAST-RESORT BRAKE\nTarget PID: {pid}.\nWhy: all smaller effective controls completed and sustained App growth still approached the recovery boundary.\nEffect: the independent controller confirmed the reversible OS pause; all App leads receive recovery state at their next hook."
                     );
                     let mut fields = Map::from_iter([
                         ("severity".to_owned(), Value::String("critical".to_owned())),
@@ -5801,7 +5801,7 @@ impl Supervisor {
                 }
                 if action == "resume" {
                     let message = if guard_cancelled_before_signal {
-                        "[Memory Supervisor] CODEX APP BRAKE CANCELLED\nOwner recovery cancelled the committed controller token before the OS pause. The exact App Server remained running."
+                        "[Calando] CODEX APP BRAKE CANCELLED\nOwner recovery cancelled the committed controller token before the OS pause. The exact App Server remained running."
                             .to_owned()
                     } else {
                         incident_notice(&incident, "manual_resumed", "memory-supervisor")
@@ -6090,7 +6090,7 @@ impl Supervisor {
                 if let Some(episode) = self.ledger.federation_peer_stale_since.remove(instance) {
                     changed = true;
                     let message = format!(
-                        "[Memory Supervisor] FEDERATION PEER RECOVERED\nPeer: {instance} is publishing fresh snapshots again.\nEffect: its pressure participates in shared admission once more."
+                        "[Calando] FEDERATION PEER RECOVERED\nPeer: {instance} is publishing fresh snapshots again.\nEffect: its pressure participates in shared admission once more."
                     );
                     self.emit_event(
                         "federation-peer",
@@ -6158,7 +6158,7 @@ impl Supervisor {
             .federation_peer_stale_since
             .insert(instance.to_owned(), last_fresh);
         let message = format!(
-            "[Memory Supervisor] FEDERATION PEER STALE\nPeer: {instance} last published {age:.0}s ago.\nEffect: its pressure no longer participates in shared admission, and that kernel's own CLI sessions may be unprotected.\nNext: verify that kernel's supervisor service; the handoff lists the restart commands."
+            "[Calando] FEDERATION PEER STALE\nPeer: {instance} last published {age:.0}s ago.\nEffect: its pressure no longer participates in shared admission, and that kernel's own CLI sessions may be unprotected.\nNext: verify that kernel's supervisor service; the handoff lists the restart commands."
         );
         self.emit_event(
             "federation-peer",
@@ -7529,7 +7529,7 @@ mod tests {
         supervisor.emit_event(
             "process-pause",
             "resumed",
-            "[Memory Supervisor] PROCESS RESUMED",
+            "[Calando] PROCESS RESUMED",
             "resume:7",
             Map::from_iter([("pid".to_owned(), json!(7))]),
         );
@@ -7693,7 +7693,7 @@ mod tests {
         let event = supervisor.notification_event(
             "pressure-episode",
             "active",
-            "[Memory Supervisor] MEMORY PROTECTION ACTIVE",
+            "[Calando] MEMORY PROTECTION ACTIVE",
             "episode:10.000",
             Map::from_iter([(
                 "cause".to_owned(),

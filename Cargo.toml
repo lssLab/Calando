@@ -1,10 +1,10 @@
 [package]
-name = "memory-supervisor"
+name = "calando"
 version = "0.2.4"
 edition = "2024"
 rust-version = "1.88"
 license = "MIT"
-description = "Cross-platform memory supervision for Claude Code and Codex CLI or Desktop App sessions"
+description = "Memory protection for Claude Code and Codex CLI or Desktop App sessions"
 repository = "https://github.com/lssLab/Calando"
 homepage = "https://github.com/lssLab/Calando"
 readme = "README.md"

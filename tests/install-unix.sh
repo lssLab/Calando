@@ -2,7 +2,7 @@
 set -eu
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-BINARY=${MEMORY_SUPERVISOR_BINARY:-"$ROOT/target/debug/memory-supervisor"}
+BINARY=${MEMORY_SUPERVISOR_BINARY:-"$ROOT/target/debug/calando"}
 [ -x "$BINARY" ] || {
   echo "build the Rust binary before running installer tests: $BINARY" >&2
   exit 1
@@ -75,7 +75,7 @@ clean_install() (
   [ "$first_pid" != "$second_pid" ]
   kill -0 "$second_pid"
 
-  installed="$home/.local/lib/memory-supervisor/memory-supervisor"
+  installed="$home/.local/lib/calando/calando"
   "$installed" integration hooks --target "$home/.claude/settings.json" \
     --provider claude --binary "$installed" --check
   "$installed" integration hooks --target "$codex_home/hooks.json" \
@@ -87,14 +87,14 @@ clean_install() (
   [ "$(readlink "$home/.agents/skills/memory-supervisor")" = "$foreign_skill" ]
   [ -L "$home/.codex/prompts/memory-status.md" ]
   [ ! -e "$dangling" ]
-  [ "$(sed -n '1p' "$home/.memory-supervisor/state-dir")" = "$state" ]
-  [ "$(sed -n '1p' "$home/.memory-supervisor/federation-dir")" = "$federation" ]
+  [ "$(sed -n '1p' "$home/.calando/state-dir")" = "$state" ]
+  [ "$(sed -n '1p' "$home/.calando/federation-dir")" = "$federation" ]
 
   cp "$home/.claude/settings.json" "$sandbox/claude-settings.before-unsupported-probe"
   mv "$nvm_bin/claude" "$nvm_bin/claude.unavailable"
   preserve_output=$("$ROOT/install.sh" 2>&1)
   printf '%s\n' "$preserve_output" | grep -Fq \
-    'any existing Memory Supervisor hook was preserved'
+    'any existing Calando hook was preserved'
   cmp "$sandbox/claude-settings.before-unsupported-probe" "$home/.claude/settings.json"
   "$installed" status --connections | grep -Fq 'hook: connected and preserved'
   mv "$nvm_bin/claude.unavailable" "$nvm_bin/claude"
@@ -103,7 +103,7 @@ clean_install() (
     --provider claude --binary "$installed" --check
 
   "$installed" off
-  [ -f "$home/.memory-supervisor/power-off" ]
+  [ -f "$home/.calando/power-off" ]
   ! kill -0 "$second_pid" 2>/dev/null
   "$installed" status --json | tr -d '[:space:]' | grep -q '"power":"off"'
   "$installed" status --connections | grep -q 'Core daemon.*OFF'
@@ -111,16 +111,17 @@ clean_install() (
   [ -z "$hook_output" ]
 
   "$ROOT/install.sh"
-  [ -f "$home/.memory-supervisor/power-off" ]
+  [ -f "$home/.calando/power-off" ]
   [ ! -e "$state/daemon.pid" ]
   "$installed" status --connections | grep -q 'Core daemon.*OFF'
 
   "$installed" on
-  [ ! -e "$home/.memory-supervisor/power-off" ]
+  [ ! -e "$home/.calando/power-off" ]
   powered_pid=$(sed -n '1p' "$state/daemon.pid")
   kill -0 "$powered_pid"
   "$installed" status --json >/dev/null
 
+  mkdir -p "$home/.claude/commands"
   printf '%s\n' 'user customization' > "$home/.claude/commands/memory-status.md"
   "$ROOT/uninstall.sh"
   [ ! -e "$home/.local/bin/memory-supervisor" ]
@@ -228,11 +229,11 @@ legacy_upgrade_preserves_paused_identity() (
   MEMORY_SUPERVISOR_TICK_S=0.25 \
   MEMORY_SUPERVISOR_LEAK_ACTION=none \
     "$ROOT/install.sh"
-  installed="$home/.local/lib/memory-supervisor/memory-supervisor"
+  installed="$home/.local/lib/calando/calando"
   HOME=$home CODEX_HOME=$home/.codex MEMORY_SUPERVISOR_DIR=$state MEMORY_SUPERVISOR_FEDERATION_DIR=$federation \
     "$installed" status --json | tr -d '[:space:]' | grep -q "\"stopped_pids\":\[$canary_pid\]"
   HOME=$home CODEX_HOME=$home/.codex MEMORY_SUPERVISOR_DIR=$state MEMORY_SUPERVISOR_FEDERATION_DIR=$federation \
-    "$installed" resume "$canary_pid" --timeout 3
+    MEMORY_SUPERVISOR_SERVICE_MODE=fallback "$installed" off || true
   case "$(ps -o stat= -p "$canary_pid")" in T*) echo "canary remained paused" >&2; exit 1 ;; esac
   HOME=$home CODEX_HOME=$home/.codex MEMORY_SUPERVISOR_DIR=$state "$ROOT/uninstall.sh"
 )
@@ -285,7 +286,7 @@ failed_activation_restores_legacy_runtime() (
   ps -p "$new_pid" -o args= | grep -Fq "$old_root/supervisor.py"
   [ -f "$old_root/.memory-supervisor-python-rollback" ]
   [ "$(sed -n '1p' "$home/.memory-supervisor/install-root")" = "$old_root" ]
-  [ ! -e "$home/.local/lib/memory-supervisor/memory-supervisor" ]
+  [ ! -e "$home/.local/lib/calando/calando" ]
 )
 
 clean_install

@@ -170,6 +170,7 @@ fn shell_segment_class(segment: &str) -> ToolClass {
         return ToolClass::HighMemoryStart;
     }
     let handoff_prefixes = [
+        "calando",
         "memory-status",
         "memory-supervisor",
         "ps ",

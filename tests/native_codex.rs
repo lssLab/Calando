@@ -1,9 +1,9 @@
-use memory_supervisor::integration::inspect_codex;
-use memory_supervisor::platform::{
+use calando::integration::inspect_codex;
+use calando::platform::{
     list_processes, platform_name, process_state, resume_process, suspend_process,
     terminate_process,
 };
-use memory_supervisor::policy::target_provider;
+use calando::policy::target_provider;
 use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::OsStr;
 #[cfg(windows)]
@@ -55,10 +55,7 @@ fn spawn_codex(command: &OsStr) -> Child {
     }
 }
 
-fn ancestors(
-    mut pid: u32,
-    processes: &BTreeMap<u32, memory_supervisor::policy::ProcessInfo>,
-) -> Vec<u32> {
+fn ancestors(mut pid: u32, processes: &BTreeMap<u32, calando::policy::ProcessInfo>) -> Vec<u32> {
     let mut result = Vec::new();
     while let Some(process) = processes.get(&pid) {
         if result.len() >= 64 || process.ppid <= 1 {
@@ -86,7 +83,7 @@ fn expected_running(platform: &str, state: &str) -> bool {
 fn process_diagnostic(
     baseline: &BTreeSet<u32>,
     launcher_pid: u32,
-    processes: &BTreeMap<u32, memory_supervisor::policy::ProcessInfo>,
+    processes: &BTreeMap<u32, calando::policy::ProcessInfo>,
 ) -> String {
     processes
         .values()

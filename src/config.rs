@@ -37,8 +37,32 @@ fn home_dir() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("."))
 }
 
+/// A Calando path, or its pre-0.3 `memory-supervisor` name while an older install still uses it.
+pub fn renamed(parent: &Path, name: &str, legacy: &str) -> PathBuf {
+    let current = parent.join(name);
+    let old = parent.join(legacy);
+    if !current.exists() && old.exists() {
+        old
+    } else {
+        current
+    }
+}
+
+/// `~/.calando`: small pointer files, the power-off marker and local federation snapshots.
+pub fn pointer_dir_in(home: &Path) -> PathBuf {
+    renamed(home, ".calando", ".memory-supervisor")
+}
+
+pub fn pointer_dir() -> PathBuf {
+    pointer_dir_in(&home_dir())
+}
+
+fn config_dir() -> PathBuf {
+    renamed(&home_dir().join(".config"), "calando", "memory-supervisor")
+}
+
 pub fn power_off_path() -> PathBuf {
-    home_dir().join(".memory-supervisor").join("power-off")
+    pointer_dir().join("power-off")
 }
 
 pub fn power_is_off() -> bool {
@@ -59,23 +83,13 @@ pub fn expand_user(path: impl AsRef<Path>) -> PathBuf {
 pub fn config_path() -> PathBuf {
     env::var_os("MEMORY_SUPERVISOR_CONFIG")
         .map(|path| expand_user(PathBuf::from(path)))
-        .unwrap_or_else(|| {
-            home_dir()
-                .join(".config")
-                .join("memory-supervisor")
-                .join("config.json")
-        })
+        .unwrap_or_else(|| config_dir().join("config.json"))
 }
 
 pub fn notification_config_path() -> PathBuf {
     env::var_os("MEMORY_SUPERVISOR_NOTIFICATION_CONFIG")
         .map(|path| expand_user(PathBuf::from(path)))
-        .unwrap_or_else(|| {
-            home_dir()
-                .join(".config")
-                .join("memory-supervisor")
-                .join("notifications.conf")
-        })
+        .unwrap_or_else(|| config_dir().join("notifications.conf"))
 }
 
 pub fn state_dir() -> PathBuf {
@@ -86,14 +100,14 @@ fn state_dir_from(home: &Path, configured: Option<std::ffi::OsString>) -> PathBu
     if let Some(path) = configured {
         return expand_user(path);
     }
-    let pointer = home.join(".memory-supervisor").join("state-dir");
+    let pointer = pointer_dir_in(home).join("state-dir");
     if let Ok(value) = fs::read_to_string(pointer) {
         let value = value.trim();
         if !value.is_empty() {
             return expand_user(value);
         }
     }
-    home.join(".cache").join("memory-supervisor")
+    renamed(&home.join(".cache"), "calando", "memory-supervisor")
 }
 
 #[derive(Debug, Default)]

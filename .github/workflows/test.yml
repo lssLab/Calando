@@ -54,10 +54,10 @@ jobs:
           set -euo pipefail
           export MEMORY_SUPERVISOR_NATIVE_CODEX_SMOKE=1
           bash tests/run.sh
-          MEMORY_SUPERVISOR_BINARY="$PWD/target/release/memory-supervisor" bash tests/install-unix.sh --all
+          MEMORY_SUPERVISOR_BINARY="$PWD/target/release/calando" bash tests/install-unix.sh --all
           mkdir -p artifacts
-          cp target/release/memory-supervisor artifacts/memory-supervisor-x86_64-unknown-linux-gnu
-          (cd artifacts && sha256sum memory-supervisor-x86_64-unknown-linux-gnu > memory-supervisor-x86_64-unknown-linux-gnu.sha256)
+          cp target/release/calando artifacts/calando-x86_64-unknown-linux-gnu
+          (cd artifacts && sha256sum calando-x86_64-unknown-linux-gnu > calando-x86_64-unknown-linux-gnu.sha256)
           packaging/release/package-release-source.sh artifacts HEAD
 
       - name: Measure native Linux footprint
@@ -69,7 +69,7 @@ jobs:
           MEMORY_SUPERVISOR_DIR="$diagnostic/state" \
           MEMORY_SUPERVISOR_FEDERATION_DIR="$diagnostic/federation" \
           MEMORY_SUPERVISOR_LEAK_ACTION=none \
-            target/release/memory-supervisor daemon --foreground >"$diagnostic/out" 2>"$diagnostic/err" &
+            target/release/calando daemon --foreground >"$diagnostic/out" 2>"$diagnostic/err" &
           daemon_pid=$!
           trap 'kill "$daemon_pid" 2>/dev/null || true; wait "$daemon_pid" 2>/dev/null || true' EXIT
           for _ in $(seq 1 100); do
@@ -82,7 +82,7 @@ jobs:
             ps -o rss=,nlwp= -p "$daemon_pid" >> "$diagnostic/samples"
             sleep 0.2
           done
-          binary_bytes=$(wc -c < target/release/memory-supervisor | tr -d '[:space:]')
+          binary_bytes=$(wc -c < target/release/calando | tr -d '[:space:]')
           awk -v binary_bytes="$binary_bytes" '
             NR == 1 { rmin = rmax = $1; tmin = tmax = $2 }
             { rsum += $1; if ($1 < rmin) rmin = $1; if ($1 > rmax) rmax = $1;
@@ -130,25 +130,25 @@ jobs:
           $env:PATH = "$CodexPrefix;$env:PATH"
           $env:MEMORY_SUPERVISOR_NATIVE_CODEX_SMOKE = "1"
           .\tests\run.ps1
-          .\tests\install-windows.ps1 -Binary .\target\release\memory-supervisor.exe
+          .\tests\install-windows.ps1 -Binary .\target\release\calando.exe
           New-Item -ItemType Directory -Force -Path artifacts | Out-Null
-          $Asset = Join-Path artifacts "memory-supervisor-x86_64-pc-windows-msvc.exe"
-          Copy-Item .\target\release\memory-supervisor.exe $Asset
+          $Asset = Join-Path artifacts "calando-x86_64-pc-windows-msvc.exe"
+          Copy-Item .\target\release\calando.exe $Asset
           $Hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $Asset).Hash.ToLowerInvariant()
-          [IO.File]::WriteAllText("$Asset.sha256", "$Hash  memory-supervisor-x86_64-pc-windows-msvc.exe`n", [Text.UTF8Encoding]::new($false))
+          [IO.File]::WriteAllText("$Asset.sha256", "$Hash  calando-x86_64-pc-windows-msvc.exe`n", [Text.UTF8Encoding]::new($false))
 
       - name: Measure native Windows footprint
         shell: powershell
         run: |
           $ErrorActionPreference = "Stop"
-          $Diagnostic = Join-Path $env:TEMP "memory-supervisor-github-footprint"
+          $Diagnostic = Join-Path $env:TEMP "calando-github-footprint"
           $State = Join-Path $Diagnostic "state"
           $Federation = Join-Path $Diagnostic "federation"
           New-Item -ItemType Directory -Force -Path $State, $Federation, "artifacts" | Out-Null
           $env:MEMORY_SUPERVISOR_DIR = $State
           $env:MEMORY_SUPERVISOR_FEDERATION_DIR = $Federation
           $env:MEMORY_SUPERVISOR_LEAK_ACTION = "none"
-          $Binary = (Resolve-Path .\target\release\memory-supervisor.exe).ProviderPath
+          $Binary = (Resolve-Path .\target\release\calando.exe).ProviderPath
           $Process = Start-Process -FilePath $Binary `
             -ArgumentList @("daemon", "--foreground", "--detach-console") -PassThru
           try {
@@ -226,7 +226,7 @@ jobs:
           test "$(uname -m)" = arm64
           export MEMORY_SUPERVISOR_NATIVE_CODEX_SMOKE=1
           bash tests/run.sh
-          MEMORY_SUPERVISOR_BINARY="$PWD/target/release/memory-supervisor" bash tests/install-unix.sh
+          MEMORY_SUPERVISOR_BINARY="$PWD/target/release/calando" bash tests/install-unix.sh
 
       - name: Validate x86-64 compatibility through Rosetta
         shell: bash
@@ -238,12 +238,12 @@ jobs:
           rustup target add x86_64-apple-darwin --toolchain "$RUST_TOOLCHAIN"
           cargo test --all-targets --locked --target x86_64-apple-darwin
           cargo build --release --locked --target x86_64-apple-darwin
-          arch -x86_64 target/x86_64-apple-darwin/release/memory-supervisor --version
+          arch -x86_64 target/x86_64-apple-darwin/release/calando --version
           mkdir -p artifacts
-          cp target/release/memory-supervisor artifacts/memory-supervisor-aarch64-apple-darwin
-          cp target/x86_64-apple-darwin/release/memory-supervisor artifacts/memory-supervisor-x86_64-apple-darwin
-          (cd artifacts && shasum -a 256 memory-supervisor-aarch64-apple-darwin > memory-supervisor-aarch64-apple-darwin.sha256)
-          (cd artifacts && shasum -a 256 memory-supervisor-x86_64-apple-darwin > memory-supervisor-x86_64-apple-darwin.sha256)
+          cp target/release/calando artifacts/calando-aarch64-apple-darwin
+          cp target/x86_64-apple-darwin/release/calando artifacts/calando-x86_64-apple-darwin
+          (cd artifacts && shasum -a 256 calando-aarch64-apple-darwin > calando-aarch64-apple-darwin.sha256)
+          (cd artifacts && shasum -a 256 calando-x86_64-apple-darwin > calando-x86_64-apple-darwin.sha256)
 
       - name: Measure native Apple Silicon footprint
         shell: bash
@@ -254,7 +254,7 @@ jobs:
           MEMORY_SUPERVISOR_DIR="$diagnostic/state" \
           MEMORY_SUPERVISOR_FEDERATION_DIR="$diagnostic/federation" \
           MEMORY_SUPERVISOR_LEAK_ACTION=none \
-            target/release/memory-supervisor daemon --foreground >"$diagnostic/out" 2>"$diagnostic/err" &
+            target/release/calando daemon --foreground >"$diagnostic/out" 2>"$diagnostic/err" &
           daemon_pid=$!
           trap 'kill "$daemon_pid" 2>/dev/null || true; wait "$daemon_pid" 2>/dev/null || true' EXIT
           for _ in $(seq 1 100); do
@@ -269,7 +269,7 @@ jobs:
             printf '%s %s\n' "$rss" "$threads" >> "$diagnostic/samples"
             sleep 0.2
           done
-          binary_bytes=$(wc -c < target/release/memory-supervisor | tr -d '[:space:]')
+          binary_bytes=$(wc -c < target/release/calando | tr -d '[:space:]')
           awk -v binary_bytes="$binary_bytes" '
             NR == 1 { rmin = rmax = $1; tmin = tmax = $2 }
             { rsum += $1; if ($1 < rmin) rmin = $1; if ($1 > rmax) rmax = $1;
@@ -322,7 +322,7 @@ jobs:
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: |
-            dist/memory-supervisor-*
+            dist/calando-*
             !dist/*.sha256
 
       - name: Publish GitHub release

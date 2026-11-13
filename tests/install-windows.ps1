@@ -66,14 +66,14 @@ try {
         $FailedAsExpected = $true
     }
     Assert-True $FailedAsExpected "clean activation-failure canary unexpectedly installed"
-    Assert-True (-not (Test-Path -LiteralPath (Join-Path $Runtime "memory-supervisor.exe"))) `
+    Assert-True (-not (Test-Path -LiteralPath (Join-Path $Runtime "calando.exe"))) `
         "clean activation failure left the candidate binary"
     Assert-True ($null -eq (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue)) `
         "clean activation failure left the scheduled task"
 
     Invoke-Install $Binary
 
-    $InstalledBinary = Join-Path $Runtime "memory-supervisor.exe"
+    $InstalledBinary = Join-Path $Runtime "calando.exe"
     Assert-True (Test-Path -LiteralPath $InstalledBinary -PathType Leaf) "clean install missed the Rust binary"
     $InstalledTask = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
     Assert-True ($null -ne $InstalledTask) `
@@ -86,8 +86,8 @@ try {
     $InitialHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $InstalledBinary).Hash
 
     & $InstalledBinary off
-    if ($LASTEXITCODE -ne 0) { throw "memory-supervisor off exited $LASTEXITCODE" }
-    Assert-True (Test-Path -LiteralPath (Join-Path $HOME ".memory-supervisor\power-off") -PathType Leaf) `
+    if ($LASTEXITCODE -ne 0) { throw "calando off exited $LASTEXITCODE" }
+    Assert-True (Test-Path -LiteralPath (Join-Path $HOME ".calando\power-off") -PathType Leaf) `
         "off did not persist its power marker"
     Assert-True ([string](Get-ScheduledTask -TaskName $TaskName).State -eq "Disabled") `
         "off did not disable the scheduled task"
@@ -99,12 +99,12 @@ try {
     Invoke-Install $Binary
     Assert-True ([string](Get-ScheduledTask -TaskName $TaskName).State -eq "Disabled") `
         "reinstall turned an intentionally off supervisor back on"
-    Assert-True (Test-Path -LiteralPath (Join-Path $HOME ".memory-supervisor\power-off") -PathType Leaf) `
+    Assert-True (Test-Path -LiteralPath (Join-Path $HOME ".calando\power-off") -PathType Leaf) `
         "reinstall lost the persisted off state"
 
     & $InstalledBinary on
-    if ($LASTEXITCODE -ne 0) { throw "memory-supervisor on exited $LASTEXITCODE" }
-    Assert-True (-not (Test-Path -LiteralPath (Join-Path $HOME ".memory-supervisor\power-off"))) `
+    if ($LASTEXITCODE -ne 0) { throw "calando on exited $LASTEXITCODE" }
+    Assert-True (-not (Test-Path -LiteralPath (Join-Path $HOME ".calando\power-off"))) `
         "on did not clear the persisted off state"
     Wait-FreshStatus $InstalledBinary
 

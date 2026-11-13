@@ -8,10 +8,18 @@
     $Source = if ($env:MEMORY_SUPERVISOR_INSTALL_ROOT) {
         $env:MEMORY_SUPERVISOR_INSTALL_ROOT
     } else {
-        Join-Path $env:LOCALAPPDATA "MemorySupervisor"
+        Join-Path $env:LOCALAPPDATA "Calando"
+    }
+    # A pre-0.3 `memory-supervisor update` passes its old release folder; move it to the new name.
+    $LegacySource = Join-Path $env:LOCALAPPDATA "MemorySupervisor"
+    $RetireLegacy = $false
+    if ([IO.Path]::GetFullPath($Source) -eq [IO.Path]::GetFullPath($LegacySource) -and
+        (Test-Path -LiteralPath (Join-Path $LegacySource ".memory-supervisor-release-source"))) {
+        $Source = Join-Path $env:LOCALAPPDATA "Calando"
+        $RetireLegacy = $true
     }
     $Source = [IO.Path]::GetFullPath($Source)
-    $SourceMarker = ".memory-supervisor-release-source"
+    $SourceMarker = ".calando-release-source"
 
     if ($Source -eq [IO.Path]::GetPathRoot($Source) -or
         $Source.TrimEnd("\") -eq [IO.Path]::GetFullPath($HOME).TrimEnd("\")) {
@@ -24,7 +32,7 @@
         $Git = Get-Command git -ErrorAction SilentlyContinue
         if (-not $Git) { throw "This existing development checkout needs Git to update" }
         & $Git.Source -C $Source pull --ff-only
-        if ($LASTEXITCODE -ne 0) { throw "Memory Supervisor source update failed" }
+        if ($LASTEXITCODE -ne 0) { throw "Calando source update failed" }
         & (Join-Path $Source "install.ps1")
         return
     }
@@ -38,8 +46,8 @@
     }
 
     $Temporary = Join-Path ([IO.Path]::GetTempPath()) `
-        ("memory-supervisor-bootstrap-" + [guid]::NewGuid().ToString("N"))
-    $Archive = Join-Path $Temporary "memory-supervisor-source.zip"
+        ("calando-bootstrap-" + [guid]::NewGuid().ToString("N"))
+    $Archive = Join-Path $Temporary "calando-source.zip"
     $Checksum = "$Archive.sha256"
     $Backup = $null
     $SourceReplaced = $false
@@ -58,9 +66,9 @@
             Copy-Item -LiteralPath $env:MEMORY_SUPERVISOR_SOURCE_ARCHIVE_SHA256_FILE -Destination $Checksum
         } else {
             Invoke-WebRequest -UseBasicParsing `
-                -Uri "$ReleaseBaseUrl/memory-supervisor-source.zip" -OutFile $Archive
+                -Uri "$ReleaseBaseUrl/calando-source.zip" -OutFile $Archive
             Invoke-WebRequest -UseBasicParsing `
-                -Uri "$ReleaseBaseUrl/memory-supervisor-source.zip.sha256" -OutFile $Checksum
+                -Uri "$ReleaseBaseUrl/calando-source.zip.sha256" -OutFile $Checksum
         }
 
         $Expected = ((Get-Content -LiteralPath $Checksum -TotalCount 1) -split '\s+')[0].ToLowerInvariant()
@@ -92,6 +100,9 @@
 
         & (Join-Path $Source "install.ps1")
         $Success = $true
+        if ($RetireLegacy) {
+            Remove-Item -Recurse -Force -LiteralPath $LegacySource -ErrorAction SilentlyContinue
+        }
     }
     catch {
         if ($SourceReplaced) {

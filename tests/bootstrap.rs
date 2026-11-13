@@ -81,11 +81,7 @@ fn release_bootstrap_installs_updates_and_rolls_back_without_git() {
         fs::read_to_string(installed.join("install-ran")).unwrap(),
         "first\n"
     );
-    assert!(
-        installed
-            .join(".memory-supervisor-release-source")
-            .is_file()
-    );
+    assert!(installed.join(".calando-release-source").is_file());
     assert!(!installed.join(".git").exists());
 
     let (second, second_hash) = release_fixture(&root, "second", 0);
