@@ -15,7 +15,7 @@ use crate::config::{
 use crate::events::{acknowledge_event, concise_message, event_should_notify};
 use crate::storage::write_atomic_json;
 
-const USER_AGENT: &str = "claude-codex-memory-supervisor";
+const USER_AGENT: &str = "calando";
 const TITLE: &str = "Calando";
 
 /// Split a notice into `Calando — <headline>` and the remaining fact lines.
@@ -79,6 +79,10 @@ fn parse_http_response(response: &str) -> Result<(u16, Value), String> {
         .map_err(|_| "connection returned an invalid HTTP status".to_owned())?;
     let body = serde_json::from_str(body_text).unwrap_or(Value::Null);
     Ok((status, body))
+}
+
+pub fn get_json(url: &str, timeout_seconds: u64) -> Result<(u16, Value), String> {
+    request_json("GET", url, None, None, timeout_seconds)
 }
 
 fn request_json(
@@ -423,7 +427,7 @@ mod tests {
             8,
         )
         .unwrap();
-        assert!(config.contains("User-Agent: claude-codex-memory-supervisor"));
+        assert!(config.contains("User-Agent: calando"));
         assert!(config.contains("Authorization: Bot private-token"));
         assert!(config.contains("Content-Type: application/json"));
         assert!(config.contains(r#"line one\\n\\\"line two\\\""#));

@@ -19,6 +19,7 @@ pub mod storage;
 pub mod supervisor;
 pub mod terminal;
 pub mod topology;
+pub mod update;
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum Command {

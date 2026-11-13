@@ -771,7 +771,8 @@ Usage: calando <command>
   telegram [CHAT_ID]     Send notices to Telegram (asks for the bot token)
   telegram off           Stop Telegram notices
   cap [<GB> | off]       Advanced: hard memory cap for all agents here (asks to confirm)
-  update                 Update now
+  update                 Update now (automatic by default)
+  update auto on | off   Turn automatic updates on or off
   uninstall              Remove Calando, keeping its settings
   lock on | off          Administrator: stop anyone, including agents, from turning Calando off
   help                   Show this help
@@ -1151,6 +1152,33 @@ pub fn run_control(arguments: &[OsString]) -> i32 {
         "on" | "off" if arguments.len() == 1 => maintain_power(action),
         "lock" => lock(&arguments[1..]),
         "uninstall" if arguments.len() == 1 && crate::config::locked() => maintain_power(action),
+        "update" if arguments.get(1).map(String::as_str) == Some("auto") => {
+            let enabled = match arguments.get(2).map(String::as_str) {
+                Some("on") => true,
+                Some("off") => false,
+                _ => {
+                    eprintln!("usage: calando update auto on|off");
+                    return 2;
+                }
+            };
+            match crate::update::set_auto(enabled) {
+                Ok(()) => {
+                    println!(
+                        "Auto update {}.",
+                        if enabled {
+                            "on"
+                        } else {
+                            "off; `calando status` and Telegram will tell you when an update is available"
+                        }
+                    );
+                    0
+                }
+                Err(error) => {
+                    eprintln!("{error}");
+                    1
+                }
+            }
+        }
         "update" | "uninstall" if arguments.len() == 1 => maintain_installation(action),
         _ => {
             eprintln!("unknown command: {}\n\n{}", arguments.join(" "), usage());

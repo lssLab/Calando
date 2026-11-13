@@ -1122,11 +1122,16 @@ fn decide_with_session_health(
             .and_then(crate::session::parse_command)
     {
         // Handled here and never sent to the model, so it costs no tokens or context.
-        let status_lines = format!(
+        let mut status_lines = format!(
             "Memory: {}\n{}",
             pressure_summary(state),
             agents_summary(state, &session)
         );
+        // Shown only on request, never pushed into the agent's context.
+        if let Some(line) = crate::update::status_line(directory) {
+            status_lines.push('\n');
+            status_lines.push_str(&line);
+        }
         let reply = crate::session::handle(
             directory,
             provider,

@@ -886,6 +886,29 @@ impl Supervisor {
                 }
             }
         }
+        // Per-session "seen" markers and dead peers' snapshots are only useful while the session
+        // or peer is alive; a week of silence means it is gone.
+        const STALE_MARKER_S: f64 = 7.0 * 86_400.0;
+        for entry in fs::read_dir(&self.directory)
+            .into_iter()
+            .flatten()
+            .flatten()
+        {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            let marker = name.starts_with("seen-") || name.starts_with("logical-seen-");
+            let stale = entry
+                .metadata()
+                .and_then(|metadata| metadata.modified())
+                .ok()
+                .and_then(|modified| SystemTime::now().duration_since(modified).ok())
+                .is_some_and(|age| age.as_secs_f64() > STALE_MARKER_S);
+            if marker && stale {
+                let _ = fs::remove_file(entry.path());
+            }
+        }
+        if crate::topology::channel_is_host_local(&federation_dir()) {
+            crate::status::prune_stale_at(&federation_dir(), STALE_MARKER_S / 3600.0, now);
+        }
         // Bound the logical roster: prune ended or long-silent sessions so it
         // cannot grow without limit.  A returning session re-registers on its
         // next hook.  Never prune a restricted agent (non-ACTIVE) or one whose
@@ -5874,6 +5897,7 @@ impl Supervisor {
     pub fn tick(&mut self) -> Value {
         let now = now_epoch();
         self.cleanup_artifacts(now);
+        crate::update::daily_check(&self.directory, now);
         self.drain_notification_events(now);
         self.drain_hook_observations(now);
         let snapshot = memory_snapshot(&self.platform, &mut self.config);

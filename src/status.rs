@@ -1379,6 +1379,9 @@ pub fn run_status(arguments: &[OsString]) -> i32 {
         }
         println!("{}", serde_json::to_string_pretty(&status).unwrap());
     } else {
+        if let Some(line) = crate::update::status_line(&state_dir()) {
+            println!("{line}\n");
+        }
         println!(
             "{}\n\n{}\n\n{}",
             human(&status),
