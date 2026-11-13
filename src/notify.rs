@@ -17,7 +17,13 @@ use crate::events::{acknowledge_event, concise_message, event_should_notify};
 use crate::storage::{ensure_private_dir, write_atomic_json, write_atomic_text};
 
 const USER_AGENT: &str = "claude-codex-memory-supervisor";
-const TITLE: &str = "Claude Code & Codex CLI Memory Supervisor";
+const TITLE: &str = "Calando";
+
+/// Split a notice into `Calando — <headline>` and the remaining fact lines.
+fn titled(message: &str) -> (String, String) {
+    let (headline, body) = message.split_once('\n').unwrap_or((message, ""));
+    (format!("{TITLE} — {headline}"), body.to_owned())
+}
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct DesktopResult {
@@ -59,15 +65,24 @@ fn windows_notification(message: &str) -> String {
         "Add-Type -AssemblyName System.Windows.Forms;",
         "[System.Windows.Forms.NotifyIcon]$n=New-Object System.Windows.Forms.NotifyIcon;",
         "$n.Icon=[System.Drawing.SystemIcons]::Warning;",
-        "$n.BalloonTipTitle='Claude Code & Codex CLI Memory Supervisor';",
+        "$n.BalloonTipTitle=$env:MEMORY_SUPERVISOR_TITLE;",
         "$n.BalloonTipText=$env:MEMORY_SUPERVISOR_MESSAGE;",
         "$n.Visible=$true;$n.ShowBalloonTip(5000);Start-Sleep -Seconds 6;$n.Dispose()"
     );
+    let (title, body) = titled(message);
+    // WSL passes only variables listed in WSLENV to a Windows process.
+    let wslenv = env::var("WSLENV").unwrap_or_default();
+    let wslenv = format!("{wslenv}:MEMORY_SUPERVISOR_TITLE:MEMORY_SUPERVISOR_MESSAGE");
     for executable in ["powershell.exe", "powershell", "pwsh"] {
         let mut command = Command::new(executable);
         command
             .args(["-NoProfile", "-NonInteractive", "-Command", script])
-            .env("MEMORY_SUPERVISOR_MESSAGE", message);
+            .env("MEMORY_SUPERVISOR_TITLE", &title)
+            .env(
+                "MEMORY_SUPERVISOR_MESSAGE",
+                if body.is_empty() { " " } else { &body },
+            )
+            .env("WSLENV", wslenv.trim_start_matches(':'));
         match command_status(&mut command, Duration::from_secs(15)) {
             Ok(success) => {
                 return if success { "delivered" } else { "failed" }.to_owned();
@@ -88,15 +103,17 @@ fn is_wsl() -> bool {
 pub fn notify_desktop_result(message: &str) -> DesktopResult {
     #[cfg(target_os = "macos")]
     {
+        let (title, body) = titled(message);
         let mut command = Command::new("osascript");
         command.args([
             "-e",
             "on run argv",
             "-e",
-            "display notification (item 1 of argv) with title \"Claude Code & Codex CLI Memory Supervisor\"",
+            "display notification (item 1 of argv) with title (item 2 of argv)",
             "-e",
             "end run",
-            message,
+            &body,
+            &title,
         ]);
         DesktopResult {
             status: if command_status(&mut command, Duration::from_secs(8)).unwrap_or(false) {
@@ -130,7 +147,8 @@ pub fn notify_desktop_result(message: &str) -> DesktopResult {
         if env::var_os("DISPLAY").is_some() || env::var_os("WAYLAND_DISPLAY").is_some() {
             let route = "linux-desktop-user-bus";
             let mut command = Command::new("notify-send");
-            command.args(["-u", "critical", TITLE, message]);
+            let (title, body) = titled(message);
+            command.args(["-u", "critical", &title, &body]);
             match command_status(&mut command, Duration::from_secs(8)) {
                 Ok(true) => delivered.push(route),
                 Ok(_) => failed.push(route),
@@ -326,8 +344,9 @@ pub fn notify_discord(message: &str, config: &BTreeMap<String, String>) -> Strin
     } else {
         return "skipped".to_owned();
     };
+    let (title, body) = titled(message);
     let payload = json!({
-        "content": format!("**{TITLE}**\n{}", message.chars().take(1800).collect::<String>())
+        "content": format!("**{title}**\n{}", body.chars().take(1800).collect::<String>())
     });
     match request_json("POST", &url, Some(&payload), authorization.as_deref(), 8) {
         Ok((status, _)) if (200..300).contains(&status) => "delivered",
@@ -364,9 +383,10 @@ pub fn notify_telegram(message: &str, config: &BTreeMap<String, String>) -> Stri
         return "failed".to_owned();
     }
     let url = format!("https://api.telegram.org/bot{token}/sendMessage");
+    let (title, body) = titled(message);
     let payload = json!({
         "chat_id": chat_id,
-        "text": format!("{TITLE}\n{}", message.chars().take(3900).collect::<String>()),
+        "text": format!("{title}\n{}", body.chars().take(3900).collect::<String>()),
     });
     match request_json("POST", &url, Some(&payload), None, 8) {
         Ok((status, body)) if (200..300).contains(&status) && body["ok"] == Value::Bool(true) => {

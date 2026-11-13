@@ -1914,7 +1914,7 @@ mod tests {
             first["hookSpecificOutput"]["additionalContext"]
                 .as_str()
                 .unwrap()
-                .contains("Running under watch")
+                .contains("running under watch")
         );
         assert!(
             !first["hookSpecificOutput"]["additionalContext"]

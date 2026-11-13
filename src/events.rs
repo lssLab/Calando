@@ -180,11 +180,11 @@ pub fn user_message(event: &Value) -> String {
     )
 }
 
-fn gib(mb: f64) -> String {
-    format!("{:.1} GiB", mb / 1024.0)
+fn gb(mb: f64) -> String {
+    format!("{:.1}", mb / 1024.0)
 }
 
-/// Name the environment a notice is about, e.g. `Windows · LAPTOP-1`, so a federated
+/// Name the environment a notice is about, e.g. `Windows (LAPTOP-1)`, so a federated
 /// Windows/WSL pair never reads as one pooled memory figure.
 fn environment(event: &Value) -> String {
     let platform = text(event, "platform").unwrap_or_default();
@@ -206,15 +206,15 @@ fn environment(event: &Value) -> String {
         .map(|rest| rest.trim_start_matches('-'))
         .filter(|rest| !rest.is_empty());
     match (name.is_empty(), host) {
-        (false, Some(host)) => format!("{name} · {host}"),
+        (false, Some(host)) => format!("{name} ({host})"),
         (false, None) => name.to_owned(),
         (true, _) if !source.is_empty() => source.to_owned(),
-        _ => "local".to_owned(),
+        _ => "This machine".to_owned(),
     }
 }
 
-/// Render a notice as three short lines (status · environment, figures, action) for people
-/// and agent hooks alike. The stored `message` stays the detailed ledger record.
+/// Render a notice for people and agent hooks: a headline, the environment, then one
+/// `Label: value` fact per line. The stored `message` stays the detailed ledger record.
 pub fn concise_message(event: &Value) -> String {
     let event_type = text(event, "type").unwrap_or_default();
     let status = text(event, "status").unwrap_or_default();
@@ -228,107 +228,97 @@ pub fn concise_message(event: &Value) -> String {
         .and_then(|message| message.lines().next())
         .map(|line| line.trim_start_matches("[Memory Supervisor]").trim())
         .filter(|line| !line.is_empty())
-        .unwrap_or("Memory action recorded");
+        .map(|line| {
+            let lower = line.to_lowercase();
+            let mut characters = lower.chars();
+            characters
+                .next()
+                .map(|first| first.to_uppercase().chain(characters).collect())
+                .unwrap_or_default()
+        })
+        .unwrap_or_else(|| "Memory action recorded".to_owned());
+    let process = pid
+        .map(|pid| format!("{role} (PID {pid})"))
+        .unwrap_or_else(|| role.to_owned());
 
-    let (icon, title, action) = match (event_type, status) {
+    let (headline, action): (String, String) = match (event_type, status) {
         ("pressure-episode", "active") => (
-            "⚠",
             "Memory protection on".to_owned(),
-            format!(
-                "New heavy work held; running work continues · {} restricted · {} paused",
-                count("restricted"),
-                count("paused")
-            ),
+            "New heavy work is on hold. Running work continues.".to_owned(),
         ),
         ("pressure-episode", "recovered") => (
-            "✓",
             "Memory protection off".to_owned(),
-            "Normal admission resumed".to_owned(),
+            "None. Normal operation resumed.".to_owned(),
         ),
         ("pressure-episode", _) => (
-            "⚠",
-            "Protection ended, worker lost".to_owned(),
-            "Paused workers exited before resume; check their results".to_owned(),
+            "Memory protection ended with a lost worker".to_owned(),
+            "A paused worker exited before it could resume. Check its results.".to_owned(),
         ),
         ("process-pause" | "codex-app-process-pause", "suspended" | "prepared" | "committed") => (
-            "⏸",
             "Process paused".to_owned(),
-            pid.map(|pid| {
-                format!("{role} PID {pid} kept intact; resume: memory-supervisor resume {pid}")
-            })
-            .unwrap_or_else(|| "Paused process kept intact; see memory-status".to_owned()),
+            format!(
+                "{process} is paused and kept intact. It resumes automatically when memory recovers."
+            ),
         ),
         ("process-pause" | "codex-app-process-pause" | "process-control", "resumed") => (
-            "▶",
             "Process resumed".to_owned(),
-            pid.map(|pid| format!("{role} PID {pid} running again"))
-                .unwrap_or_else(|| "Running again".to_owned()),
+            format!("{process} is running again."),
         ),
         ("codex-app-process-pause", "cancelled") => (
-            "✓",
             "App pause cancelled".to_owned(),
-            "Process left running".to_owned(),
+            "None. The process was left running.".to_owned(),
         ),
         ("lead-probation", "monitoring") => (
-            "▶",
             "Guarded resume".to_owned(),
-            "Running under watch; renewed growth pauses it again".to_owned(),
+            format!("{process} is running under watch. Renewed growth pauses it again."),
         ),
         ("lead-probation", "failed") => (
-            "⏸",
             "Guarded resume failed".to_owned(),
-            pid.map(|pid| format!("PID {pid} paused again; your decision: memory-status"))
-                .unwrap_or_else(|| "Paused again; your decision: memory-status".to_owned()),
+            format!("{process} is paused again and needs your decision. Run memory-status."),
         ),
         ("lead-probation", "resumed") => (
-            "✓",
             "Recovery complete".to_owned(),
-            "Process stable".to_owned(),
+            format!("None. {process} is stable."),
         ),
         ("federation-peer", "stale") => (
-            "⚠",
-            stored_title.to_owned(),
-            "Peer not reporting; its memory is not counted".to_owned(),
+            "Peer environment not reporting".to_owned(),
+            "Its memory is not counted until it reports again.".to_owned(),
         ),
         ("federation-peer", "recovered") => (
-            "✓",
-            stored_title.to_owned(),
-            "Peer reporting again".to_owned(),
+            "Peer environment reporting again".to_owned(),
+            "None.".to_owned(),
         ),
         ("protection-degraded", _) | (_, "critical" | "failed") => (
-            "✖",
-            stored_title.to_owned(),
-            "Protection degraded; run memory-status".to_owned(),
+            stored_title,
+            "Protection is degraded. Run memory-status.".to_owned(),
         ),
-        _ => ("•", stored_title.to_owned(), "See memory-status".to_owned()),
+        _ => (stored_title, "Run memory-status for details.".to_owned()),
     };
 
-    let mut figures = Vec::new();
+    let mut lines = vec![headline, environment(event)];
     if let (Some(free), Some(capacity)) =
         (number(event, "headroom_mb"), number(event, "capacity_mb"))
     {
-        figures.push(format!(
-            "Free {:.1} / {:.1} GiB",
-            free / 1024.0,
-            capacity / 1024.0
-        ));
+        lines.push(format!("Free: {} of {} GB", gb(free), gb(capacity)));
     }
     if let Some(held) = number(event, "vm_held_mb") {
         let used = number(event, "guest_used_mb")
-            .map(|used| format!(", in use {}", gib(used)))
+            .map(|used| format!(", uses {} GB", gb(used)))
             .unwrap_or_default();
-        figures.push(format!("WSL VM {}{used}", gib(held)));
+        lines.push(format!("WSL VM: holds {} GB{used}", gb(held)));
+    }
+    if count("restricted") > 0 {
+        lines.push(format!("Restricted agents: {}", count("restricted")));
+    }
+    if count("paused") > 0 {
+        lines.push(format!("Paused processes: {}", count("paused")));
     }
     if event_type == "pressure-episode"
         && let Some(seconds) = number(event, "duration_s")
     {
-        figures.push(format!("lasted {seconds:.0}s"));
+        lines.push(format!("Duration: {seconds:.0} s"));
     }
-    let mut lines = vec![format!("{icon} {title} · {}", environment(event))];
-    if !figures.is_empty() {
-        lines.push(figures.join(" · "));
-    }
-    lines.push(action);
+    lines.push(format!("Action: {action}"));
     lines.join("\n")
 }
 
@@ -593,17 +583,25 @@ mod tests {
         });
         assert_eq!(
             concise_message(&event),
-            "⚠ Memory protection on · Windows · LAPTOP-1\n\
-             Free 1.5 / 15.7 GiB · WSL VM 9.6 GiB, in use 3.2 GiB\n\
-             New heavy work held; running work continues · 0 restricted · 0 paused"
+            "Memory protection on\n\
+             Windows (LAPTOP-1)\n\
+             Free: 1.5 of 15.7 GB\n\
+             WSL VM: holds 9.6 GB, uses 3.2 GB\n\
+             Action: New heavy work is on hold. Running work continues."
         );
         let recovered = json!({
             "type":"pressure-episode", "status":"recovered", "source":"wsl-Ubuntu-LAPTOP-1",
-            "platform":"wsl", "headroom_mb":8192, "capacity_mb":9945, "duration_s":33
+            "platform":"wsl", "headroom_mb":8192, "capacity_mb":9945, "duration_s":33,
+            "paused":1
         });
         assert_eq!(
             concise_message(&recovered),
-            "✓ Memory protection off · WSL · Ubuntu-LAPTOP-1\nFree 8.0 / 9.7 GiB · lasted 33s\nNormal admission resumed"
+            "Memory protection off\n\
+             WSL (Ubuntu-LAPTOP-1)\n\
+             Free: 8.0 of 9.7 GB\n\
+             Paused processes: 1\n\
+             Duration: 33 s\n\
+             Action: None. Normal operation resumed."
         );
     }
 
