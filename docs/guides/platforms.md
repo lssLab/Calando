@@ -20,7 +20,7 @@ admission, while only the local supervisor may pause a local PID.
 
 | Base OS | Environment above it | Required installation | Federation boundary |
 | --- | --- | --- | --- |
-| Windows | One or more WSL2 distributions | Windows plus every WSL distribution | Each WSL instance auto-detects the Windows user's `.memory-supervisor/instances` |
+| Windows | One or more WSL2 distributions | Windows plus every WSL distribution | Each WSL instance auto-detects the Windows user's `.calando/instances` (and the 0.2.x `.memory-supervisor/instances`) |
 | Windows, macOS, or Linux | Dynamic-memory VM | Host plus every guest | Connect only the sides that actually compete for the same physical RAM through a host-local shared folder |
 | Windows, macOS, or Linux | Fixed-memory VM | Host plus every guest | Keep each side independent; do not federate across the fixed allocation boundary |
 | Linux kernel (native Linux, WSL, or a desktop VM) | One or more PID-isolated containers | Kernel host environment plus every isolated container | Share a host-local volume inside that kernel |
@@ -29,18 +29,18 @@ admission, while only the local supervisor may pause a local PID.
 ### Codex App follows the App Server environment
 
 The Codex App window and its execution engine do not have to run in the same operating-system
-environment. Memory Supervisor follows the `codex ... app-server` process, not the desktop window:
+environment. Calando follows the `codex ... app-server` process, not the desktop window:
 
-- A Windows Codex App using a WSL engine is protected by the Supervisor installed in that WSL
+- A Windows Codex App using a WSL engine is protected by Calando installed in that WSL
   distribution. It detects the WSL App Server, resolves that process's active `CODEX_HOME`, and
   manages its logical threads, hook decisions, WSL child tools, and WSL-side physical brakes. This
-  does not require the unsigned native Windows Supervisor or a Smart App Control change.
+  does not require the unsigned native Windows supervisor or a Smart App Control change.
 - That WSL instance cannot measure or pause the Windows App UI process or a separate Windows-native
-  Claude Code or Codex CLI. Install the Windows Supervisor as well when those Windows processes must
+  Claude Code or Codex CLI. Install the Windows supervisor as well when those Windows processes must
   be covered; the Windows and WSL instances then share admission through federation while retaining
   local PID control.
-- A native Windows or macOS App Server uses the Supervisor in that OS. An App Server actually
-  running in Linux, another WSL distribution, a VM, or a PID-isolated container uses the Supervisor
+- A native Windows or macOS App Server uses the supervisor in that OS. An App Server actually
+  running in Linux, another WSL distribution, a VM, or a PID-isolated container uses the supervisor
   inside that environment. The same rule applies even if the window or client that requested it is
   elsewhere.
 - A fixed-memory VM or remote computer protects itself independently. Federate only execution
@@ -48,10 +48,10 @@ environment. Memory Supervisor follows the `codex ... app-server` process, not t
 
 This is a general process-boundary rule rather than a hard-coded Windows/WSL exception. A shared
 Windows/WSL `CODEX_HOME` is handled only as a file-layout case: the hook file retains both native
-command fields, but each command still reaches only the Supervisor and PIDs in its own environment.
+command fields, but each command still reaches only the supervisor and PIDs in its own environment.
 
 Without a shared path, each instance still protects its own local environment. Only
-cross-environment admission and the combined `memory-status --all` view are unavailable.
+cross-environment admission and the combined `calando status` view are unavailable.
 
 The federation reader does not whitelist a Windows/WSL pair. Windows, WSL, Linux, and macOS peers
 inside one host-local memory boundary use the same snapshot contract, and only the strictest valid
@@ -73,7 +73,7 @@ checks both SHA-256 values. It uses the downloader in the pasted command plus th
 system's standard archive and SHA-256 support. A manual development checkout can be built locally
 with Rust 1.88 or newer.
 
-Windows 10 has no Smart App Control. The Supervisor executable's
+Windows 10 has no Smart App Control. The supervisor executable's
 [minimum Windows baseline](https://doc.rust-lang.org/rustc/platform-support/windows-msvc.html) is
 also Windows 10, and the required memory and process facilities are available there. It needs no SAC
 setting, although a SmartScreen prompt still requires checking the download source. Windows 11 Smart
@@ -94,17 +94,19 @@ executable are not supported native paths. See the [Windows signing runbook](win
 
 | Platform | User-level startup mechanism |
 | --- | --- |
-| Linux / WSL | `~/.config/systemd/user/memory-supervisor.service`; installer-owned linger when available |
-| macOS | `~/Library/LaunchAgents/io.github.lsslab.memory-supervisor.plist` |
-| Windows | `MemorySupervisor` Scheduled Task at user logon |
+| Linux / WSL | `~/.config/systemd/user/calando.service`; installer-owned linger when available |
+| macOS | `~/Library/LaunchAgents/io.github.lsslab.calando.plist` |
+| Windows | `Calando` Scheduled Task at user logon |
 | Unix without user systemd | PID-supervised fallback; starts immediately, but boot startup is manual |
 
-`memory-supervisor update` updates the checkout when possible, verifies and activates the native
+`calando update` updates the release source when possible, verifies and activates the native
 runtime, reloads the local service, and reconnects every detected supported CLI. It never signals an
 agent PID during the daemon cutover, and the new daemon reloads paused identities from `runtime.json`.
+The installed daemon also runs it automatically once a day when nothing is paused and memory is calm;
+see [operations](operations.md#update).
 
 The safest update time is between active CLI sessions. A live update normally preserves them, but
-there can be a brief fail-open protection gap. Always run `memory-status --connections` after an
+there can be a brief fail-open protection gap. Run `calando status` after an
 update. Only an actual Codex hook-definition change requires the user to trust again personally in
 that CLI process's `/hooks` or Desktop App **Settings → Hooks**; restarting never substitutes for
 trust. An App Settings change refreshes existing tasks loaded by the shared App Server, but not
@@ -128,17 +130,19 @@ state, while replacing an installed build should be done between active CLI sess
   user-facing black window open, and its periodic PowerShell sensors use `CREATE_NO_WINDOW`;
   commands run from an existing terminal keep that shared terminal.
 - Claude Code and Codex hook/skill files remain installed. Open a new AI CLI session after login
-  and run `memory-status --connections`. Only an actual hook-hash change can require review: use
+  and run `calando status`. Only an actual hook-hash change can require review: use
   `/hooks` in Codex CLI and **Settings → Hooks** in Codex App.
-- A reboot is not an update. Do not run `memory-supervisor update` unless source, setup, or a later
+- A reboot is not an update. Do not run `calando update` unless source, setup, or a later
   installed CLI needs to be reapplied.
 
 ## Federation paths
 
-- Default: `~/.memory-supervisor/instances`
+- Default: `~/.calando/instances`
 - Override: `MEMORY_SUPERVISOR_FEDERATION_DIR`
-- Persisted pointer: `~/.memory-supervisor/federation-dir`
-- State pointer: `~/.memory-supervisor/state-dir`
+- Persisted pointer: `~/.calando/federation-dir`
+- State pointer: `~/.calando/state-dir`
+- While environments run mixed versions, federation also reads `.memory-supervisor/instances`.
+- Peer files that stay stale for a week are removed automatically.
 - WSL automatically looks for the Windows user's shared instance directory.
 - WSL default instance names include `WSL_DISTRO_NAME`, so Ubuntu and Debian on the same host do not
   overwrite one another even though WSL shares the Windows hostname.
@@ -147,7 +151,7 @@ state, while replacing an installed build should be done between active CLI sess
   name.
 
 ```bash
-memory-status --all
+calando status
 ```
 
 Federation is global backpressure, not a scheduler. It neither migrates workers nor sends a signal
@@ -163,9 +167,8 @@ inspecting another user's processes, and the product does not bypass that bounda
 
 A constrained VPS is a natural deployment shape because native cgroup ceilings, PSI, swap/reclaim,
 and all same-user remote sessions feed the same policy. Enable the installed user service and, when
-appropriate, user linger so it remains available without an open SSH shell. Desktop OS notifications
-are often unavailable on a headless server, so use the mandatory hook/terminal action messages and
-optionally Discord or Telegram. This path is covered by Linux and cgroup contract tests, but has not
+appropriate, user linger so it remains available without an open SSH shell. Use the always-on hook and
+terminal messages and, optionally, Telegram. This path is covered by Linux and cgroup contract tests, but has not
 yet been claimed as a completed hours-long real-VPS model soak.
 
 ## Native capacity and sensors
@@ -221,36 +224,32 @@ at an idle boundary because it immediately terminates every running WSL distribu
 session inside it. See Microsoft's [advanced WSL settings](https://learn.microsoft.com/windows/wsl/wsl-config)
 and [`wsl --shutdown` command](https://learn.microsoft.com/windows/wsl/basic-commands#shutdown).
 
-## Optional local CLI memory budget
+## Optional local CLI memory cap
 
-The budget is **off by default**. It is one aggregate ceiling for all Claude Code and Codex trees
-visible to this installed control environment, not a per-CLI limit or a pooled Windows+WSL quota.
+The cap is **off by default** and not recommended for normal use; it is meant for strict research or
+benchmark runs. It is one aggregate ceiling for all Claude Code and Codex trees visible to this
+installed control environment, not a per-CLI limit or a pooled Windows+WSL quota.
 
 ```bash
-memory-supervisor budget
-memory-supervisor budget set 6
-memory-supervisor budget off
+calando cap
+calando cap 6
+calando cap off
 ```
 
-`6` is only a GiB syntax example (`memory-supervisor hard-cap set <MB>` is the MB-precision alias).
-Run the command separately in Windows, WSL, each VM, or each isolated container. Because those
-control environments can share one physical machine, `memory-supervisor budget` first reports the
-theoretical maximum for this environment and the currently possible total after peer environments'
-explicit budgets;
-`budget set` refuses a request that no longer fits (naming how much to reduce where) and asks for
-confirmation at 90% or more of the currently possible total, or when the machine-wide
-explicit-budget total would reach 90% of the physical estimate. An environment's default allocation,
-such as an unconfigured WSL VM ceiling, is never counted as a claim.
-Near the ceiling, new fan-out is held first. Above it, at most one verified growing worker/support PID
-can be paused per reaction interval; a lead remains the last resort and requires exact recovery
-visibility. Suspension stops further execution but does not immediately return resident memory, so
-use cgroup/container/VM limits when a byte-exact quota is required.
+`6` is only a GB syntax example. Run the command separately in Windows, WSL, each VM, or each isolated
+container. It checks the value against what this environment can use now, prints an explanation, and
+asks `[y/N]`; non-interactive callers pass `--yes`. Near the cap, new heavy work is held. Above it,
+one growing subagent is paused. Pausing cannot reclaim memory already used, so use can briefly pass the
+cap; use cgroup, container, or VM limits when a byte-exact quota is required.
+
+A single session can also be capped with `/calando cap <GB>` (Codex: `$calando cap <GB>`); see
+[operations](operations.md#session-commands).
 
 ## Persistent advanced settings
 
 Normal operation needs no configuration file. Advanced overrides live in
-`~/.config/memory-supervisor/config.json`; environment variables with the same names take precedence.
-The budget commands above are the preferred way to set or clear a cap.
+`~/.config/calando/config.json`; environment variables with the same names take precedence.
+`calando cap` is the preferred way to set or clear a cap.
 
 ```json
 {
@@ -266,38 +265,37 @@ falls back to one second and appears in `configuration_error`.
 
 Path/bootstrap settings such as `MEMORY_SUPERVISOR_DIR`,
 `MEMORY_SUPERVISOR_FEDERATION_DIR`, and `MEMORY_SUPERVISOR_FORCE_PLATFORM` do not belong in this
-JSON file. After a manual advanced edit, run `memory-supervisor update` and verify with `memory-status`.
+JSON file. After a manual advanced edit, run `calando update` and verify with `calando status`.
 
 ## Pause, resume, and restart
 
 - `SIGSTOP` on Unix and native process suspension on Windows preserve the PID and in-memory session.
-- `memory-supervisor resume <pid>` revalidates PID plus start identity before continuing it.
-- `memory-supervisor resume` is accepted only when exactly one managed PID is paused.
+- There is no manual resume command. A pressure-paused process resumes automatically when memory
+  recovers; a lead paused for runaway growth gets one guarded automatic resume.
+- If a lead stays paused, close that terminal and use the CLI's own resume (`claude --resume`,
+  `codex resume`), or run `calando off`, which resumes it in place.
 - Control intent is persisted before the signal and reported complete only after daemon acknowledgement.
-- Restarting the supervisor reloads its incident ledger and does not automatically resume agents.
-- Restarting the agent CLI is different: use that AI CLI's transcript/session resume feature.
-- A remote incident must be controlled from the OS named by its `source` field.
+- Restarting the supervisor reloads its incident ledger.
+- A remote incident is handled by the OS named by its `source` field.
 
 AI CLI/model context is delivered at the next real hook boundary, which can be later than the
-operating-system resume. Exact terminal, OS, Discord, and Telegram action notices are attempted
-independently.
-
+operating-system resume. Exact terminal and Telegram notices are attempted independently.
 
 ## Turn the whole installation on or off
 
 ```bash
-memory-supervisor off
-memory-supervisor on
+calando off
+calando on
 ```
 
 One `off` command disables the service and automatic startup for the current OS/PID-control
-environment and persists that choice at `~/.memory-supervisor/power-off`. Installed Claude Code and
-Codex hooks and skills remain connected, but every hook passes through silently. `memory-status`
-and `--connections` report intentional `OFF`, and `memory-supervisor update` preserves it. `on`
+environment and persists that choice at `~/.calando/power-off`. Installed Claude Code and
+Codex hooks and skills remain connected, but every hook passes through silently. `calando status`
+reports intentional `OFF`, and `calando update` preserves it. `on`
 removes the marker, restores automatic startup, and verifies that a fresh state was published.
 
-`off` refuses while the supervisor owns a paused PID or a process-control action is pending, so it
-cannot leave a process stranded without a daemon to resume it. Windows, each WSL distribution, VM
+`off` first resumes every process Calando paused, so no process is left stranded without a daemon.
+While an administrator lock exists (`calando lock on`), `off` refuses. Windows, each WSL distribution, VM
 guest, and PID-isolated container have separate services and PID namespaces; run the command once
 inside each environment that you want to toggle.
 
@@ -305,21 +303,21 @@ inside each environment that you want to toggle.
 
 ```bash
 # Linux / WSL
-systemctl --user restart memory-supervisor.service
-systemctl --user is-active memory-supervisor.service
+systemctl --user restart calando.service
+systemctl --user is-active calando.service
 
 # macOS: restart a loaded agent
-launchctl kickstart -k gui/$(id -u)/io.github.lsslab.memory-supervisor
+launchctl kickstart -k gui/$(id -u)/io.github.lsslab.calando
 
 # macOS: explicitly unload, then load again
-launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/io.github.lsslab.memory-supervisor.plist
-launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/io.github.lsslab.memory-supervisor.plist
+launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/io.github.lsslab.calando.plist
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/io.github.lsslab.calando.plist
 
 # Windows
-schtasks /End /TN MemorySupervisor
-schtasks /Run /TN MemorySupervisor
+schtasks /End /TN Calando
+schtasks /Run /TN Calando
 ```
 
 Use these commands to repair an unexpected service failure, not as the product power switch. If the
 service is unavailable without an `off` marker, hooks fail open rather than disabling the CLI and
-`memory-status` reports the stale or missing supervisor and resulting protection gap.
+`calando status` reports the stale or missing supervisor and resulting protection gap.

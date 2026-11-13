@@ -4,7 +4,7 @@
   <strong>English</strong> · <a href="stopping-distance.ko.md">한국어</a> · <a href="stopping-distance.zh-CN.md">简体中文</a> · <a href="stopping-distance.ja.md">日本語</a>
 </p>
 
-Memory Supervisor is not designed to keep memory use low. Existing work remains unrestricted while
+Calando is not designed to keep memory use low. Existing work remains unrestricted while
 headroom falls at a stable rate. It starts with new work and applies gradual protection only when
 the measured trajectory approaches real risk.
 

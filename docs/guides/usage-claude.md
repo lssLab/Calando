@@ -6,7 +6,7 @@
 
 ## Supported contract
 
-Memory Supervisor `0.3.0` supports Claude Code **2.1.217 or newer**. This is the pinned
+Calando `0.3.0` supports Claude Code **2.1.217 or newer**. This is the pinned
 latest-supported baseline for the graded logical-control contract; old releases do not receive a
 reduced matcher set or compatibility policy.
 
@@ -21,11 +21,11 @@ paths, then uses the newest supported Claude Code it can verify. An older execut
 non-login process's `PATH` therefore cannot hide a current user installation.
 
 If no supported executable can be verified, installation reports the version problem but preserves
-any existing Memory Supervisor hook. A failed version probe is not evidence that a valid hook should
-be deleted. `memory-status --connections` continues to show hook health separately and does not call
+any existing Calando hook. A failed version probe is not evidence that a valid hook should
+be deleted. `calando status` continues to show hook health separately and does not call
 the provider protected until both the version and hook are ready. If `claude update` is unavailable
 for the original installation method, upgrade Claude Code with that same package manager or
-installer, then run `memory-supervisor update`.
+installer, then run `calando update`.
 
 Claude Code has the broadest documented integration of the supported CLIs. `PreToolUse` observes
 all tool paths, classifies their actual input, gates only new expansion at machine admission, and
@@ -37,7 +37,8 @@ Run the platform installer. It atomically merges these events into
 
 - `SessionStart`: inject the resource contract at startup; resume/clear/compact stay silent only
   when there is no unseen suspension incident.
-- `UserPromptSubmit`: inject non-GREEN adaptive admission and any unseen incident even after recovery.
+- `UserPromptSubmit`: answer `/calando ...` session commands without sending the prompt to the
+  model; otherwise inject non-GREEN adaptive admission and any unseen incident even after recovery.
 - `PreToolUse`: classify every tool; delay and hand back new expansion under machine pressure, hold
   new classified high-memory starts while machine distress is critical, or deny only the
   future-work class excluded by the target logical state.
@@ -52,33 +53,33 @@ Run the platform installer. It atomically merges these events into
 
 ## Hook activation, workspace trust, and reload
 
-Claude Code does not use Codex's per-hook hash approval. The installer writes the Memory Supervisor
+Claude Code does not use Codex's per-hook hash approval. The installer writes the Calando
 hook to user settings at `~/.claude/settings.json`; that user hook has no separate approve/enable
 step. Interactive Claude Code nevertheless holds every settings-file hook, including this user
 hook, until the user accepts workspace trust for the current folder or one of its parents. Claude's
 `/hooks` screen is a read-only browser and cannot grant that trust.
 
-Workspace trust is one folder-level decision rather than a Memory Supervisor-specific Hook review.
+Workspace trust is one folder-level decision rather than a Calando-specific Hook review.
 Accept it only for a working folder you trust. After that decision, current Claude Code watches
 settings files, so a running session normally picks up a later user-hook change. Restart only if the
 entry does not appear after a short wait, or open a new session when the goal is specifically to
 exercise the once-per-session `SessionStart` event.
 
-A plain non-interactive `claude -p` run loads the same user settings and hooks, so Memory Supervisor
+A plain non-interactive `claude -p` run loads the same user settings and hooks, so Calando
 covers it without an additional setup step. Claude Code skips workspace-trust verification in this
-mode. If `--bare` is added, Claude Code deliberately skips all hooks and Memory Supervisor cannot
+mode. If `--bare` is added, Claude Code deliberately skips all hooks and Calando cannot
 supervise that invocation.
 
-After installation or `memory-supervisor update`, run `memory-status --connections`. Its Claude
+After installation or `calando update`, run `calando status`. Its Claude
 `CONNECTED` result verifies a supported executable, skill, and current user-hook wiring. Use
 Claude's read-only `/hooks` view to confirm the entry under `User Settings` when needed. Neither
 check proves workspace trust for the current folder. An organization policy such as managed-only
 hooks or `disableAllHooks` can still prevent the user hook and requires administrator action.
 
 Installed command hooks intentionally omit the optional `statusMessage`, so normal hook execution
-does not keep a Memory Supervisor progress line in the TUI. User-visible text appears only for a
+does not keep a Calando progress line in the TUI. User-visible text appears only for a
 real protective action or unseen incident. If an already-running session still shows old routine
-hook progress lines, run `memory-supervisor update` and open a new Claude Code session so the AI CLI
+hook progress lines, run `calando update` and open a new Claude Code session so the AI CLI
 reloads the current hook definition.
 
 Admission uses the worst fresh adaptive action from `MEMORY_SUPERVISOR_FEDERATION_DIR`, so pressure in a host,
@@ -86,14 +87,13 @@ WSL, or VM holds new Claude fan-out everywhere while process pause remains local
 color alone does not block fan-out.
 
 If the Claude lead is `PAUSED_BY_SUPERVISOR`, no in-process hook can run during that pause. The
-supervisor therefore writes the cause and exact recovery policy to the revalidated target terminal
-and independently queues OS, Discord, and Telegram delivery. Automatic probation, success,
-failure, manual resume, and raw external resume get the same phase-specific guidance. A hook then
-delivers it once to the user and model at the next prompt/tool boundary; that boundary may be later
-than the OS-level resume itself. `memory-supervisor resume` continues the same PID and in-memory
-session. If Claude was terminated and started with `--resume`, `SessionStart source=resume`
-delivers the resource incident while Claude's transcript mechanism restores the conversation
-separately.
+supervisor writes the cause and recovery policy to the revalidated target terminal and, when
+configured, Telegram. A hook delivers it to the model at the next prompt or tool boundary, which may
+be later than the resume itself. There is no manual resume command: a pressure-paused process resumes
+automatically, and a lead paused for runaway growth gets one guarded automatic resume. If the lead
+stays paused, close that terminal and run `claude --resume`, or run `calando off` to resume it in
+place. After `claude --resume`, the first hook says the previous process was paused and ended and that
+subagent results from that run may be missing.
 
 `StructuredOutput` and the other result/message/status tools remain allowed in `HANDOFF_ONLY`.
 Supervisor denials are recorded with their tool, reason, time, and logical epoch, then summarized
@@ -109,8 +109,7 @@ Verify:
 
 ```bash
 bash tests/run.sh
-memory-status --connections
-memory-status
+calando status
 printf '{}' | runtime/hooks/gate.sh SessionStart
 ```
 
@@ -127,15 +126,28 @@ On Windows use:
 '{}' | powershell -File .\runtime\hooks\gate.ps1 SessionStart
 ```
 
-The personal skill is linked at `~/.claude/skills/memory-supervisor`. A newly created top-level
-skills directory may require a new Claude Code session before discovery.
+## Session commands
 
-When a process is paused, first follow the action block: pressure-paused workers and the first
-probation for a lead paused after sustained material-growth evidence recover automatically. For an authorized manual override, use
-`memory-supervisor resume <pid>` (or `memory-supervisor resume` when exactly one PID is paused) rather
-than raw `kill -CONT` so the
-daemon validates the process start identity, clears its state, persists the RESUMED incident, and
-applies the resume cooldown.
+```text
+/calando on | off | status | help
+/calando cap <GB> | off          advanced; first reply explains, apply with /calando cap <GB> yes
+```
+
+The `UserPromptSubmit` hook answers these, so the prompt never reaches the model and uses no tokens or
+context. They act only on the session that typed them (the hook payload's session id).
+
+- `off`: the session is still measured but never held, paused, or notified.
+- `cap`: limits the session's own process tree. Near 90% of the cap its heavy starts are held; above
+  the cap one growing subagent is paused and resumes when the session drops under 90%.
+- `status`: what this session's agent sees, plus an update line when relevant.
+
+The command comes from the `calando` skill, copied (not linked) into `~/.claude/skills/calando`. A
+newly created top-level skills directory may require a new Claude Code session before discovery. The
+old `memory-status` command files are removed on install. Terminal commands that act on the whole
+environment are listed in [operations](operations.md).
+
+Claude Code applies automatic updates, including hook changes; new sessions pick them up. The daily
+update check also restores Calando's hooks if Claude Code dropped them from `settings.json`.
 
 ## If a hook blocks every prompt
 
@@ -145,8 +157,8 @@ Do not keep editing the active hook from the blocked session. From a separate te
 2. Run `printf '{}' | runtime/hooks/gate.sh UserPromptSubmit`; the safe result is valid JSON or no output,
    always with exit code 0.
 3. Run `bash tests/run.sh`.
-4. Run `memory-supervisor update` to atomically replace only owned supervisor hook entries and reload the service.
+4. Run `calando update` to atomically replace only owned supervisor hook entries and reload the service.
 5. Open a new Claude Code session because hook definitions may be snapshotted at session start.
 
-If every prompt remains blocked after this procedure, use `memory-status --connections` and the
+If every prompt remains blocked after this procedure, use `calando status` and the
 gate exit code to separate a hook-wiring failure from supervisor state.

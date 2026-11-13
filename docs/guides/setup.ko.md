@@ -10,7 +10,7 @@
 별도 설치 파일을 미리 준비할 필요가 없습니다. 일반 설치는 현재 사용자 범위에서 이루어지므로
 `sudo`나 관리자 권한도 필요하지 않습니다.
 
-### 1. Memory Supervisor 설치
+### 1. Calando 설치
 
 #### Linux, WSL2, macOS 터미널
 
@@ -51,8 +51,8 @@ irm https://raw.githubusercontent.com/lssLab/Calando/main/bootstrap.ps1 | iex
 Codex App은 창이 표시되는 운영체제가 아니라 **App Server와 도구가 실제로 실행되는 환경**을
 기준으로 설치합니다.
 
-- Windows의 Codex App이 WSL 엔진을 사용하면 WSL에 설치한 Supervisor가 WSL App Server, 대화별
-  논리 thread와 그 안에서 실행되는 WSL 도구를 보호합니다. 이 경로는 Windows용 Supervisor를
+- Windows의 Codex App이 WSL 엔진을 사용하면 WSL에 설치한 Calando가 WSL App Server, 대화별
+  논리 thread와 그 안에서 실행되는 WSL 도구를 보호합니다. 이 경로는 Windows용 Calando를
   실행하지 않으므로 Smart App Control을 끌 필요가 없습니다. 다만 Windows 쪽 App 화면 프로세스와
   Windows에서 따로 실행한 Claude Code·Codex CLI는 이 WSL 설치의 측정·제어 대상이 아닙니다.
 - App Server나 CLI가 Windows·macOS·Linux에서 직접 실행되면 그 운영체제에 설치합니다. Windows
@@ -66,13 +66,13 @@ Codex App은 창이 표시되는 운영체제가 아니라 **App Server와 도�
 
 ### 2. Claude Code 설정
 
-설치기가 Memory Supervisor 사용자 Hook을 자동으로 연결합니다. 사용자가 별도로 설정하거나 Hook을
+설치기가 Calando 사용자 Hook을 자동으로 연결합니다. 사용자가 별도로 설정하거나 Hook을
 승인·활성화할 필요는 없습니다.
 
 **설치할 때 이미 실행 중이었다면:** 현재 작업을 그대로 이어가면 됩니다. Claude Code가 사용자
 설정 변경을 자동으로 다시 읽으므로 보통 재시작할 필요가 없습니다.
 
-**확인하려면:** 5번의 `memory-status --connections`에서 `Claude Code CONNECTED`를 확인합니다.
+**확인하려면:** 5번의 `calando status`에서 `Claude Code CONNECTED`를 확인합니다.
 Hook 상세 내용을 직접 보고 싶을 때만 읽기 전용 `/hooks`의 `User Settings`를 확인합니다. 이
 선택적 화면에 항목이 나타나지 않는 예외에만 현재 작업을 마친 뒤 Claude Code를 한 번 다시
 시작합니다.
@@ -80,7 +80,7 @@ Hook 상세 내용을 직접 보고 싶을 때만 읽기 전용 `/hooks`의 `Use
 ### 3. Codex CLI 설정
 
 1. 사용할 Codex CLI에서 `/hooks`를 엽니다.
-2. Memory Supervisor Hook 7개가 모두 **신뢰됨·켜짐**인지 확인합니다.
+2. Calando Hook 7개가 모두 **신뢰됨·켜짐**인지 확인합니다.
 3. 검토가 필요한 항목은 신뢰하고, 꺼진 항목은 켭니다.
 4. `/hooks`를 닫고 작업을 계속합니다.
 
@@ -90,9 +90,9 @@ CLI만 한 번 다시 시작합니다.
 
 ### 4. Codex Desktop App 설정
 
-1. Codex App을 열고 **설정 → Hooks**로 이동합니다. Memory Supervisor 항목이 아직 없으면 최대
+1. Codex App을 열고 **설정 → Hooks**로 이동합니다. Calando 항목이 아직 없으면 최대
    60초 기다린 뒤 설정 화면을 다시 엽니다.
-2. Memory Supervisor Hook 7개를 모두 신뢰하고 켭니다. **모두 신뢰**를 눌러도 꺼진 스위치는
+2. Calando Hook 7개를 모두 신뢰하고 켭니다. **모두 신뢰**를 눌러도 꺼진 스위치는
    자동으로 켜지지 않으므로 두 상태를 각각 확인합니다.
 3. 작업하던 기존 대화로 돌아가 원래 하려던 다음 요청을 보냅니다. 기존 대화가 없을 때만 새
    대화를 만듭니다.
@@ -103,7 +103,7 @@ CLI만 한 번 다시 시작합니다.
 ### 5. 설치 확인
 
 ```bash
-memory-status --connections
+calando status
 ```
 
 사용하는 프로그램에 따라 다음 상태를 확인합니다.
@@ -118,14 +118,14 @@ memory-status --connections
 
 - `disabled` 또는 `not trusted`: Codex CLI는 `/hooks`, Codex App은 **설정 → Hooks**에서
   해당 항목을 신뢰하고 켭니다.
-- `missing`, `stale`, `DEGRADED`, `NOT RUNNING`: `memory-supervisor update`를 실행한 뒤 다시
+- `missing`, `stale`, `DEGRADED`, `NOT RUNNING`: `calando update`를 실행한 뒤 다시
   확인합니다.
 - `NEEDS ATTENTION`: 출력에 표시된 프로그램 버전이나 Hook 조건을 먼저 맞춘 뒤
-  `memory-supervisor update`를 실행합니다.
-- `Core daemon OFF`: `memory-supervisor on`을 실행합니다.
+  `calando update`를 실행합니다.
+- `Core daemon OFF`: `calando on`을 실행합니다.
 - App의 7개가 모두 정상인데 요청을 보낸 뒤에도 `ACTIVE`가 되지 않으면 App을 한 번 다시 시작하고
   기존 대화에서 다음 요청을 보낸 뒤 다시 확인합니다.
-- 첫 설치 직후 `memory-status` 명령을 찾지 못하면 터미널만 새로 열고 다시 실행합니다. Claude
+- 첫 설치 직후 `calando status` 명령을 찾지 못하면 터미널만 새로 열고 다시 실행합니다. Claude
   Code·Codex CLI·Codex App을 다시 시작할 필요는 없습니다.
 
 Codex의 Hook 신뢰는 관리자 권한 승인이 아니라, 로컬에서 실행될 명령을 사용자가 확인하는
@@ -137,12 +137,18 @@ Codex의 Hook 신뢰는 관리자 권한 승인이 아니라, 로컬에서 실�
 위 명령은 최신 공개 릴리스를 설치합니다. Rust 빌드 도구가 없어도 릴리스에 포함된 검증된
 실행 파일을 자동으로 사용합니다.
 
+설치 뒤에는 감시 프로그램이 하루에 한 번 새 릴리스를 확인해 자동으로 업데이트합니다
+(`calando update auto off`로 끌 수 있습니다). Codex Hook 정의가 바뀌는 릴리스는 Codex가 연결된
+환경에서 자동 적용되지 않으며, 상태 화면이 `calando update` 실행과 Hook 신뢰를 안내합니다. 0.2.x에서
+0.3.0으로 올릴 때는 Hook 명령이 바뀌므로 Codex CLI `/hooks` 또는 App **설정 → Hooks**에서 Calando Hook을
+한 번 다시 신뢰합니다. 자세한 내용은 [운영·알림·복구](operations.ko.md#update)에 있습니다.
+
 ### 6. 삭제
 
 Calando를 삭제하려면 설치한 각 환경의 터미널에서 한 번씩 실행합니다.
 
 ```bash
-memory-supervisor uninstall
+calando uninstall
 ```
 
 백그라운드 서비스와 실행 파일, Calando가 추가한 Hook·Skill 연결만 제거하고 상태와 사용자

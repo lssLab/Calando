@@ -6,11 +6,11 @@
 
 ## 보호 대상 사용자·PID 제어 환경마다 supervisor 하나
 
-Supervisor는 자신의 OS 사용자와 PID namespace에서 보이는 프로세스 목록을 읽습니다. 같은 PID
+Calando는 자신의 OS 사용자와 PID namespace에서 보이는 프로세스 목록을 읽습니다. 같은 PID
 제어 환경에서 그 사용자가 실행한 Claude Code와 Codex는 Windows Terminal, iTerm, VS Code, tmux,
 SSH 등 어떤 터미널에서 시작했든 한 번의 설치로 감시됩니다.
 
-Supervisor는 로컬 PID 제어 환경 밖에 signal을 보내지 않습니다. 보호할 host, WSL 배포판, VM,
+Calando는 로컬 PID 제어 환경 밖에 signal을 보내지 않습니다. 보호할 host, WSL 배포판, VM,
 PID 격리 container마다 한 번씩 설치해야 합니다. WSL 2 배포판은 관리형 VM과 kernel을 공유하면서
 PID namespace는 분리될 수 있으므로 각각 로컬 instance가 필요합니다. 각 instance는 작은 상태
 snapshot을 공유 federation 디렉터리에 게시합니다. Hook은 최근 10초 안의 정상 snapshot 중 가장
@@ -19,7 +19,7 @@ supervisor만 수행합니다.
 
 | 기본 OS | 그 위의 환경 | 필요한 설치 | Federation 경계 |
 | --- | --- | --- | --- |
-| Windows | WSL2 한 개 또는 여러 배포판 | Windows와 각 WSL 배포판에 한 번씩 | 각 WSL이 Windows 사용자 `.memory-supervisor/instances`를 자동 감지 |
+| Windows | WSL2 한 개 또는 여러 배포판 | Windows와 각 WSL 배포판에 한 번씩 | 각 WSL이 Windows 사용자 `.calando/instances`를 자동 감지(혼합 버전 동안 `.memory-supervisor/instances`도 읽음) |
 | Windows·macOS·Linux | 동적 메모리 VM | 호스트와 각 guest에 한 번씩 | 실제로 같은 물리 메모리를 경쟁하는 양쪽만 host-local 공유 폴더로 연결 |
 | Windows·macOS·Linux | 고정 메모리 VM | 호스트와 각 guest에 한 번씩 | 고정 할당 경계를 넘겨 federation하지 않고 각자 독립 |
 | Linux kernel(기본 Linux·WSL·Desktop VM) | PID 격리 container 한 개 또는 여러 개 | 그 kernel의 host 환경과 각 격리 container | 그 kernel 안의 host-local volume을 공유 |
@@ -27,27 +27,27 @@ supervisor만 수행합니다.
 
 ### Codex App은 창이 아니라 App Server 환경을 따릅니다
 
-Codex App 창과 실행 엔진은 서로 다른 운영체제 환경에서 실행될 수 있습니다. Memory Supervisor는
+Codex App 창과 실행 엔진은 서로 다른 운영체제 환경에서 실행될 수 있습니다. Calando는
 데스크톱 창이 아니라 `codex ... app-server` 프로세스를 기준으로 설치 위치를 정합니다.
 
-- Windows Codex App이 WSL 엔진을 사용하면 해당 WSL 배포판에 설치한 Supervisor가 보호합니다.
+- Windows Codex App이 WSL 엔진을 사용하면 해당 WSL 배포판에 설치한 Calando가 보호합니다.
   WSL App Server를 찾아 그 프로세스가 실제로 사용하는 `CODEX_HOME`을 확인하고, 대화별 논리
   thread, hook 판단, WSL 하위 도구와 WSL 안의 물리 제동을 관리합니다. 이 경로에는 서명되지 않은
-  Windows 네이티브 Supervisor가 필요하지 않으므로 Smart App Control도 바꿀 필요가 없습니다.
+  Windows 네이티브 Calando가 필요하지 않으므로 Smart App Control도 바꿀 필요가 없습니다.
 - 그 WSL 인스턴스는 Windows App 화면 프로세스나 Windows에서 따로 실행한 Claude Code·Codex CLI를
   측정하거나 멈출 수 없습니다. Windows 프로세스까지 보호하려면 Windows에도 설치합니다. 그러면
   Windows와 WSL은 federation으로 새 작업 판단을 공유하되 PID 제어는 각 환경 안에서만 합니다.
-- Windows 또는 macOS 네이티브 App Server는 해당 운영체제의 Supervisor를 사용합니다. Linux,
+- Windows 또는 macOS 네이티브 App Server는 해당 운영체제의 Calando를 사용합니다. Linux,
   다른 WSL 배포판, 가상 머신이나 PID 격리 컨테이너에서 실제 App Server가 실행되면 그 환경 안의
-  Supervisor를 사용합니다. 요청한 창이나 client가 다른 곳에 있어도 같은 원칙입니다.
+  Calando를 사용합니다. 요청한 창이나 client가 다른 곳에 있어도 같은 원칙입니다.
 - 고정 메모리 가상 머신과 다른 컴퓨터는 각자 독립적으로 보호합니다. 같은 물리 메모리를 동적으로
   경쟁하는 실행 환경만 federation으로 연결합니다.
 
 이는 Windows/WSL 조합만 예외 처리한 것이 아니라 모든 환경에 적용하는 프로세스 경계 원칙입니다.
 Windows와 WSL이 `CODEX_HOME`을 공유하는 경우도 파일 배치만 특별합니다. Hook 파일에 두 환경의
-실행 명령을 모두 보존하지만, 각 명령은 여전히 자기 환경의 Supervisor와 PID에만 도달합니다.
+실행 명령을 모두 보존하지만, 각 명령은 여전히 자기 환경의 Calando와 PID에만 도달합니다.
 
-공유 경로가 없어도 각 instance는 자기 로컬 환경을 보호합니다. 통합 `memory-status --all`과
+공유 경로가 없어도 각 instance는 자기 로컬 환경을 보호합니다. 통합 `calando status`과
 cross-environment admission만 사용할 수 없습니다.
 
 Federation reader는 peer의 OS 이름을 Windows/WSL 쌍으로 제한하지 않습니다. 같은 host-local 메모리
@@ -69,7 +69,7 @@ bundle과 현재 OS·architecture의 native binary를 내려받아 둘의 SHA-25
 명령의 다운로드 기능과 운영체제 기본 압축·SHA-256 기능만 사용합니다. 수동 개발 checkout을 직접
 build하려면 Rust 1.88 이상이 필요합니다.
 
-Windows 10에는 Smart App Control이 없습니다. Supervisor 실행 파일의
+Windows 10에는 Smart App Control이 없습니다. Calando 실행 파일의
 [최소 Windows 기준](https://doc.rust-lang.org/rustc/platform-support/windows-msvc.html)도 Windows
 10이며, 필요한 메모리·프로세스 기능도 제공됩니다. 따라서 별도 SAC 설정 없이 설치할 수 있지만
 SmartScreen 안내가 나오면 다운로드 출처를 확인합니다. Windows 11 Smart App Control은 checksum이
@@ -90,17 +90,17 @@ PC마다 순차 배포됩니다. 끄기 전에 `winver`로 빌드를 확인하�
 
 | 플랫폼 | 사용자 단위 자동 시작 방식 |
 | --- | --- |
-| Linux / WSL | `~/.config/systemd/user/memory-supervisor.service`, 가능하면 설치기 소유 linger |
-| macOS | `~/Library/LaunchAgents/io.github.lsslab.memory-supervisor.plist` |
-| Windows | 로그인 시 실행되는 `MemorySupervisor` 예약 작업 |
+| Linux / WSL | `~/.config/systemd/user/calando.service`, 가능하면 설치기 소유 linger |
+| macOS | `~/Library/LaunchAgents/io.github.lsslab.calando.plist` |
+| Windows | 로그인 시 실행되는 `Calando` 예약 작업 |
 | user systemd가 없는 Unix | PID 감독 fallback, 설치 즉시 실행되지만 부팅 시작은 수동 |
 
-`memory-supervisor update`는 가능한 경우 checkout을 업데이트하고 native runtime을 검증·활성화한 뒤
+`calando update`는 가능한 경우 checkout을 업데이트하고 native runtime을 검증·활성화한 뒤
 로컬 서비스와 감지된 지원 CLI 연결을 갱신합니다. 데몬 교체 중 agent PID에는 신호를 보내지 않고,
 새 데몬은 `runtime.json`의 paused identity를 다시 읽습니다.
 
 가장 안전한 업데이트 시점은 활성 CLI 세션이 없을 때입니다. 활성 세션도 대개 유지되지만 잠깐
-fail-open 보호 공백이 생길 수 있습니다. 업데이트 뒤에는 항상 `memory-status --connections`를
+fail-open 보호 공백이 생길 수 있습니다. 업데이트 뒤에는 항상 `calando status`를
 확인합니다. Codex Hook 정의가 실제로 바뀐 경우에만 사용자가 CLI의 `/hooks` 또는 Desktop App의
 **설정 → Hooks**에서 직접 다시 신뢰해야 합니다. 재시작은 승인을 대신하지 않습니다. App 설정 변경은
 공유 App Server의 로드된 기존 작업을 갱신하지만 별도 CLI 프로세스는 갱신하지 않습니다. Claude
@@ -109,7 +109,7 @@ Code는 Hook별 해시 승인이 없지만, 대화형 세션은 현재 폴더 �
 세션은 사용자 설정 변경을 보통 자동으로 다시 읽습니다. 이 신뢰·재적재 경계는 데몬 재시작보다
 오래갈 수 있습니다.
 
-지원 런타임은 네이티브 Rust 실행 파일입니다. Supervisor 재시작은 저장된 상태를 다시 읽으며,
+지원 런타임은 네이티브 Rust 실행 파일입니다. Calando 재시작은 저장된 상태를 다시 읽으며,
 설치된 빌드를 교체할 때는 가능하면 실행 중인 CLI 세션이 없는 시점을 사용합니다.
 
 ### 머신 재시작 뒤 일어나는 일
@@ -123,17 +123,17 @@ Code는 Hook별 해시 승인이 없지만, 대화형 세션은 현재 폴더 �
   sensor도 `CREATE_NO_WINDOW`로 실행된다. 기존 terminal에서 실행한 명령은 그 terminal 연결을
   유지한다.
 - Claude Code·Codex hook/skill 파일은 그대로 남는다. 로그인 뒤 새 AI CLI 세션을 열고
-  `memory-status --connections`를 실행한다. Hook hash가 실제로 바뀐 경우에만 Codex CLI는 `/hooks`,
+  `calando status`를 실행한다. Hook hash가 실제로 바뀐 경우에만 Codex CLI는 `/hooks`,
   Codex App은 **설정 → Hooks** 검토를 요구할 수 있다.
 - 재부팅은 업데이트가 아니다. Source·설정·나중에 설치한 CLI 연결을 다시 적용할 때만
-  `memory-supervisor update`를 실행한다.
+  `calando update`를 실행한다.
 
 ## Federation 경로
 
-- 기본값: `~/.memory-supervisor/instances`
+- 기본값: `~/.calando/instances`
 - 명시값: `MEMORY_SUPERVISOR_FEDERATION_DIR`
-- 저장된 pointer: `~/.memory-supervisor/federation-dir`
-- 상태 pointer: `~/.memory-supervisor/state-dir`
+- 저장된 pointer: `~/.calando/federation-dir`
+- 상태 pointer: `~/.calando/state-dir`
 - WSL은 Windows 사용자의 공유 인스턴스 디렉터리를 자동 탐색합니다.
 - WSL 기본 instance 이름에는 `WSL_DISTRO_NAME`이 들어가므로 같은 Windows hostname을 공유하는
   Ubuntu와 Debian도 서로의 snapshot을 덮어쓰지 않습니다.
@@ -141,7 +141,7 @@ Code는 Hook별 해시 승인이 없지만, 대화형 세션은 현재 폴더 �
 - WSL이 아닌 복제 guest의 identity가 겹치면 `MEMORY_SUPERVISOR_INSTANCE`를 고유하게 지정합니다.
 
 ```bash
-memory-status --all
+calando status
 ```
 
 Federation은 전역 backpressure이지 scheduler가 아닙니다. Worker를 옮기거나 다른 OS가 소유한 PID에
@@ -157,8 +157,8 @@ admission 판단을 공유합니다. 여러 사용자가 쓰는 서버라면 보
 
 제한된 VPS는 native cgroup 상한·PSI·swap/reclaim과 같은 사용자의 모든 원격 세션을 한 정책에
 반영할 수 있어 자연스러운 배포 대상입니다. 설치된 user service를 활성화하고, SSH 창이 없어도
-필요하다면 user linger를 사용합니다. Headless server에서는 desktop OS 알림이 없을 수 있으므로
-필수 hook/terminal 조치 메시지를 사용하고 필요하면 Discord·Telegram을 연결하십시오. Linux와
+필요하다면 user linger를 사용합니다. 필수 hook/terminal 조치 메시지는 항상 동작하며, 자리를 비운 동안 받으려면 `calando telegram`으로
+Telegram을 연결하십시오. Linux와
 cgroup 계약 테스트는 이 경로를 다루지만 실제 VPS에서 유료 모델을 몇 시간 돌린 soak 검증까지
 완료했다고 주장하지는 않습니다.
 
@@ -183,7 +183,7 @@ reconciliation을 실행하지 않습니다.
 적응형 admission은 실제 headroom, 단·장기 감소율, 예상 소진 시간, native distress, 최근 burst,
 자동 recoverability reserve를 사용합니다. RAM의 고정 비율을 예약하지 않습니다. 안정적인 고사용량은
 계속 허용하며, 여유가 큰 상태의 빠른 감소는 먼저 Observe하고 reserve 접근·지속적인 짧은 TTE·명시
-하드캡·보호 저하가 있을 때 Hold합니다.
+`calando cap` 상한·보호 저하가 있을 때 Hold합니다.
 
 ## RAM 16 GiB Windows host의 WSL2 용량
 
@@ -191,7 +191,7 @@ Microsoft가 현재 문서화한 WSL2 기본 `memory` 상한은 Windows RAM의 5
 host에서 명시적인 `memory=8GB` 줄만 지워도 보통 같은 8 GiB 상한이 남아 heavy Linux CLI에 추가
 여유가 생기지 않습니다. `memory=10GB`는 여러 무거운 WSL 작업과 Windows 프로그램을 함께 쓰는
 경우의 예시이고, `memory=12GB`는 Windows 쪽 프로그램이 가벼울 때만 검토할 수 있는 더 큰
-예시입니다. 둘 다 Supervisor 기본값이나 자동 권장값은 아닙니다.
+예시입니다. 둘 다 Calando 기본값이나 자동 권장값은 아닙니다.
 
 ```ini
 [wsl2]
@@ -213,34 +213,34 @@ Windows 최악 상황 reserve는 줄어듭니다. Federation은 양쪽을 관찰
 [WSL 고급 설정](https://learn.microsoft.com/windows/wsl/wsl-config)과
 [`wsl --shutdown` 명령](https://learn.microsoft.com/windows/wsl/basic-commands#shutdown)을 참고하십시오.
 
-## 선택형 로컬 CLI 메모리 예산
+## 선택형 로컬 CLI 메모리 상한
 
-예산은 **기본 OFF**입니다. 이 설치 제어 환경에서 보이는 Claude Code와 Codex 트리 전체의 통합
-상한이며, AI CLI별 제한이나 Windows+WSL 통합 quota가 아닙니다.
+상한은 **기본 OFF**이며 일반 사용에는 권하지 않습니다. 엄격한 연구나 벤치마크 실행을 위한 고급
+기능입니다. 이 설치 제어 환경에서 보이는 Claude Code와 Codex 트리 전체의 통합 상한이며, AI CLI별
+제한이나 Windows+WSL 통합 quota가 아닙니다.
 
 ```bash
-memory-supervisor budget
-memory-supervisor budget set 6
-memory-supervisor budget off
+calando cap
+calando cap 6
+calando cap off
 ```
 
-`6`은 GiB 문법 예시일 뿐 권장값이 아닙니다(`memory-supervisor hard-cap set <MB>`가 MB 정밀
-별칭). Windows, WSL, 각 VM·격리 container에서 따로 실행합니다. 이 제어 환경들은 물리 머신
-하나를 공유할 수 있으므로 `memory-supervisor budget`이 설정 전에 이 환경의 이론상 최대와 peer
-환경의 명시적 예산을 뺀 현재 가능 총량을 먼저 보여줍니다. `budget set`은 들어가지 않는 요청을
-어디에서 얼마를 줄여야 하는지와 함께 거절하고, 현재 가능 총량의 90% 이상이거나 설정 후
-machine-wide 명시 예산 합계가 물리 추정치의 90% 이상이면 진행 여부를 확인합니다. 설정 없는
-환경의 기본 할당(예: WSL VM 상한)은 claim으로 세지 않습니다. 상한 근처에서는
-새 fan-out을 먼저 보류하고, 초과 뒤에도 반응 구간마다 검증된 증가 worker/support PID 하나만
-pause합니다. Lead는 정확한 복구 안내까지 검증된 최후 수단입니다. Suspend는 이후 실행을 멈추지만
-resident memory를 즉시 반환하지 않으므로 byte 단위 강제에는 cgroup/container/VM native limit를
-사용합니다.
+`6`은 GB 문법 예시일 뿐 권장값이 아닙니다. Windows, WSL, 각 VM·격리 container에서 따로 실행합니다.
+인수 없는 `calando cap`은 이 환경의 이론상 최대와 peer 환경의 명시적 상한을 뺀 현재 가능 총량을
+보여 줍니다. `calando cap <GB>`는 지금 쓸 수 있는 양을 넘는 요청을 거절하고, 설명을 출력한 뒤
+`[y/N]`으로 확인합니다. 대화형이 아닌 호출자는 `--yes`를 붙입니다. 설정 없는 환경의 기본 할당(예:
+WSL VM 상한)은 claim으로 세지 않습니다. 상한 근처에서는 새 무거운 작업을 먼저 보류하고, 초과 뒤에는
+증가 중인 서브에이전트 하나를 pause합니다. Suspend는 이후 실행을 멈추지만 이미 쓴 메모리를 즉시
+돌려주지 않으므로 사용량이 잠깐 상한을 넘을 수 있습니다. byte 단위 강제에는 cgroup/container/VM
+native limit를 사용합니다.
+
+세션 하나만 제한하려면 그 세션에서 `/calando cap <GB>`(Codex는 `$calando`)를 씁니다.
 
 ## 고급 영속 설정
 
 일반 사용에는 설정 파일이 필요하지 않습니다. 고급 override는
-`~/.config/memory-supervisor/config.json`에 두며 같은 이름의 환경변수가 우선합니다. 예산은 위
-전용 명령으로 설정·해제하는 것이 권장됩니다.
+`~/.config/calando/config.json`에 두며 같은 이름의 환경변수가 우선합니다. 상한은 위
+`calando cap`으로 설정·해제하는 것이 권장됩니다.
 
 ```json
 {
@@ -256,37 +256,38 @@ resident memory를 즉시 반환하지 않으므로 byte 단위 강제에는 cgr
 
 `MEMORY_SUPERVISOR_DIR`, `MEMORY_SUPERVISOR_FEDERATION_DIR`,
 `MEMORY_SUPERVISOR_FORCE_PLATFORM` 같은 bootstrap 경로는 이 JSON에 넣지 않습니다. 고급 파일을
-직접 바꾼 뒤에는 `memory-supervisor update`를 실행하고 `memory-status`로 확인합니다.
+직접 바꾼 뒤에는 `calando update`를 실행하고 `calando status`로 확인합니다.
 
 ## Pause, resume, restart
 
 - Unix `SIGSTOP`과 Windows native suspend는 PID와 in-memory session을 보존합니다.
-- `memory-supervisor resume <pid>`는 PID와 시작 identity를 다시 확인한 뒤 재개합니다.
-- 관리 중인 paused PID가 정확히 하나일 때만 `memory-supervisor resume`에서 PID를 생략할 수 있습니다.
+- 수동 재개 명령은 없습니다. 메모리 압박으로 멈춘 프로세스는 메모리가 회복되면 자동으로 재개되고,
+  급격한 증가로 멈춘 리드는 안전장치가 있는 자동 재개를 한 번 받습니다.
+- 리드가 계속 멈춰 있으면 그 터미널을 닫고 CLI 자체 재개(`claude --resume`, `codex resume`)로
+  이어가거나, `calando off`로 그 자리에서 재개합니다.
 - 제어 의도는 신호 전에 저장되고 daemon acknowledgement 뒤에만 완료로 표시됩니다.
-- Supervisor 재시작은 사건 원장을 다시 읽으며 agent를 자동 재개하지 않습니다.
-- Agent CLI 자체 재시작은 별개이므로 해당 AI CLI의 transcript/session resume를 사용합니다.
+- Calando 재시작은 사건 원장을 다시 읽으며 agent를 자동 재개하지 않습니다.
 - 원격 사건은 `source`에 표시된 OS에서 제어해야 합니다.
 
-AI CLI/model 문맥은 다음 실제 hook 경계에서 전달되므로 OS resume보다 늦을 수 있습니다. 정확한
-터미널·OS·Discord·Telegram 조치 알림은 서로 독립적으로 시도됩니다.
-
+AI CLI/model 문맥은 다음 실제 hook 경계에서 전달되므로 OS resume보다 늦을 수 있습니다. 터미널
+고지와 Telegram 알림은 서로 독립적으로 시도됩니다.
 
 ## 전체 전원 켜기·끄기
 
 ```bash
-memory-supervisor off
-memory-supervisor on
+calando off
+calando on
 ```
 
 `off` 한 번은 현재 OS/PID 제어 환경의 서비스와 자동 시작을 함께 끄고
-`~/.memory-supervisor/power-off`에 선택을 남깁니다. 설치된 Claude Code·Codex hook과 skill은
-삭제하지 않으며 모든 hook은 조용히 통과합니다. `memory-status`와 `--connections`는 장애가 아니라
-의도적인 `OFF`로 표시하고, `memory-supervisor update`도 이 상태를 켜지 않습니다. `on`은 marker를
+`~/.calando/power-off`에 선택을 남깁니다. 설치된 Claude Code·Codex hook과 skill은
+삭제하지 않으며 모든 hook은 조용히 통과합니다. `calando status`는 장애가 아니라
+의도적인 `OFF`로 표시하고, `calando update`도 이 상태를 켜지 않습니다. `on`은 marker를
 지우고 서비스를 자동 시작 상태로 복원한 뒤 fresh state가 게시됐는지 확인합니다.
 
-Supervisor가 직접 일시정지한 PID 또는 처리 중인 process control이 남아 있으면 `off`는 거부됩니다.
-이 안전 경계가 OFF 뒤 재개할 수 없는 process를 남기는 것을 막습니다. Windows, 각 WSL 배포판,
+`off`는 먼저 Calando가 일시정지한 모든 PID를 재개하고 나서 끕니다. 재개하지 못한 PID가 있으면
+거부되므로 OFF 뒤 재개할 수 없는 process가 남지 않습니다. `calando lock`이 켜져 있으면 `off`는
+거부됩니다. Windows, 각 WSL 배포판,
 VM guest와 PID-isolated container는 서비스와 PID namespace가 다르므로 해당 환경에서 한 번씩
 실행해야 합니다.
 
@@ -294,21 +295,21 @@ VM guest와 PID-isolated container는 서비스와 PID namespace가 다르므로
 
 ```bash
 # Linux / WSL
-systemctl --user restart memory-supervisor.service
-systemctl --user is-active memory-supervisor.service
+systemctl --user restart calando.service
+systemctl --user is-active calando.service
 
 # macOS: 적재된 agent 재시작
-launchctl kickstart -k gui/$(id -u)/io.github.lsslab.memory-supervisor
+launchctl kickstart -k gui/$(id -u)/io.github.lsslab.calando
 
 # macOS: 명시적으로 unload한 뒤 다시 load
-launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/io.github.lsslab.memory-supervisor.plist
-launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/io.github.lsslab.memory-supervisor.plist
+launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/io.github.lsslab.calando.plist
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/io.github.lsslab.calando.plist
 
 # Windows
-schtasks /End /TN MemorySupervisor
-schtasks /Run /TN MemorySupervisor
+schtasks /End /TN Calando
+schtasks /Run /TN Calando
 ```
 
 아래 명령은 의도적인 전원 전환이 아니라 서비스 장애를 수리할 때만 사용합니다. 서비스가 없고
-`off` marker도 없으면 hook은 CLI를 막는 대신 fail open하며, `memory-status`가 stale/missing
+`off` marker도 없으면 hook은 CLI를 막는 대신 fail open하며, `calando status`가 stale/missing
 supervisor와 보호 공백을 표시합니다.

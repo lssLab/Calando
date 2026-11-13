@@ -10,8 +10,8 @@ want to do.
 | Start here | Read it when you need to |
 | --- | --- |
 | [Installation, connection, and supported environments](guides/setup.md) | Install for the first time, connect a running Claude Code or Codex session, or check hook trust and Windows, WSL2, macOS, or Linux conditions |
-| [How Memory Supervisor works](guides/how-it-works.md) | Understand gradual braking, CLI versus Codex App, blind control, or federation |
-| [Operations, notifications, and recovery](guides/operations.md) | Use status and control commands, configure notifications, or handle a paused process and recovery |
+| [How Calando works](guides/how-it-works.md) | Understand gradual braking, CLI versus Codex App, blind control, or federation |
+| [Operations, notifications, and recovery](guides/operations.md) | Use terminal and session commands, set up Telegram, update, lock, or handle a paused process and recovery |
 
 To read the original detailed README continuously from beginning to end, use the
 [detailed guide](detailed-guide.md).
@@ -31,7 +31,7 @@ To read the original detailed README continuously from beginning to end, use the
 
 - [Claude Code](guides/usage-claude.md) — Claude Code hooks and connection verification
 - [Codex](guides/usage-codex.md) — Codex CLI and Desktop App hooks and trust
-- [Notifications](guides/notifications.md) — terminal, operating system, Discord, and Telegram
+- [Notifications](guides/notifications.md) — terminal, hook context, and Telegram
 - [Windows executable trust](guides/windows-signing.md) — unsigned Windows builds and Smart App Control
 
 ### Security, performance, and verification

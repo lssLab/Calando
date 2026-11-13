@@ -32,7 +32,7 @@
   <a href="../LICENSE"><img src="https://img.shields.io/badge/license-MIT-2563EB?style=flat-square" alt="MIT 라이선스"></a>
 </p>
 
-## Memory Supervisor는 무엇을 해결하나?
+## Calando는 무엇을 해결하나?
 
 Claude Code·Codex CLI 또는 Codex Desktop App에서 큰 작업을 오래 진행하면 서브에이전트,
 빌드, 테스트, 브라우저 도구가 한꺼번에 겹칠 수 있습니다. 메모리 여유가 빠르게 사라지면
@@ -40,7 +40,7 @@ CLI에서는 터미널이 응답하지 않거나 세션이 종료될 수 있고,
 공유하는 여러 대화가 함께 영향을 받을 수 있습니다. 어느 쪽이든 아직 전달되지 않은 결과와
 작업 흐름이 끊길 수 있습니다.
 
-Memory Supervisor는 메모리 사용량이 높다는 이유만으로 작업을 제한하지 않습니다. CLI와
+Calando는 메모리 사용량이 높다는 이유만으로 작업을 제한하지 않습니다. CLI와
 Desktop App 모두 실제 위험이 가까워질 때 새 작업부터 단계적으로 늦추고, 진행 중인 작업과
 결과 전달은 가능한 한 유지해 세션이 갑자기 끊기는 상황을 예방합니다.
 
@@ -48,7 +48,7 @@ Desktop App 모두 실제 위험이 가까워질 때 새 작업부터 단계적�
 상태가 회복되면 반대 순서로 해제합니다.
 
 1. **자동 파악** — 평소처럼 `claude`나 `codex`를 실행하거나 Codex Desktop App에서 대화를
-   시작하면 됩니다. Memory Supervisor가 CLI 세션과 App 대화를 자동으로 구분하고, 메모리 용량,
+   시작하면 됩니다. Calando가 CLI 세션과 App 대화를 자동으로 구분하고, 메모리 용량,
    현재 여유, 감소 속도, 다음 작업에 필요한 완충 여유를 파악해 보호 기준을 자동으로 정합니다.
    따라서 사용자가 예산을 설정하거나 상태를 계속 확인할 필요가 없습니다.
 2. **제한 없이 실행** — 메모리 사용량만 높고 남은 여유와 감소 속도가 안정적이면 에이전트와
@@ -90,7 +90,7 @@ Desktop App의 대화를 지키면서 가능한 한 높은 성능을 오래 유�
 
 ## 작동 방식
 
-Memory Supervisor는 터미널 명령을 가로채는 중간 프로그램이 아닙니다. 사용자는 평소처럼
+Calando는 터미널 명령을 가로채는 중간 프로그램이 아닙니다. 사용자는 평소처럼
 `claude`와 `codex`를 실행하고, 작은 백그라운드 감시 프로그램이 옆에서 상태를 확인합니다.
 
 1. 감시 프로그램은 **운영체제 환경마다 하나씩** 실행됩니다. Windows·macOS·Linux 본체뿐 아니라
@@ -108,9 +108,9 @@ Memory Supervisor는 터미널 명령을 가로채는 중간 프로그램이 아
    작업을 시작해도 되는지 확인합니다. `ALLOW`는 허용, `OBSERVE`는 허용하며 관찰, `HOLD`는
    새 서브에이전트·워크플로·작업 생성만 대기시키고, `DRAIN`은 이런 생성 요청을 막는 판단입니다.
 5. Windows·Linux·macOS의 기본 OS와 그 위에서 실행되는 각 WSL 배포판·가상 머신·프로세스 격리
-   컨테이너에는 자기 PID 공간을 담당하는 Supervisor가 따로 실행됩니다. 같은 물리 메모리를 쓰는
+   컨테이너에는 자기 PID 공간을 담당하는 Calando가 따로 실행됩니다. 같은 물리 메모리를 쓰는
    환경끼리는 federation으로 10초 이내의 새 작업 판단만 공유하며, 그중 가장 엄격한 판단을
-   적용합니다. 각 Supervisor는 자기 hook과 PID만 제어하므로 다른 환경의 프로그램을 직접
+   적용합니다. 각 Calando는 자기 hook과 PID만 제어하므로 다른 환경의 프로그램을 직접
    멈추지는 않습니다.
 6. `DRAIN`에서도 Chrome이나 IDE 같은 외부 프로그램만 원인이면 기존 AI 작업을 멈추지 않습니다.
    AI 작업이 원인이거나 사용자가 정한 메모리 한도를 넘었을 때만 `ACTIVE(모든 작업) →
@@ -138,8 +138,8 @@ Memory Supervisor는 터미널 명령을 가로채는 중간 프로그램이 아
 CLI에서는 세션마다 독립된 주 프로세스와 하위 프로세스가 있어 어느 세션이 메모리를 늘리는지
 비교적 정확히 알 수 있습니다. Codex Desktop App에서도 여러 대화가 하나의 세션으로 합쳐지는 것은
 아닙니다. 각 대화는 App Server 안에서 `session_id`를 가진 **논리 thread**로 구분됩니다. 여기서
-논리 thread는 운영체제가 실행하는 OS thread가 아니라, App Server와 Supervisor가 대화 흐름을
-구분하는 단위입니다. Supervisor는 각 논리 thread를 독립 리드로 보고, `agent_id`가 있으면 그 리드의
+논리 thread는 운영체제가 실행하는 OS thread가 아니라, App Server와 Calando가 대화 흐름을
+구분하는 단위입니다. Calando는 각 논리 thread를 독립 리드로 보고, `agent_id`가 있으면 그 리드의
 서브에이전트로 연결합니다. 따라서 대화별 에이전트 목록, 다음 hook에서 허용할 작업 범위, 조치와
 복구 알림은 따로 관리할 수 있습니다.
 
@@ -150,7 +150,7 @@ PID, 그 아래의 프로세스 트리와 터미널을 가지지만, App의 논�
 대화 하나만 운영체제 기능으로 멈출 수도 없습니다. 즉, 대화는 논리적으로 분리되지만 프로세스와
 메모리는 물리적으로 공유됩니다.
 
-Supervisor는 공유 App Server 메모리를 한 번만 계산합니다. 별도로 실행된 도구 프로세스는 hook
+Calando는 공유 App Server 메모리를 한 번만 계산합니다. 별도로 실행된 도구 프로세스는 hook
 직전의 프로세스 목록·부모 자식 관계·PID 시작 정보가 모두 맞을 때만 특정 논리 thread의 작업으로
 확정합니다. 반면 App Server 내부에서 직접 사용한 메모리나 여러 대화의 도구 실행이 겹쳐 생긴
 하위 프로세스는 어느 논리 thread의 것인지 확정하지 못할 수 있습니다. 이것이 여기서 말하는
@@ -192,7 +192,7 @@ App hook 연결이 끊기면 새로운 대화별 제한이나 물리 제동이 �
 프로세스 관측은 계속합니다.
 
 CLI와 App을 동시에 실행해도 어느 한쪽이 관측에서 빠지지는 않습니다. 같은 OS·WSL 배포판·VM처럼
-하나의 PID 공간에서는 Supervisor 하나가 CLI 프로세스 트리와 Codex App Server를 함께 봅니다.
+하나의 PID 공간에서는 Calando 하나가 CLI 프로세스 트리와 Codex App Server를 함께 봅니다.
 다만 둘을 한 세션으로 합치지는 않습니다.
 
 - CLI 세션은 각각 **터미널·주 PID·하위 프로세스 트리를 가진 독립 리드**입니다.
@@ -205,13 +205,13 @@ App 원인으로 여는 blind 완충은 App hook에만 적용되고 일반 CLI �
 CLI나 App 어느 쪽의 메모리든 시스템 위험 계산에는 반영되지만, 한쪽이 늘었다는 이유만으로 다른
 쪽을 제동 대상으로 정하지는 않습니다. 각 대상은 자기 증가와 연결 근거로 따로 선정합니다.
 
-Federation은 App 대화나 터미널을 합치는 기능이 아니라, 같은 물리 메모리를 경쟁하는 **Supervisor
+Federation은 App 대화나 터미널을 합치는 기능이 아니라, 같은 물리 메모리를 경쟁하는 **Calando
 인스턴스끼리** 연결하는 기능입니다. Windows·각 WSL 배포판·동적 메모리 VM·프로세스 격리
 컨테이너는 10초 이내의 새 작업 판단만 서로 사용하고 가장 엄격한 최신 판단을 적용합니다. 다른
-인스턴스의 대화 목록이나 PID를 로컬 제어 대상으로 합치지 않으며, 각 Supervisor는 자기 PID
+인스턴스의 대화 목록이나 PID를 로컬 제어 대상으로 합치지 않으며, 각 Calando는 자기 PID
 공간의 CLI와 App만 제어합니다. 예를 들어 WSL의 App 때문에 `DRAIN`이 되면 federation을 통해
-Windows CLI도 새 서브에이전트나 큰 작업 시작을 미룰 수 있지만, WSL Supervisor가 Windows CLI를
-멈추거나 Windows Supervisor가 WSL App Server를 멈출 수는 없습니다.
+Windows CLI도 새 서브에이전트나 큰 작업 시작을 미룰 수 있지만, WSL Calando가 Windows CLI를
+멈추거나 Windows Calando가 WSL App Server를 멈출 수는 없습니다.
 
 ## 터미널과 에이전트를 어떤 구조로 제어하나?
 
@@ -255,7 +255,7 @@ A. 사용자 작업 경로
 B. 백그라운드 보호 경로
 
 ┌──────────────────────┐                ┌──────────────────────┐                ┌──────────────────────┐
-│ OS 메모리·프로세스   │──── 측정 ─────►│ 로컬 Supervisor      │──── 기록 ─────►│ 상태·사건 원장       │
+│ OS 메모리·프로세스   │──── 측정 ─────►│ 로컬 Calando      │──── 기록 ─────►│ 상태·사건 원장       │
 │ 남은 여유·감소 속도  │                │ 측정·제동·복구 판단  │                │ hook이 최신 판단 조회│
 └──────────────────────┘                └──────────┬───────────┘                └──────────────────────┘
                                                    │ 보호 조치 발생 시
@@ -280,29 +280,29 @@ B. 백그라운드 보호 경로
 
        ┌────────────────────────────┐  ┌────────────────────────────┐  ┌────────────────────────────┐
        │ WSL 배포판 / VM / 컨테이너 │  │ VM / 컨테이너              │  │ VM / 컨테이너              │
-       │ 각각 독립 Supervisor       │  │ 독립 Supervisor            │  │ 독립 Supervisor            │
+       │ 각각 독립 Calando       │  │ 독립 Calando            │  │ 독립 Calando            │
        └──────────────▲─────────────┘  └──────────────▲─────────────┘  └──────────────▲─────────────┘
                       │ 위에서 실행                    │ 위에서 실행                    │ 위에서 실행
        ┌──────────────┴─────────────┐  ┌──────────────┴─────────────┐  ┌──────────────┴─────────────┐
        │ Windows 기본 OS            │  │ Linux 기본 OS              │  │ macOS 기본 OS              │
-       │ 호스트 Supervisor          │  │ 호스트 Supervisor          │  │ 호스트 Supervisor          │
+       │ 호스트 Calando          │  │ 호스트 Calando          │  │ 호스트 Calando          │
        └────────────────────────────┘  └────────────────────────────┘  └────────────────────────────┘
 
-                    각 Supervisor는 자기 상태·hook·PID 공간만 제어
+                    각 Calando는 자기 상태·hook·PID 공간만 제어
                          메모리 합산 없음 · 다른 환경의 PID 제어 없음
 ```
 
 CLI의 주 에이전트 인지는 다음 순서로 보장합니다.
 
-1. Supervisor가 원인, 대상, 현재 제한, 복구 방법을 사건 원장에 먼저 기록합니다.
+1. Calando가 원인, 대상, 현재 제한, 복구 방법을 사건 원장에 먼저 기록합니다.
 2. hook에서 막힌 작업은 그 호출에 이유를 즉시 돌려줍니다.
 3. 실제 프로그램 조치는 정확한 터미널에 즉시 표시하고, 별도 터미널이 없는 작업자 사건도
    주 에이전트의 다음 실제 hook에서 한 번 전달합니다.
-4. OS·Discord·Telegram을 선택했다면 정상 보호의 시작과 완전 회복을 각각 한 번 알립니다.
+4. Telegram을 연결했다면 정상 보호의 시작과 완전 회복을 각각 한 번 알립니다.
 
 예를 들어 Windows의 Claude 주 에이전트가 편집 결과를 정리하는 동안 WSL의 Codex가 새
 서브에이전트와 큰 테스트를 시작하려 하고, 두 환경이 쓰는 물리 메모리 여유가 빠르게 줄었다고
-가정합니다. WSL Supervisor가 `DRAIN`을 기록하면 federation이 그 판단을 Windows에 전달하고,
+가정합니다. WSL Calando가 `DRAIN`을 기록하면 federation이 그 판단을 Windows에 전달하고,
 양쪽 hook은 새 서브에이전트와 테스트 시작만 기다리게 합니다. 진행 중인 편집·결과·메시지는
 계속 허용합니다. 원인이 외부 VM이면 AI 프로그램은 멈추지 않습니다. 여유가 안정적으로 회복되면
 새 작업을 다시 열고, 같은 AI 작업자의 증가가 원인으로 확인된 경우에만 논리 단계를 줄인 뒤
@@ -341,7 +341,7 @@ Codex Desktop App에서는 대화 하나가 `session_id`를 가진 논리 thread
                            └───────────────────────┬───────────────────────┘
                                                    ▼
 ┌──────────────────────┐                ┌──────────────────────┐                ┌──────────────────────┐
-│ OS 메모리·프로세스   │──── 측정 ─────►│ 로컬 Supervisor      │──── 기록 ─────►│ 상태·사건 원장       │
+│ OS 메모리·프로세스   │──── 측정 ─────►│ 로컬 Calando      │──── 기록 ─────►│ 상태·사건 원장       │
 │ 여유·감소 속도       │                │ App 전용 제어기      │                │ 대화 단계·hook 확인  │
 │ App 지속 증가        │                │ 원인 집합·제동거리   │                │ 복구·알림 범위       │
 └──────────────────────┘                └──────────┬───────────┘                └──────────┬───────────┘
@@ -388,7 +388,7 @@ Server가 아니라 그 빌드 프로세스 하나가 먼저 물리 제동 후�
 복구는 한 번에 하나씩 수행합니다. 정확한 하위 프로세스가 있으면 그 대상을 우선하고, blind 하위
 프로세스는 관련 대화와 서브에이전트가 마지막 논리 단계를 실제로 확인한 뒤 하나만 제동합니다.
 공유 App Server는 그보다 작은 방법이 모두 소진된 경우에만 모든 대화가 함께 멈추는 최후
-수단입니다. 기본 OS·WSL·VM·컨테이너 사이의 federation 경계와 각 Supervisor가 자기 PID 공간만
+수단입니다. 기본 OS·WSL·VM·컨테이너 사이의 federation 경계와 각 Calando가 자기 PID 공간만
 제어한다는 원칙도 CLI와 같습니다. 세부 안전 조건은
 [Codex Desktop App 안내](guides/codex-app.ko.md)에 정리되어 있습니다.
 
@@ -398,7 +398,7 @@ Server가 아니라 그 빌드 프로세스 하나가 먼저 물리 제동 후�
 별도 설치 파일을 미리 준비할 필요가 없습니다. 일반 설치는 현재 사용자 범위에서 이루어지므로
 `sudo`나 관리자 권한도 필요하지 않습니다.
 
-### 1. Memory Supervisor 설치
+### 1. Calando 설치
 
 #### Linux, WSL2, macOS 터미널
 
@@ -439,8 +439,8 @@ irm https://raw.githubusercontent.com/lssLab/Calando/main/bootstrap.ps1 | iex
 Codex App은 창이 표시되는 운영체제가 아니라 **App Server와 도구가 실제로 실행되는 환경**을
 기준으로 설치합니다.
 
-- Windows의 Codex App이 WSL 엔진을 사용하면 WSL에 설치한 Supervisor가 WSL App Server, 대화별
-  논리 thread와 그 안에서 실행되는 WSL 도구를 보호합니다. 이 경로는 Windows용 Supervisor를
+- Windows의 Codex App이 WSL 엔진을 사용하면 WSL에 설치한 Calando가 WSL App Server, 대화별
+  논리 thread와 그 안에서 실행되는 WSL 도구를 보호합니다. 이 경로는 Windows용 Calando를
   실행하지 않으므로 Smart App Control을 끌 필요가 없습니다. 다만 Windows 쪽 App 화면 프로세스와
   Windows에서 따로 실행한 Claude Code·Codex CLI는 이 WSL 설치의 측정·제어 대상이 아닙니다.
 - App Server나 CLI가 Windows·macOS·Linux에서 직접 실행되면 그 운영체제에 설치합니다. Windows
@@ -454,13 +454,13 @@ Codex App은 창이 표시되는 운영체제가 아니라 **App Server와 도�
 
 ### 2. Claude Code 설정
 
-설치기가 Memory Supervisor 사용자 Hook을 자동으로 연결합니다. 사용자가 별도로 설정하거나 Hook을
+설치기가 Calando 사용자 Hook을 자동으로 연결합니다. 사용자가 별도로 설정하거나 Hook을
 승인·활성화할 필요는 없습니다.
 
 **설치할 때 이미 실행 중이었다면:** 현재 작업을 그대로 이어가면 됩니다. Claude Code가 사용자
 설정 변경을 자동으로 다시 읽으므로 보통 재시작할 필요가 없습니다.
 
-**확인하려면:** 5번의 `memory-status --connections`에서 `Claude Code CONNECTED`를 확인합니다.
+**확인하려면:** 5번의 `calando status`에서 `Claude Code CONNECTED`를 확인합니다.
 Hook 상세 내용을 직접 보고 싶을 때만 읽기 전용 `/hooks`의 `User Settings`를 확인합니다. 이
 선택적 화면에 항목이 나타나지 않는 예외에만 현재 작업을 마친 뒤 Claude Code를 한 번 다시
 시작합니다.
@@ -468,7 +468,7 @@ Hook 상세 내용을 직접 보고 싶을 때만 읽기 전용 `/hooks`의 `Use
 ### 3. Codex CLI 설정
 
 1. 사용할 Codex CLI에서 `/hooks`를 엽니다.
-2. Memory Supervisor Hook 7개가 모두 **신뢰됨·켜짐**인지 확인합니다.
+2. Calando Hook 7개가 모두 **신뢰됨·켜짐**인지 확인합니다.
 3. 검토가 필요한 항목은 신뢰하고, 꺼진 항목은 켭니다.
 4. `/hooks`를 닫고 작업을 계속합니다.
 
@@ -478,9 +478,9 @@ CLI만 한 번 다시 시작합니다.
 
 ### 4. Codex Desktop App 설정
 
-1. Codex App을 열고 **설정 → Hooks**로 이동합니다. Memory Supervisor 항목이 아직 없으면 최대
+1. Codex App을 열고 **설정 → Hooks**로 이동합니다. Calando 항목이 아직 없으면 최대
    60초 기다린 뒤 설정 화면을 다시 엽니다.
-2. Memory Supervisor Hook 7개를 모두 신뢰하고 켭니다. **모두 신뢰**를 눌러도 꺼진 스위치는
+2. Calando Hook 7개를 모두 신뢰하고 켭니다. **모두 신뢰**를 눌러도 꺼진 스위치는
    자동으로 켜지지 않으므로 두 상태를 각각 확인합니다.
 3. 작업하던 기존 대화로 돌아가 원래 하려던 다음 요청을 보냅니다. 기존 대화가 없을 때만 새
    대화를 만듭니다.
@@ -491,7 +491,7 @@ CLI만 한 번 다시 시작합니다.
 ### 5. 설치 확인
 
 ```bash
-memory-status --connections
+calando status
 ```
 
 사용하는 프로그램에 따라 다음 상태를 확인합니다.
@@ -506,14 +506,14 @@ memory-status --connections
 
 - `disabled` 또는 `not trusted`: Codex CLI는 `/hooks`, Codex App은 **설정 → Hooks**에서
   해당 항목을 신뢰하고 켭니다.
-- `missing`, `stale`, `DEGRADED`, `NOT RUNNING`: `memory-supervisor update`를 실행한 뒤 다시
+- `missing`, `stale`, `DEGRADED`, `NOT RUNNING`: `calando update`를 실행한 뒤 다시
   확인합니다.
 - `NEEDS ATTENTION`: 출력에 표시된 프로그램 버전이나 Hook 조건을 먼저 맞춘 뒤
-  `memory-supervisor update`를 실행합니다.
-- `Core daemon OFF`: `memory-supervisor on`을 실행합니다.
+  `calando update`를 실행합니다.
+- `Core daemon OFF`: `calando on`을 실행합니다.
 - App의 7개가 모두 정상인데 요청을 보낸 뒤에도 `ACTIVE`가 되지 않으면 App을 한 번 다시 시작하고
   기존 대화에서 다음 요청을 보낸 뒤 다시 확인합니다.
-- 첫 설치 직후 `memory-status` 명령을 찾지 못하면 터미널만 새로 열고 다시 실행합니다. Claude
+- 첫 설치 직후 `calando status` 명령을 찾지 못하면 터미널만 새로 열고 다시 실행합니다. Claude
   Code·Codex CLI·Codex App을 다시 시작할 필요는 없습니다.
 
 Codex의 Hook 신뢰는 관리자 권한 승인이 아니라, 로컬에서 실행될 명령을 사용자가 확인하는
@@ -525,12 +525,16 @@ Codex의 Hook 신뢰는 관리자 권한 승인이 아니라, 로컬에서 실�
 위 명령은 최신 공개 릴리스를 설치합니다. Rust 빌드 도구가 없어도 릴리스에 포함된 검증된
 실행 파일을 자동으로 사용합니다.
 
+설치 뒤에는 하루에 한 번 자동으로 업데이트합니다(`calando update auto off`로 끌 수 있습니다). 0.2.x에서
+0.3.0으로 올릴 때는 Hook 명령이 바뀌므로 Codex CLI `/hooks` 또는 App **설정 → Hooks**에서 Calando Hook을
+한 번 다시 신뢰합니다. 자세한 내용은 아래 [update](#update)에 있습니다.
+
 ### 6. 삭제
 
 Calando를 삭제하려면 설치한 각 환경의 터미널에서 한 번씩 실행합니다.
 
 ```bash
-memory-supervisor uninstall
+calando uninstall
 ```
 
 백그라운드 서비스와 실행 파일, Calando가 추가한 Hook·Skill 연결만 제거하고 상태와 사용자
@@ -578,63 +582,51 @@ Windows와 WSL은 설치기가 같은 로컬 공유 폴더를 연결하고, 가�
 
 ## 알림
 
-Memory Supervisor는 메모리 수치가 바뀔 때마다 알리지 않습니다. 실제 보호 조치가 시작되거나
-완전히 해제됐을 때, 또는 연결·보호 상태에 사용자의 확인이 필요할 때만 한 번씩 알립니다.
+Calando는 메모리 수치가 바뀔 때마다 알리지 않습니다. 실제 보호 조치가 시작되거나 완전히 해제됐을 때,
+또는 사용자의 확인이 필요할 때만 한 번씩 알립니다.
 
-| 경로 | 어디에 표시되는가 | 언제 무엇을 알리는가 |
+| 경로 | 어디에 표시되는가 | 켜기·끄기 |
 | --- | --- | --- |
-| 터미널 | 조치 대상 Claude Code·Codex CLI가 실행 중인 정확한 터미널 | 프로세스를 일시정지·재개하거나 리드의 일시정지를 한 번 풀어 상태를 확인할 때 즉시 이유, PID와 복구 명령을 표시합니다. 항상 켜져 있습니다. |
-| OS | Linux·WSL·macOS·Windows의 데스크톱 알림 | 보호 조치가 처음 시작되거나 해제됐을 때, federation 연결이나 보호 기능에 확인할 문제가 생겼을 때 표시합니다. 데스크톱 알림을 사용할 수 있을 때 동작하는 선택 경로입니다. |
-| Telegram | 사용자가 연결한 봇의 개인 대화 또는 그룹 | 중요한 조치의 시작·복구와 연결·보호 문제를 알립니다. 메모리 상태, 조치 이유, 대상이 있으면 PID와 다음 행동을 남기므로 자리를 비운 동안에도 확인할 수 있습니다. |
-| Discord | 사용자가 연결한 채널·웹후크 또는 개인 메시지 | Telegram과 같은 중요한 조치·복구·확인 필요 사항을 남깁니다. 팀 채널이나 개인 알림에 쓰는 선택 경로입니다. |
+| Hook 컨텍스트 | 주 에이전트의 다음 Hook | 항상 켜짐 |
+| 터미널 | Hook이 보여 주는 한 줄 메시지, 일시정지된 프로세스의 터미널 고지 | 항상 켜짐 |
+| Telegram | 사용자가 연결한 봇의 개인 대화 또는 그룹 | `calando telegram` / `calando telegram off` |
 
-터미널·OS·Telegram·Discord는 사건이 기록된 직후 전달을 시도합니다. 같은 상태가 계속되는 동안은
-반복해서 보내지 않으며, 리드 에이전트는 다음 Hook이 실행될 때 같은 상황과 복구 상태를 전달받습니다.
-터미널 알림은 별도 설정 없이 항상 유지됩니다. 선택 알림은 아래 명령으로 연결하고 시험합니다.
+프로세스 고지는 그 프로세스를 가진 세션에만 갑니다. 다른 세션은 개수와 에이전트 메모리 합계로만
+언급합니다. Telegram 연결 절차, 메시지 형식, 오류 해결은 [알림](guides/notifications.ko.md)에 있습니다.
 
-```bash
-memory-supervisor notifications show
-memory-supervisor notifications routes os
-memory-supervisor notifications discord-webhook
-memory-supervisor notifications telegram
-memory-supervisor notifications test
-```
+## 세션 명령과 Skill
 
-Discord 웹후크 URL과 Discord·Telegram 봇 토큰은 명령줄에 붙이지 않고 명령 실행 뒤 나타나는
-숨김 입력창에 넣습니다. 설정은 다음 알림부터 바로 적용되며 Supervisor나 AI 프로그램을 다시
-시작할 필요가 없습니다. 경로 선택, 끄는 방법, Discord 채널·DM, Telegram 그룹 연결과 오류 해결은
-[알림 설정](guides/notifications.ko.md)에 있습니다.
+설치기는 자동으로 판단하는 **Hook**과 `calando`라는 이름의 **Skill** 하나를 연결합니다. Skill은
+`~/.claude/skills`, `~/.agents/skills`, `~/.codex/skills`에 복사되며 메모리 정책을 직접 집행하지 않습니다.
 
-## Claude Code·Codex의 Skill과 명령
+| 사용하는 곳 | 입력 |
+| --- | --- |
+| Claude Code | `/calando on\|off\|status\|help`, 고급: `/calando cap <GB>\|off` |
+| Codex CLI·Desktop App | `$calando on\|off\|status\|help`, 고급: `$calando cap <GB>\|off` |
 
-설치기는 자동으로 판단하는 **Hook**, 에이전트가 상태를 이해하고 설명하게 하는 **Skill**, 사용자가
-바로 호출하는 **단축 명령**을 함께 연결합니다. Hook은 사용자가 부르지 않아도 작동하고, Skill은
-메모리 정책을 직접 집행하지 않습니다.
+- 세션 명령은 UserPromptSubmit Hook이 바로 답합니다. 프롬프트는 모델에 전달되지 않으므로 토큰과
+  컨텍스트를 쓰지 않습니다.
+- 대상은 명령을 입력한 그 세션입니다(Hook payload의 session id). PID나 세션 목록을 고르지 않습니다.
+- 세션 `off`: 그 세션은 계속 측정하지만 대기·일시정지·알림 대상에서 빠집니다.
+- 세션 `cap`: 그 세션의 프로세스 트리만 제한합니다. 90% 근처에서 무거운 새 작업을 미루고, 상한을
+  넘으면 증가 중인 서브에이전트 하나를 일시정지했다가 세션이 90% 아래로 내려가면 재개합니다. 첫 응답이
+  설명하고 `/calando cap <GB> yes`로 적용합니다.
+- `/calando status`는 그 세션의 에이전트가 보는 상태와, 필요하면 업데이트 안내를 보여 줍니다.
 
-| 사용하는 곳 | 입력하는 방법 | 하는 일 |
-| --- | --- | --- |
-| Claude Code | “메모리 상태 확인해줘”, `/memory-supervisor` 또는 `/memory-status` | 설치된 Skill이나 단축 명령으로 전체 상태를 읽고 원인·자동 복구·필요한 명령을 설명합니다. |
-| Codex CLI | `$memory-supervisor 메모리 상태 확인`; `/skills`에서 설치 여부 확인. `/prompts:memory-status`는 호환용 단축 명령 | Codex의 기본 Skill 경로로 같은 상태 확인 절차를 실행합니다. Hook 신뢰·활성화는 별도로 `/hooks`에서 관리합니다. |
-| Codex Desktop App | 대화에서 `$memory-supervisor 메모리 상태 확인` 또는 자연어로 요청 | CLI와 같은 사용자 Skill을 대화별로 사용합니다. 별도 App용 Skill은 없으며 Hook은 **설정 → Hooks**에서 관리합니다. |
-| 운영체제 터미널 | `memory-status`, `memory-supervisor ...` | Skill이 아니라 실제 상태 확인·설정·복구 명령입니다. `resume`·`terminate`·`kill`은 사용자가 명시적으로 요청한 경우에만 실행합니다. |
-
-Skill은 `memory-status --all` 결과를 읽어 현재 원인과 다음 행동을 설명하지만, 사용자의 허락 없이
-프로세스를 재개하거나 종료하지 않습니다. 설치 뒤 Claude Code나 Codex를 새로 추가했다면
-`memory-supervisor update`로 연결하고 `memory-status --connections`에서 확인합니다. 자세한 차이는
-[Claude Code 사용 안내](guides/usage-claude.ko.md)와 [Codex 사용 안내](guides/usage-codex.ko.md)에 있습니다.
+자세한 차이는 [Claude Code 사용 안내](guides/usage-claude.ko.md)와 [Codex 사용 안내](guides/usage-codex.ko.md)에 있습니다.
 
 ## 보안
 
-Memory Supervisor가 확인하는 것은 운영체제의 메모리와 프로세스 정보, Claude Code·Codex Hook이
+Calando가 확인하는 것은 운영체제의 메모리와 프로세스 정보, Claude Code·Codex Hook이
 전달하는 세션·에이전트·도구·작업 경로와 연결 상태, 실행할 명령의 앞부분뿐입니다. 이 정보로 새
 작업 허용 여부와 정확한 제어 대상을 판단합니다.
 
 자동 제어는 앞으로 시작할 Claude Code·Codex 작업을 잠시 미루는 것과, 최후의 보호 단계에서
 확인된 로컬 작업 프로세스 하나를 일시정지·재개하는 것까지입니다. 자동으로 프로그램을 종료하거나
-다른 프로그램을 제어하지 않습니다. 평상시 감시에는 외부 통신이 없으며, GitHub 설치·업데이트와
-사용자가 켠 Discord·Telegram 알림만 네트워크를 사용합니다.
+다른 프로그램을 제어하지 않습니다. 평상시 감시에는 외부 통신이 없으며, GitHub 설치·업데이트 확인과
+사용자가 켠 Telegram 알림만 네트워크를 사용합니다.
 
-**Memory Supervisor가 확인하고 제어하는 범위는 여기까지이며, 그 외는 다루지 않습니다.**
+**Calando가 확인하고 제어하는 범위는 여기까지이며, 그 외는 다루지 않습니다.**
 프롬프트·대화·모델 응답과 Hook에 포함될 수 있는 파일 내용은 제어 판단에 사용하지 않으며 어디에도
 남기지 않습니다. 프로젝트 파일과 프로세스 메모리를 직접 열어 읽지 않으며,
 브라우저·IDE 내부 데이터, Claude·ChatGPT 인증 정보와 운영체제의 커널·메모리·스왑·방화벽
@@ -643,86 +635,89 @@ Memory Supervisor가 확인하는 것은 운영체제의 메모리와 프로세�
 
 ## 제어와 복구
 
-메모리 상황이 안정되면 일시정지된 작업을 하나씩 자동으로 다시 이어갑니다. 리드 에이전트가 자기
-메모리 증가로 멈춘 경우에는 일시정지를 한 번 자동으로 풀어 증가세가 가라앉았는지 확인합니다.
-메모리가 다시 빠르게 늘어나면 리드를 다시 멈추고 사용자가 결정할 때까지 기다립니다. 직접 재개할
-때는 먼저 현재 상태를 확인하고, 표시된 PID로 재개합니다.
-
-```bash
-memory-status
-memory-supervisor resume [pid]
-```
+수동 재개 명령은 없습니다. 메모리 압박으로 멈춘 프로세스는 메모리가 회복되면 하나씩 자동으로
+재개됩니다. 리드 에이전트가 자기 메모리 증가로 멈춘 경우에는 안전장치가 있는 자동 재개를 한 번
+시도해 증가세가 가라앉았는지 확인합니다.
 
 리드 에이전트 일시정지는 의도적으로 매우 드뭅니다. 새 작업 대기와 서브에이전트·도구 제어를
 단계적으로 적용했는데도 위험이 계속되고, 같은 리드의 지속적인 메모리 증가와 정확한 터미널이
-확인됐을 때만 사용하는 **최후의 보호 단계**입니다. 대부분은 그 전에 작업 범위 축소나 작업자
-일시정지·자동 복구로 끝납니다.
+확인됐을 때만 쓰는 **최후의 보호 단계**입니다.
 
-Claude Code나 Codex를 실수로 종료했다면 해당 CLI가 대화를 복원하고, `SessionStart` hook이
-보존된 메모리 사건과 현재 판단을 주 에이전트에게 한 번 다시 전달합니다.
+리드가 계속 멈춰 있으면 둘 중 하나를 고릅니다.
 
-```bash
-claude --resume
-codex resume
-```
+- 그 터미널을 닫고 CLI의 자체 재개 기능으로 이어갑니다.
 
-의도적으로 보호 기능을 끄려면 아래 두 명령만 사용합니다. `off`는 백그라운드 서비스와 자동 시작을
-끄되 설치된 Claude Code·Codex hook은 그대로 두고 조용히 통과시킵니다. 이 상태는 재부팅과
-`memory-supervisor update` 뒤에도 유지되며, `on` 한 번으로 다시 켭니다.
+  ```bash
+  claude --resume
+  codex resume
+  ```
 
-```bash
-memory-supervisor off
-memory-supervisor on
-```
+  재개된 세션의 첫 Hook은 이전 프로세스가 일시정지된 채 끝났고, 그 실행의 서브에이전트 결과가
+  빠졌을 수 있다고 알려 줍니다.
+- `calando off`를 실행합니다. 멈춘 프로세스를 그 자리에서 재개한 뒤 보호를 끕니다.
 
-Supervisor가 관리하는 일시정지 PID나 처리 중인 프로세스 조치가 있으면 `off`는 이를 방치하지 않고
-거부합니다. 먼저 표시된 PID를 재개하거나 종료해야 합니다. 사용자가 `off`를 실행하지 않았는데
-서비스가 중단됐다면 기존처럼 hook이 10초 뒤 오래된 판단을 버리고 **보호 기능을 사용할 수 없음**을
-알립니다.
+Codex App의 공유 App Server는 안전장치가 있는 재개가 실패해도 멈춘 채로 두지 않고 thread별 제한으로
+돌아갑니다.
 
-```bash
-memory-status --connections
-memory-supervisor update
-```
+## 터미널 명령
 
-고정 한도가 필요할 때만 한 환경의 Claude Code와 Codex 전체가 함께 쓸 메모리 상한을 켤 수 있습니다.
-
-```bash
-memory-supervisor budget
-memory-supervisor budget set 6
-memory-supervisor budget off
-```
-
-명령은 제어 대상에 따라 나뉩니다.
-
-- `memory-status` 묶음은 상태만 읽습니다. 로컬 원인, federation, 서비스·hook·알림 연결을 확인합니다.
-- `on`과 `off`는 현재 설치 환경의 전체 전원을 제어합니다. 연결된 모든 Claude Code·Codex 세션에
-  한 번에 적용되며, 다른 OS·WSL 배포판·가상 머신은 그 환경 안에서 따로 실행합니다.
-- `resume`은 Supervisor가 일시정지한 같은 프로그램을 이어서 실행합니다. `terminate`와 `kill`은
-  원인을 검토한 뒤 사용자가 선택하는 종료 명령입니다.
-- `budget`은 현재 환경의 Claude Code와 Codex 전체에만 선택형 상한을 적용하며 컴퓨터 전체나
-  Chrome을 제한하지 않습니다.
-- `update`는 서비스와 감지된 CLI 연결을 다시 적용하고, `notifications`는 OS·Discord·Telegram
-  선택 경로를 제어합니다. 주 에이전트용 hook과 정확한 터미널 알림은 항상 유지됩니다.
-
-## 자주 쓰는 명령
+터미널 명령은 실행한 환경 전체에 적용됩니다. Windows, 각 WSL 배포판, VM, 컨테이너는 그 환경 안에서
+따로 실행합니다.
 
 | 명령 | 용도 |
 | --- | --- |
-| `memory-status` | 로컬 상태, 원인, 다음 조치 |
-| `memory-status --all` | 같은 컴퓨터에서 함께 동작하는 Windows·WSL·가상 머신·컨테이너 상태 |
-| `memory-status --connections` | 백그라운드 서비스·AI CLI·알림 연결 상태 |
-| `memory-supervisor on` / `off` | 현재 환경의 보호 기능을 지속적으로 켜거나 끄기. OFF에서도 hook 연결은 유지되고 통과 모드로 동작 |
-| `memory-supervisor update` | 업데이트와 감지된 CLI 재연결 |
-| `memory-supervisor budget` | 현재 환경의 자동 용량과 선택한 상한 확인 |
-| `memory-supervisor budget set <GiB>` / `budget off` | 현재 환경의 Claude Code·Codex 통합 상한 설정·해제 |
-| `memory-supervisor resume [pid]` | Supervisor가 일시정지한 프로세스 재개. PID 생략은 대상이 하나일 때만 가능 |
-| `memory-supervisor terminate <pid>` | 검증된 관리 프로세스 정상 종료 |
-| `memory-supervisor kill <pid>` | 최후 수단으로 검증된 관리 프로세스 강제 종료 |
-| `memory-supervisor notifications show` | 비밀값을 가린 알림 설정 |
-| `memory-supervisor notifications routes <all\|none\|경로>` | OS·Discord·Telegram 선택 경로 설정 |
-| `memory-supervisor notifications test` | 활성화한 선택 알림 경로 시험 |
-| `memory-supervisor uninstall` | 상태를 보존하고 소유한 서비스·CLI 연결 제거 |
+| `calando status [--json]` | 이 환경, CLI 연결, 함께 동작하는 다른 모든 환경의 상태 |
+| `calando on` / `off` | 보호 켜기·끄기. `off`는 Calando가 멈춘 프로세스를 모두 재개한 뒤 끕니다 |
+| `calando telegram [CHAT_ID]` / `telegram off` | Telegram 알림 설정·해제 |
+| `calando cap [<GB> \| off]` | 고급: 이 환경의 모든 에이전트에 대한 하드캡 |
+| `calando update` | 지금 업데이트 |
+| `calando update auto on` / `off` | 자동 업데이트 켜기·끄기(기본값 켜짐) |
+| `calando uninstall` | 설정과 상태를 보존하고 제거 |
+| `calando lock on` / `off` | 관리자 잠금 |
+| `calando help` | 도움말 |
+
+0.3.x 동안에는 `memory-supervisor`와 `memory-status`도 명령 별칭으로 동작합니다. 오래된 federation
+peer 파일은 일주일 뒤 자동으로 정리됩니다.
+
+### on·off
+
+`off`는 백그라운드 서비스와 자동 시작을 끄되 설치된 Hook은 그대로 두고 조용히 통과시킵니다. 이
+상태는 재부팅과 업데이트 뒤에도 유지되며 `on` 한 번으로 다시 켭니다. 멈춘 프로세스를 재개하지 못하면
+`off`는 거부됩니다. 사용자가 `off`를 실행하지 않았는데 서비스가 멈췄다면 Hook이 10초 뒤 오래된 판단을
+버리고 **보호 기능을 사용할 수 없음**을 알립니다.
+
+### cap
+
+`calando cap`은 일반 사용에는 권하지 않습니다. 엄격한 연구나 벤치마크 실행을 위한 고급 기능입니다.
+
+- 인수 없이 실행하면 자동 용량과 현재 상한을 보여 줍니다.
+- `calando cap <GB>`는 이 환경이 지금 쓸 수 있는 양을 넘는 값을 거부하고, 설명을 출력한 뒤 `[y/N]`으로
+  확인합니다. 대화형이 아닌 호출자는 `--yes`를 붙입니다.
+- 상한 근처에서는 무거운 새 작업을 미루고, 상한을 넘으면 증가 중인 서브에이전트 하나를 일시정지합니다.
+- 일시정지는 이미 쓴 메모리를 되찾지 못하므로 사용량이 잠깐 상한을 넘을 수 있습니다. 바이트 단위로
+  정확한 한도가 필요하면 cgroup·컨테이너·VM 한도를 씁니다.
+
+### update
+
+설치된 감시 프로그램은 하루에 한 번 백그라운드에서 최신 GitHub 릴리스를 확인합니다. 멈춘 프로세스가
+없고 메모리가 안정적일 때 자기 서비스 밖에서 업데이트를 실행하며, 바쁘면 한 시간마다 다시 시도합니다.
+
+- Claude Code: Hook 변경을 포함해 자동 적용됩니다. 새 세션부터 새 Hook을 씁니다.
+- Codex: Hook 정의가 바뀌는 릴리스(마이너 버전, 예: 0.3 → 0.4)는 Codex가 연결돼 있으면 자동 적용하지
+  않습니다. Codex는 사용자가 CLI `/hooks`나 App **설정 → Hooks**에서 신뢰하기 전까지 바뀐 Hook을 조용히
+  건너뛰기 때문입니다. 상태 화면과 Telegram 메시지 한 번이 `calando update` 실행과 Hook 신뢰를
+  안내합니다. 패치 릴리스는 Hook을 바꾸지 않습니다.
+- 자동 업데이트를 끄면 `calando status`, `/calando status`, 버전마다 한 번의 Telegram 메시지가 새 버전을
+  알립니다. 에이전트 Hook은 업데이트를 언급하지 않습니다.
+- 매일 확인할 때 Claude Code가 `settings.json`에서 Calando Hook을 빠뜨렸다면 다시 넣습니다.
+- 0.2.x에서 0.3.0으로 올리면 Hook 명령이 바뀌므로 Codex 사용자는 Calando Hook을 한 번 다시
+  신뢰해야 합니다.
+
+### lock
+
+`calando lock on`은 관리자만 실행할 수 있습니다. 켜져 있는 동안 터미널과 세션의 `off`, `uninstall`이
+거부됩니다. 잠금 파일은 `/etc/calando/lock`(Windows `%ProgramData%\Calando\lock`)입니다. 정책 파일일 뿐
+샌드박스가 아닙니다. 한계는 [보안](guides/security.ko.md)에 있습니다.
 
 ## 검증 방법
 
@@ -752,7 +747,7 @@ Silicon macOS와 Rosetta 기반 macOS x86-64 빌드·플랫폼 계약을 검사�
 | [보안과 데이터·제어 경계](guides/security.ko.md) | 확인·저장·공유 정보와 자동·수동 제어의 한계 |
 | [테스트 범위](testing/test-matrix.ko.md) | 공개 테스트가 확인하는 기능과 플랫폼 |
 | [Claude Code](guides/usage-claude.ko.md) / [Codex](guides/usage-codex.ko.md) | CLI와 Desktop App 연결 설정·세션 동작 |
-| [알림](guides/notifications.ko.md) | 터미널·OS·Discord·Telegram 전달 |
+| [알림](guides/notifications.ko.md) | 터미널·Hook·Telegram 전달과 메시지 형식 |
 | [성능](guides/performance.ko.md) | 백그라운드 메모리 사용량과 실행 전 검사 시간 |
 | [보안 정책](../.github/SECURITY.ko.md) | 취약점 비공개 제보 방법 |
 | [기여 방법](../.github/CONTRIBUTING.ko.md) | 변경 원칙과 제출 전 검사 |

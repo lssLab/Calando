@@ -4,7 +4,7 @@
   <a href="performance.md">English</a> · <a href="performance.ko.md">한국어</a> · <a href="performance.zh-CN.md">简体中文</a> · <strong>日本語</strong>
 </p>
 
-Memory Supervisor は 1 つの同期 Rust 実行可能ファイルを使用します。 バックグラウンド測定や hook 決定のために、別個の言語ランタイムや常駐 worker プールは開始されません。
+Calando は 1 つの同期 Rust 実行可能ファイルを使用します。 バックグラウンド測定や hook 決定のために、別個の言語ランタイムや常駐 worker プールは開始されません。
 
 <a id="measured-native-release-builds"></a>
 ## 測定されたネイティブ リリース ビルド

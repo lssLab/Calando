@@ -6,7 +6,7 @@
 
 ## Supported contract
 
-Memory Supervisor supports Codex CLI **0.145.0 or newer** when this command reports the hook feature
+Calando supports Codex CLI **0.145.0 or newer** when this command reports the hook feature
 as stable and enabled:
 
 ```bash
@@ -16,9 +16,9 @@ codex update
 ```
 
 The installer runs the same check. Unsupported or disabled-hook releases are left without a
-Memory Supervisor Codex hook; a previously owned hook is removed on reinstall so a downgrade cannot
+Calando Codex hook; a previously owned hook is removed on reinstall so a downgrade cannot
 silently claim protection. If `codex update` is unavailable for the original installation method,
-upgrade Codex with that same package manager or installer, then run `memory-supervisor update`.
+upgrade Codex with that same package manager or installer, then run `calando update`.
 
 Current Codex hooks can observe local function tools through `PreToolUse`. Version 0.145.0 supplies
 the optional subagent identity to thread-spawn hook input and omits it on the root thread. The
@@ -43,7 +43,7 @@ Official contract references:
 ## Installation and trust
 
 Run the README's one-line installer. If the supervisor already exists and Codex was installed later,
-run `memory-supervisor update`. Then use ordinary Codex commands:
+run `calando update`. Then use ordinary Codex commands:
 
 ```bash
 codex
@@ -67,20 +67,25 @@ save approval in App Settings first, then restart only the pre-existing CLI proc
 work. If approval was written by the other process and the current surface has no actual change to
 save, restart that already-running App or CLI once so it reads the shared trust record.
 
-Memory Supervisor treats the seven owned events as one connection contract. `memory-status
---connections` checks each event's definition, enabled state, and exact current trust hash. A
+Calando treats the seven owned events as one connection contract. `calando status` checks each event's definition, enabled state, and exact current trust hash. A
 missing, duplicated, disabled, untrusted, or changed entry therefore cannot be reported as Codex
 `CONNECTED`, and a Codex App route cannot be reported as `ACTIVE` merely because one other event
-produced a recent receipt. Use `memory-supervisor update` for a missing or stale definition; use
+produced a recent receipt. Use `calando update` for a missing or stale definition; use
 `/hooks` to enable or trust an entry. A successful `SessionStart` performs the same audit and tells
 both the lead and the user which remaining events are incomplete and what to do next.
 
-Run `memory-status --connections` after every `memory-supervisor update`. Codex stores trust against
-the current hook definition, not against the Supervisor release number. A binary-only update behind
+Run `calando status` after every update. Codex stores trust against the current hook definition, not
+against the Calando release number. A binary-only update behind
 the same command therefore needs no re-approval. If the installer changed a command, matcher, or
 another hashed field, Codex reports the new definition for review and the user must trust it again
 on the affected CLI or App surface. A process restart may reload an approval already saved by a
 different process sharing the same `CODEX_HOME`; it can never create that approval.
+
+Upgrading from 0.2.x to 0.3.0 changes every hook command, so trust the seven Calando hooks once in
+`/hooks` (CLI) or **Settings → Hooks** (App). For the same reason, automatic updates do not apply a
+release that changes hook definitions (a minor version, for example 0.3 → 0.4) while Codex is
+connected: `calando status` and one Telegram message ask you to run `calando update` and trust the
+hooks. Patch releases never change hooks and update automatically.
 
 Each generated Codex command also includes the absolute `hooks.json` source it belongs to. The gate
 compares that source with the current process's `CODEX_HOME`. This prevents a user hook from one
@@ -100,7 +105,7 @@ of the installed route rather than a documentation-only warning.
 | Event | Purpose |
 | --- | --- |
 | `SessionStart` | inject startup contract and unseen incidents on resume/clear/compact |
-| `UserPromptSubmit` | warn about pressure or an unseen suspended/resumed incident |
+| `UserPromptSubmit` | answer `$calando ...` session commands without reaching the model; otherwise warn about pressure or an unseen suspended/resumed incident |
 | `PreToolUse` | classify local function tools; deny only new fan-out under machine admission or the work class excluded by an exact logical-agent state |
 | `SubagentStart` / `SubagentStop` | observe lifecycle; start adds only the same twelve-second RED fallback |
 | `PostToolUse` | deliver unseen incident versions without delaying completed work |
@@ -109,9 +114,9 @@ of the installed route rather than a documentation-only warning.
 ORANGE never delays an already-admitted worker at `SubagentStart`. Codex has no post-tool
 cooperative sleep; RED pressure is handled by pre-spawn admission and the independent PID backstop.
 Installed command hooks intentionally omit the optional `statusMessage`, so routine Pre/Post hook
-execution does not leave Memory Supervisor spinner text in the TUI. A visible message is returned
+execution does not leave Calando spinner text in the TUI. A visible message is returned
 only for a real action or unseen incident. If an existing session still shows persistent
-`Running PreToolUse/PostToolUse hook` lines, reapply with `memory-supervisor update`, review `/hooks` if
+`Running PreToolUse/PostToolUse hook` lines, reapply with `calando update`, review `/hooks` if
 the hash changed, then close `/hooks` and continue that CLI session. Restart only other
 CLI processes that were already open and did not receive that process-local reload.
 
@@ -121,16 +126,38 @@ failure produces no deny decision. The OS daemon remains the independent backsto
 Codex hook trust is hash-based. Reinstalling changed hook commands makes them pending review; use
 `/hooks` in the affected CLI process to inspect and trust the exact definitions. That save reloads
 sessions hosted by the same CLI process; a new session is needed only to replay `SessionStart`. A
-supervisor daemon restart
-does not restart Codex. If a paused Codex lead resumes, an exact target-terminal notice and the
-OS/remote adapters immediately distinguish direct sustained material process-growth evidence from
-the separate `agent|mixed|external|unknown` machine attribution estimate and explain what happens
-next. The hook repeats the same safe event once at the next prompt or
-post-tool boundary, which is not guaranteed to coincide with OS-level resume. If Codex itself is
-restarted, use Codex's session resume path. Codex restores the transcript in a new process, while
-the installed `SessionStart` hook automatically injects any retained, unseen resource incident and
-current supervisor decision once. `runtime.json` preserves the resource incident; it does not
-replace Codex's transcript mechanism.
+supervisor daemon restart does not restart Codex.
+
+## Paused lead
+
+There is no manual resume command. A pressure-paused process resumes automatically when memory
+recovers, and a lead paused for runaway growth gets one guarded automatic resume. The target terminal
+notice and Telegram (when configured) explain the cause; the hook repeats it once at the next prompt
+or post-tool boundary. If the lead stays paused, close that terminal and run `codex resume`, or run
+`calando off` to resume it in place. After `codex resume`, the first hook says the previous process
+was paused and ended and that subagent results from that run may be missing. `runtime.json` keeps the
+resource incident; it does not replace Codex's transcript mechanism.
+
+In the Codex App, the shared App Server is never left paused after a failed guarded resume; Calando
+falls back to per-thread limits.
+
+## Session commands
+
+```text
+$calando on | off | status | help
+$calando cap <GB> | off          advanced; first reply explains, apply with $calando cap <GB> yes
+```
+
+These work in Codex CLI and the App. The `UserPromptSubmit` hook answers them, so the prompt never
+reaches the model and uses no tokens or context. They act only on the session that typed them.
+
+- `off`: the session is still measured but never held, paused, or notified.
+- `cap`: limits the session's own process tree. Near 90% of the cap its heavy starts are held; above
+  the cap one growing subagent is paused and resumes when the session drops under 90%.
+- `status`: what this session's agent sees, plus an update line when relevant.
+
+The command comes from the `calando` skill, copied into `~/.agents/skills` and `~/.codex/skills`.
+Terminal commands for the whole environment are in [operations](operations.md).
 
 ## Verification
 
@@ -138,7 +165,7 @@ Repository validation checks:
 
 ```bash
 bash tests/run.sh
-memory-status --connections
+calando status
 ```
 
 `tests/native_codex.rs` additionally uses the official binary to verify detection and round-trip

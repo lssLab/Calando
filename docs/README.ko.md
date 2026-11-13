@@ -31,7 +31,7 @@
 
 - [Claude Code 연결](guides/usage-claude.ko.md) — Claude Code Hook과 연결 확인
 - [Codex 연결](guides/usage-codex.ko.md) — Codex CLI·Desktop App Hook과 신뢰
-- [알림](guides/notifications.ko.md) — 터미널, 운영체제, Discord, Telegram
+- [알림](guides/notifications.ko.md) — 터미널, Hook, Telegram
 - [Windows 실행 신뢰](guides/windows-signing.ko.md) — 서명 전 Windows 실행 파일과 Smart App Control
 
 ### 보안·성능·검증

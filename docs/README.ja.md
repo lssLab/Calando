@@ -9,8 +9,8 @@
 | ここから始めましょう | 必要なときに読んでください |
 | --- | --- |
 | [インストール、接続、サポート環境](guides/setup.ja.md) | 初めてインストールするか、実行中の Claude Code または Codex セッションに接続するか、フックの信頼性と Windows、WSL2、macOS、または Linux の状態を確認します。 |
-| [Memory Supervisor の仕組み](guides/how-it-works.ja.md) | 段階的なブレーキング、CLI と Codex App、blind control、またはフェデレーションについて理解する |
-| [操作、通知、および回復](guides/operations.ja.md) | ステータスおよび制御コマンドを使用したり、通知を設定したり、一時停止したプロセスや回復を処理したりできます。 |
+| [Calando の仕組み](guides/how-it-works.ja.md) | 段階的なブレーキング、CLI と Codex App、blind control、またはフェデレーションについて理解する |
+| [操作、通知、および回復](guides/operations.ja.md) | 状態確認と制御のコマンド、Telegram 通知の設定、一時停止したプロセスと回復を扱います。 |
 
 元の詳細な README を最初から最後まで続けて読むには、[詳細ガイド](detailed-guide.ja.md) を使用してください。
 
@@ -31,7 +31,7 @@
 
 - [Claude Code](guides/usage-claude.ja.md) — Claude Code フックと接続検証
 - [Codex](guides/usage-codex.ja.md) — Codex CLI およびデスクトップ アプリのフックと信頼
-- [通知](guides/notifications.ja.md) — 端末、オペレーティング システム、Discord、および Telegram
+- [通知](guides/notifications.ja.md) — エージェントの文脈、端末、Telegram
 - [Windows 実行可能ファイルの信頼](guides/windows-signing.ja.md) - 未署名の Windows ビルドと Smart App Control
 
 <a id="security-performance-and-verification"></a>

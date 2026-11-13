@@ -10,7 +10,7 @@
 ご使用の環境の **ターミナル** を開き、以下に一致する 1 行のコマンドを貼り付けます。 Git、Python、Rust、または別個のインストーラーを準備する必要はありません。 通常のインストールはユーザー アカウントに限定されており、`sudo` や管理者シェルは必要ありません。
 
 <a id="1-install-memory-supervisor"></a>
-### 1. Memory Supervisor をインストールします
+### 1. Calando をインストールします
 
 <a id="linux-wsl2-or-macos-terminal"></a>
 #### Linux、WSL2、または macOS ターミナル
@@ -30,16 +30,16 @@ irm https://raw.githubusercontent.com/lssLab/Calando/main/bootstrap.ps1 | iex
 
 コマンドが完了すると、バックグラウンド サービスが実行され、検出された Claude Code および Codex hooks が自動的に接続されます。 実行中の AI プログラムを閉じたり、進行中の作業を中断したりすることはありません。
 
-> [！重要]
+> [!IMPORTANT]
 > Windows 実行可能ファイルは現在、[SignPath Foundation](https://signpath.org/) によってレビュー中です。
-> Windows 11 では、**Windows セキュリティ → アプリとブラウザのコントロール → Smart App Control** を維持する必要があります
-> レビューが完了するまで、ネイティブ ビルドをインストールして使用している間、`Off`。
+> Windows 11 では、審査が完了するまで、ネイティブ ビルドをインストールして使う間は
+> **Windows セキュリティ → アプリとブラウザーのコントロール → Smart App Control** を `Off` にしておく必要があります。
 
 | ウィンドウの状態 | ネイティブ ビルドはインストールできますか? |
 | --- | --- |
 | 64 ビット Windows 10 | はい。 Smart App Control は使用できないため、SAC 設定は必要ありません。 SmartScreen が表示された場合は、ダウンロードがこのリポジトリのリリースからのものであることを確認してください。 |
 | Windows 11 24H2 ビルド 26100.8117 以降、25H2 ビルド 26200.8117 以降、または再有効化コントロールが表示される新しい Windows 11 ビルド | はい、Smart App Controlを`Off`に設定した後です。 未署名ビルドの使用を停止した後は、同じ設定ページから再度有効にすることができます。 |
-| 古い W​​indows 11 ビルド、または段階的に展開されるコントロールをまだ受け取っていない現在のビルド | オフにした後は可能ですが、再度オンにするには、Windows のリセットまたは再インストールが必要になる場合があります。 無効にする前にこれを確認してください。 |
+| 古い Windows 11 ビルド、または段階的に展開されるコントロールをまだ受け取っていない現在のビルド | オフにした後は可能ですが、再度オンにするには、Windows のリセットまたは再インストールが必要になる場合があります。 無効にする前にこれを確認してください。 |
 | Smart App Control はすでに `Off` です | 変更せずにインストールしてください。 別の SmartScreen ダウンロード レピュテーション プロンプトが表示された場合は、発行者とファイル ソースを確認してください。 |
 | S モードの Windows 11、または実行可能ファイルをブロックする組織のアプリ制御ポリシー | ネイティブ Windows パスではサポートされていません。 このインストーラーは、S モードまたは管理者ポリシーをバイパスできません。 |
 
@@ -54,28 +54,32 @@ Codex App ウィンドウが表示されるオペレーティング システム
 <a id="2-set-up-claude-code"></a>
 ### 2. Claude Code を設定します
 
-インストーラーは、Memory Supervisor ユーザー hook に自動的に接続します。 Claude Code では、設定、承認、または有効にするものは何もありません。
+インストーラーは、Calando ユーザー hook に自動的に接続します。 Claude Code では、設定、承認、または有効にするものは何もありません。
 
 **インストール中に Claude Code がすでに実行されていた場合:** 作業を続けます。 Claude Code はユーザー設定の変更を自動的に再ロードするため、通常は再起動は必要ありません。
 
-**確認するには:** ステップ 5 の `memory-status --connections` 出力の `Claude Code CONNECTED` を確認します。 hook の詳細を確認したい場合のみ、読み取り専用の `/hooks` 画面を開いて `User Settings` を調べてください。 このオプションのビューにエントリが表示されない例外的な場合にのみ、現在の作業の後に Claude Code を再起動します。
+**確認するには:** ステップ 5 の `calando status` 出力の `Claude Code CONNECTED` を確認します。 hook の詳細を確認したい場合のみ、読み取り専用の `/hooks` 画面を開いて `User Settings` を調べてください。 このオプションのビューにエントリが表示されない例外的な場合にのみ、現在の作業の後に Claude Code を再起動します。
 
 <a id="3-set-up-codex-cli"></a>
 ### 3. Codex CLI を設定します
 
 1. 使用するCodex CLIで`/hooks`を開きます。
-2. 7 つの Memory Supervisor hooks がすべて **信頼されており、オン**であることを確認します。
+2. 7 つの Calando hooks がすべて **信頼されており、オン**であることを確認します。
 3. レビュー用にマークされたエントリを信頼し、無効になっているエントリをオンにします。
 4. `/hooks` を閉じて作業を続けてください。
+
+**0.2.x から更新した場合:** 0.3.0 では hook のコマンドが変わったため、7 項目を一度信頼し直します。
 
 **インストール中に Codex CLI がすでに実行されていた場合:** 確認したばかりの CLI で続行します。 再起動する必要はありません。 インストール前にすでに開いていた他の Codex CLI については、現在の作業を終了し、その CLI のみを 1 回再起動します。
 
 <a id="4-set-up-codex-desktop-app"></a>
 ### 4. Codex Desktop App を設定します
 
-1. Codex App を開き、**設定 → Hooks** に移動します。 Memory Supervisor エントリがまだ存在しない場合は、最大 60 秒待ってから設定を再度開きます。
-2. Memory Supervisor hooks の 7 つすべてを信頼してオンにします。 **すべて信頼** では、以前に無効にされたスイッチはオンにならないため、両方の状態を確認してください。
+1. Codex App を開き、**設定 → Hooks** に移動します。 Calando エントリがまだ存在しない場合は、最大 60 秒待ってから設定を再度開きます。
+2. Calando hooks の 7 つすべてを信頼してオンにします。 **すべて信頼** では、以前に無効にされたスイッチはオンにならないため、両方の状態を確認してください。
 3. 既存のタスクに戻り、送信する予定だった次のリクエストを送信します。 続行する既存のタスクがない場合にのみ、新しいタスクを作成します。
+
+**0.2.x から更新した場合:** 0.3.0 では hook のコマンドが変わったため、**設定 → Hooks** で 7 項目を一度信頼し直します。
 
 **インストール中にCodex App がすでに実行されていた場合:** アプリとその既存のタスクを開いたままにして、手順 1 ～ 3 に従います。 アプリを再起動したり、新しいタスクを作成したりする必要はありません。
 
@@ -83,7 +87,7 @@ Codex App ウィンドウが表示されるオペレーティング システム
 ### 5. インストールを確認する
 
 ```bash
-memory-status --connections
+calando status
 ```
 
 使用するプログラムの行を確認してください。
@@ -97,15 +101,15 @@ memory-status --connections
 回線が正常でない場合は、回線が報告する内容にのみ対処してください。
 
 - `disabled` または `not trusted`: Codex CLI で `/hooks` を使用するか、Codex App で **設定 → Hooks** を使用して、名前付きエントリを信頼して有効にします。
-- `missing`、`stale`、`DEGRADED`、または `NOT RUNNING`: `memory-supervisor update` を実行し、このチェックを繰り返します。
-- `NEEDS ATTENTION`: 報告されたプログラム バージョンまたは hook の要件を満たしてから、`memory-supervisor update` を実行します。
-- `Core daemon OFF`: `memory-supervisor on` を実行します。
+- `missing`、`stale`、`DEGRADED`、または `NOT RUNNING`: `calando update` を実行し、このチェックを繰り返します。
+- `NEEDS ATTENTION`: 報告されたプログラム バージョンまたは hook の要件を満たしてから、`calando update` を実行します。
+- `Core daemon OFF`: `calando on` を実行します。
 - 7 つのアプリ hooks がすべて正しいように見えても、リクエスト後にアプリがまだ `ACTIVE` にならない場合は、アプリを一度再起動し、既存のタスクで次のリクエストを送信して、再度確認してください。
-- 新規インストールで `memory-status` コマンドが見つからない場合は、ターミナルのみを再度開き、再度実行します。 Claude Code、Codex CLI、および Codex App は、この PATH 更新のために再起動する必要はありません。
+- 新規インストールで `calando` コマンドが見つからない場合は、ターミナルのみを再度開き、再度実行します。 Claude Code、Codex CLI、および Codex App は、この PATH 更新のために再起動する必要はありません。
 
 Codex hook trust は管理者アクセスではありません。 Codex が実行する正確なローカル コマンドを承認することになります。 組織のポリシーまたは Windows セキュリティ ポリシーによってインストールがブロックされている場合にのみ、管理者ポリシーを確認してください。 基礎となる信頼ルールについては、[Claude Code hooks ガイド](https://code.claude.com/docs/en/hooks) および [Codex hooks ガイド](https://learn.chatgpt.com/docs/hooks#review-and-trust-hooks) を参照してください。
 
-これらのコマンドは、最新のパブリック リリースをインストールします。 Rust ビルド ツールは必要ありません。 そのリリースに含まれる検証済みの実行可能ファイルが自動的に使用されます。
+これらのコマンドは、最新のパブリック リリースをインストールします。 Rust ビルド ツールは必要ありません。 そのリリースに含まれる検証済みの実行可能ファイルが自動的に使用されます。インストール後は自動更新がオンになり、1 日 1 回新しいリリースを確認します（`calando update auto off` で停止）。0.2.x からの更新では、古い `memory-supervisor` のフォルダーが一度だけ移動されます。0.3.x の間は `memory-supervisor` と `memory-status` も別名として使えます。
 
 <a id="6-uninstall"></a>
 ### 6. アンインストール
@@ -113,10 +117,10 @@ Codex hook trust は管理者アクセスではありません。 Codex が実�
 Calando を削除するには、それがインストールされている各環境でこれを 1 回実行します。
 
 ```bash
-memory-supervisor uninstall
+calando uninstall
 ```
 
-状態とユーザー設定を維持しながら、バックグラウンド サービス、実行可能ファイル、Calando が所有する hook およびスキル接続を削除します。
+バックグラウンド サービス、実行可能ファイル、Calando が追加した hook とスキルを削除します。設定と状態は残ります。管理者が `calando lock on` にしている間は拒否されます。
 
 <a id="supported-environments"></a>
 ## サポートされている環境

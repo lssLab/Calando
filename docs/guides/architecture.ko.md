@@ -16,18 +16,18 @@
 | **프로세스 번호(PID)** | OS가 실행 중인 프로세스 하나에 붙인 번호입니다. 번호 재사용으로 오인하지 않도록 시작 정체성까지 다시 확인합니다. |
 | **PID 제어 환경** | 감시 프로그램 하나가 사용자 한 명의 프로세스 목록을 읽고 일시정지·재개할 수 있는 범위입니다. Windows, WSL 배포판 하나, 가상 머신 하나, 프로세스가 격리된 컨테이너 하나가 각각 이런 범위가 되며, 반드시 서로 다른 커널이라는 뜻은 아닙니다. |
 | **supervisor 데몬** | 사용자와 PID 제어 환경 하나를 계속 감시하는 백그라운드 프로그램입니다. 메모리를 측정하고 새 작업 허용 여부를 판단하며 로컬 프로그램의 일시정지·재개를 담당합니다. |
-| **훅 gate** | AI CLI가 지원되는 작업의 시작 전후에 잠깐 실행하는 `memory-supervisor gate <event>` 검사 프로그램입니다. |
+| **훅 gate** | AI CLI가 지원되는 작업의 시작 전후에 잠깐 실행하는 `calando gate <event>` 검사 프로그램입니다. |
 | **새 작업 허용 상태(admission)** | 아직 시작하지 않은 작업을 허용할지, 관찰하며 허용할지, 새 확장을 멈출지, 앞으로 할 일을 줄일지 나타냅니다. 실행 중인 프로그램의 일시정지와는 별개입니다. |
 | **여러 환경 연동(federation)** | 같은 물리 메모리를 쓰는 로컬 환경끼리 최신 새 작업 허용 상태만 공유하는 기능입니다. 다른 환경의 PID를 제어하지는 못합니다. |
 | **TTE** | “메모리 고갈까지 남은 시간”입니다. 현재 속도로 메모리가 줄어들 때 사용 가능한 메모리가 바닥날 것으로 예상되는 시간을 초 단위로 나타냅니다. |
-| **supervisor 명령** | supervisor를 확인·제어하는 터미널 명령 `memory-supervisor`와 읽기 전용 단축 명령 `memory-status`입니다. Claude Code나 Codex 세션을 뜻하지 않습니다. |
+| **calando 명령** | Calando를 확인·제어하는 터미널 명령 `calando`입니다. 0.3.x 동안은 `memory-supervisor`·`memory-status`도 별칭으로 동작합니다. Claude Code나 Codex 세션을 뜻하지 않습니다. |
 
 과거 호환 인터페이스의 `provider`는 AI CLI 종류(`claude` 또는 `codex`)만 뜻합니다.
 사용자·계정·모델 회사·OS·클라우드 사업자를 뜻하지 않습니다.
 
 ## 가장 중요한 아키텍처 사실
 
-Memory Supervisor는 터미널과 AI CLI 사이에 끼어들지 않고 별도로 상태를 감시합니다.
+Calando는 터미널과 AI CLI 사이에 끼어들지 않고 별도로 상태를 감시합니다.
 
 ```text
 터미널 → claude
@@ -50,7 +50,7 @@ Memory Supervisor는 터미널과 AI CLI 사이에 끼어들지 않고 별도로
 flowchart TB
     User["Claude Code 또는 Codex를 쓰는 사용자"]
     AI["AI CLI 세션<br/>주 에이전트 + 하위 작업"]
-    Gate["짧게 실행되는 사전 검사<br/>memory-supervisor gate EVENT"]
+    Gate["짧게 실행되는 사전 검사<br/>calando gate EVENT"]
     Daemon["백그라운드 감시 프로그램<br/>사용자·PID 제어 환경마다 하나"]
     Sensors["남은 메모리와 부족 신호<br/>프로세스 목록 + PID 시작 정보"]
     Policy["자동 안전 판단<br/>용량 · 변화 추세 · OS 경고 · 원인"]
@@ -58,9 +58,9 @@ flowchart TB
     Runtime["runtime.json<br/>에이전트별 제한 · 일시정지 소유권 · 사건 기록"]
     Observations["hook-observations/pending<br/>세션 · 작업 단계 · 도구 종류"]
     Queue["control/*.json<br/>수동 제어 요청 + 처리 결과"]
-    Status["memory-status<br/>짧게 실행되는 조회 명령"]
-    Control["memory-supervisor<br/>짧게 실행되는 제어 명령"]
-    Notice["정확한 터미널 · OS<br/>Discord · Telegram"]
+    Status["calando status<br/>짧게 실행되는 조회 명령"]
+    Control["calando on/off/cap ...<br/>짧게 실행되는 제어 명령"]
+    Notice["정확한 터미널 · Telegram"]
     HookFiles["Claude/Codex 훅 설정<br/>연동 모드가 설치·검증"]
 
     User --> AI
@@ -89,7 +89,7 @@ flowchart TB
 ```
 
 그림의 실행 항목은 모두 Rust 실행 파일 하나를 서로 다른 방식으로 부른 것입니다. 백그라운드 감시
-모드만 계속 실행되고 `gate`·`memory-status`·수동 제어 명령은 호출할 때만 잠깐 실행됩니다. 계속
+모드만 계속 실행되고 `gate`·`calando status`·수동 제어 명령은 호출할 때만 잠깐 실행됩니다. 계속
 열어 두는 네트워크 연결은 없습니다. 감시 프로그램이 상태 파일을 안전하게 교체하고 사전 검사가
 이를 읽습니다. 수동 일시정지·재개 요청도 파일로 전달되며, 감시 프로그램이 대상을 다시 확인한
 뒤 실행하고 결과를 기록합니다. 작업 관찰 기록은 별도 작업 스케줄러가 아니라 판단 근거를
@@ -137,7 +137,7 @@ supervisor를 실행한 사용자가 소유한 문자 장치이며, 기록한 `d
    저장하고 알림을 씁니다. 저장이나 필수 주 프로그램 알림이 실패하면 즉시 재개합니다.
 
 별도 하위 작업·도구 프로그램에는 자기 터미널이 없을 수 있습니다. 이 경우 사건은 주 에이전트의
-다음 사전 검사와 설정된 운영체제·원격 알림을 통해 전달됩니다.
+다음 사전 검사와 설정된 Telegram 알림을 통해 전달됩니다.
 
 ## 동시 터미널 세 개: WSL 두 개, PowerShell 하나
 
@@ -159,7 +159,7 @@ flowchart LR
         WD["WSL supervisor 데몬"] -->|"기록"| WS
         WD -. "관측하고 근거가 있을 때만<br/>WSL PID에 신호" .-> A
         WD -. "관측하고 근거가 있을 때만<br/>WSL PID에 신호" .-> B
-        WC["WSL memory-status / memory-supervisor"] --> WS
+        WC["WSL calando"] --> WS
         WC -->|"로컬 제어 요청"| WD
     end
 
@@ -170,7 +170,7 @@ flowchart LR
         NG -->|"읽기"| NS["Windows state.json"]
         ND["Windows supervisor 데몬"] -->|"기록"| NS
         ND -. "관측하고 근거가 있을 때만<br/>Windows PID 일시정지" .-> C
-        NC["PowerShell memory-status / memory-supervisor"] --> NS
+        NC["PowerShell calando"] --> NS
         NC -->|"로컬 제어 요청"| ND
     end
 
@@ -180,12 +180,12 @@ flowchart LR
 
 | 항목 | 같은 WSL distribution의 A와 B | WSL과 Windows 사이 |
 | --- | --- | --- |
-| Supervisor 데몬 | 하나를 공유 | 각각 별도 |
+| Calando 데몬 | 하나를 공유 | 각각 별도 |
 | 감지 용량 | 같은 WSL/cgroup 가시 용량 | Linux guest와 Windows host 용량을 따로 측정 |
 | Admission 판단 | 같은 로컬 판단 공유 | federation을 통해 최신 판단 중 더 위험한 쪽 공유 |
-| 하드캡 | 명시적으로 켠 경우 WSL 합산 상한 하나 | 제어 환경마다 따로 설정하며 합치지 않음 |
+| `calando cap` | 명시적으로 켠 경우 WSL 합산 상한 하나 | 제어 환경마다 따로 설정하며 합치지 않음 |
 | PID 일시정지·재개 | WSL 데몬이 로컬 WSL PID에 조치 가능 | 자신의 PID 제어 환경 밖에 있는 PID에는 signal을 보낼 수 없음 |
-| `memory-status --all` | 두 로컬 세션 모두 표시 | 양쪽의 최신 snapshot을 합쳐 표시 가능 |
+| `calando status` | 두 로컬 세션 모두 표시 | 양쪽의 최신 snapshot을 합쳐 표시 가능 |
 
 WSL 2 배포판들은 관리형 VM·Linux 커널·host-backed 메모리 pool을 공유할 수 있지만 PID·mount·
 user·cgroup namespace는 분리됩니다. 따라서 각 배포판에 로컬 instance가 필요합니다.
@@ -247,8 +247,8 @@ Calando/
 │   ├── supervisor.rs           1초 control loop와 보호 조치
 │   ├── runtime.rs + events.rs  영속 pause·사건 상태와 사용자 메시지
 │   ├── gate.rs                 훅 admission과 사건 문맥 응답
-│   ├── status.rs + control.rs  memory-status와 memory-supervisor 제어 동작
-│   ├── notify.rs + terminal.rs 선택 알림과 정확한 터미널 전달
+│   ├── status.rs + control.rs  `calando status`와 제어 동작
+│   ├── notify.rs + terminal.rs Telegram 알림과 정확한 터미널 전달
 │   ├── integration.rs          CLI 버전 검사, 소유 훅 병합, 경로 이전
 │   └── storage.rs              비공개 폴더와 원자적·크기 제한 파일 I/O
 ├── SKILL.md                    Claude Code·Codex가 공유하는 운영 스킬
@@ -263,7 +263,7 @@ Calando/
 ├── runtime/
 │   ├── bin/                    호환 명령 launcher
 │   ├── hooks/                  fail-open hook wrapper
-│   └── notifications/          비공개 알림 기본 template와 wrapper
+│   └── notifications/          비공개 알림 설정 예시와 wrapper
 ├── docs/
 │   ├── detailed-guide.*        4개 언어 전체 상세 안내
 │   ├── guides/                 설치·사용·보안·아키텍처 안내
@@ -272,7 +272,7 @@ Calando/
 └── .github/                    커뮤니티 문서와 운영체제별 테스트 matrix
 ```
 
-설치기가 생성한 훅은 `memory-supervisor gate <event>`를 직접 실행합니다. `runtime/hooks/`와
+설치기가 생성한 훅은 `calando gate <event>`를 직접 실행합니다. `runtime/hooks/`와
 `integrations/`는 fail-open 계약·호환성·test용이며 또 하나의 상주 데몬이 아닙니다. 저장소
 루트의 짧은 유지보수 파일은 v0.2.0 checkout 경로를 보존하면서 `packaging/`으로 연결합니다.
 새 실행 파일은 정리된 경로를 먼저 사용하고 업데이트 중에는 기존 평면 경로로 자동 fallback합니다.
@@ -281,20 +281,22 @@ Calando/
 
 | 용도 | Linux / WSL / macOS | Windows |
 | --- | --- | --- |
-| 관리되는 checkout | `~/.local/share/memory-supervisor` | `%LOCALAPPDATA%\MemorySupervisor` |
-| 네이티브 runtime | `~/.local/lib/memory-supervisor/memory-supervisor` | `$HOME\.local\lib\memory-supervisor\memory-supervisor.exe` |
-| 사용자 명령 | `~/.local/bin/memory-supervisor`, `memory-status` symlink | `$HOME\.local\bin\*.cmd` launcher |
-| 현재 snapshot과 runtime 원장 | `~/.cache/memory-supervisor/` | `$HOME\.cache\memory-supervisor\` |
-| 설정 | `~/.config/memory-supervisor/` | `$HOME\.config\memory-supervisor\` |
-| 경로 pointer와 기본 federation | `~/.memory-supervisor/` | `$HOME\.memory-supervisor\` |
-| 지속형 전원 상태 | `~/.memory-supervisor/power-off` | `$HOME\.memory-supervisor\power-off` |
-| 상주 자동 시작 | 사용자 systemd, macOS LaunchAgent 또는 감독형 fallback | `MemorySupervisor` 예약 작업 |
-| Claude Code 연동 | `~/.claude/settings.json`, skill·command 폴더 | `$HOME` 아래 같은 경로 |
-| Codex 연동 | `$CODEX_HOME/hooks.json`(미설정 시 `~/.codex/hooks.json`), `~/.agents/skills`, 호환 prompt·skill | 각 환경의 실제 `CODEX_HOME`; skill·호환 파일은 `$HOME` 아래 |
+| 관리되는 checkout | `~/.local/share/calando` | `%LOCALAPPDATA%\Calando` |
+| 네이티브 runtime | `~/.local/lib/calando/calando` | `%USERPROFILE%\.local\lib\calando\calando.exe` |
+| 사용자 명령 | `~/.local/bin/calando`와 별칭 symlink | `$HOME\.local\bin\*.cmd` launcher |
+| 현재 snapshot과 runtime 원장 | `~/.cache/calando/` | `$HOME\.cache\calando\` |
+| 설정 | `~/.config/calando/` | `$HOME\.config\calando\` |
+| 경로 pointer와 기본 federation | `~/.calando/` | `$HOME\.calando\` |
+| 지속형 전원 상태 | `~/.calando/power-off` | `$HOME\.calando\power-off` |
+| 상주 자동 시작 | 사용자 systemd `calando.service`, macOS LaunchAgent `io.github.lsslab.calando` 또는 감독형 fallback | `Calando` 예약 작업 |
+| Claude Code 연동 | `~/.claude/settings.json`, `~/.claude/skills/calando` | `$HOME` 아래 같은 경로 |
+| Codex 연동 | `$CODEX_HOME/hooks.json`(미설정 시 `~/.codex/hooks.json`), `~/.agents/skills/calando`, `~/.codex/skills/calando` | 각 환경의 실제 `CODEX_HOME`; skill은 `$HOME` 아래 |
 
 Checkout은 업데이트 원본이고 복사된 네이티브 runtime이 서비스와 훅에서 실행됩니다.
-`memory-status`는 같은 실행 파일의 별칭이고 모든 제어 동사는 `memory-supervisor` 하위
-명령입니다. 데몬은 터미널이나 AI CLI마다가 아니라 설치된 사용자·PID 제어 환경마다 하나입니다.
+모든 명령은 `calando` 하위 명령이며, `memory-supervisor`와 `memory-status`는 같은 실행 파일의
+별칭입니다. 0.2.x에서 올리면 옛 `memory-supervisor` 폴더를 한 번 옮기고, Unix에서는 옛 이름을 링크로
+남깁니다. Federation은 버전이 섞인 동안 `.calando/instances`와 `.memory-supervisor/instances`를 모두
+읽습니다. 데몬은 터미널이나 AI CLI마다가 아니라 설치된 사용자·PID 제어 환경마다 하나입니다.
 `off` marker가 있으면 데몬은 실행하지 않고 gate는 fail-open 경고 없이 통과합니다. 서비스 등록과
 hook 연결은 보존되므로 `on`이 marker를 지우고 같은 설치를 다시 시작할 수 있습니다.
 
@@ -305,7 +307,7 @@ hook 연결은 보존되므로 `on`이 marker를 지우고 같은 설치를 다�
 - `containment`는 논리 identity, 도구·상태 계약, 폭주 증거를 정의하며 OS 조치를 하지 않습니다.
 - `supervisor`만 두 결과를 결합하고 영속 조치를 기록하는 상주 주체입니다.
 - `gate`는 분류된 future action을 허용·거절하고 문맥을 전달할 수 있지만 프로세스를 멈추지 못합니다.
-- `memory-supervisor` 제어 동사는 조치를 요청하고, 데몬이 다시 검증한 뒤 실행합니다.
+- `calando` 제어 동사는 조치를 요청하고, 데몬이 다시 검증한 뒤 실행합니다.
 - `federation`은 admission snapshot만 공유하며 모든 PID 조치는 자신이 소유한 PID 제어 환경
   안에서만 실행됩니다.
 

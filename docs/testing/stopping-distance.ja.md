@@ -4,7 +4,7 @@
   <a href="stopping-distance.md">English</a> · <a href="stopping-distance.ko.md">한국어</a> · <a href="stopping-distance.zh-CN.md">简体中文</a> · <strong>日本語</strong>
 </p>
 
-Memory Supervisor はメモリ使用量を低く抑えるように設計されていません。 既存の作業は無制限のままですが、headroom は安定した速度で下落しています。 新しい作業から開始され、測定された軌跡が実際のリスクに近づいた場合にのみ段階的な保護が適用されます。
+Calando はメモリ使用量を低く抑えるためのものではありません。headroom が一定の速度で減っている間も既存の作業は制限しません。測定した推移が実際の危険に近づいたときだけ、新しい作業から段階的に保護をかけます。
 
 <a id="calculation"></a>
 ## 計算

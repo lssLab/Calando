@@ -4,7 +4,7 @@
   <a href="federation-topology.md">English</a> · <a href="federation-topology.ko.md">한국어</a> · <a href="federation-topology.zh-CN.md">简体中文</a> · <strong>日本語</strong>
 </p>
 
-Memory Supervisor は、独自のプロセスを確認および制御できる各オペレーティング システム カーネルで 1 回実行されます。 Federation を使用すると、複数のカーネルが同じ物理メモリをめぐって競合するときに、これらのスーパーバイザを調整できます。
+Calando は、独自のプロセスを確認および制御できる各オペレーティング システム カーネルで 1 回実行されます。 Federation を使用すると、複数のカーネルが同じ物理メモリをめぐって競合するときに、これらのスーパーバイザを調整できます。
 
 <a id="the-deciding-rule"></a>
 ## 決定的なルール
@@ -44,7 +44,9 @@ topology adapter    -> which co-resident kernels share RAM and where they exchan
 
 WSL2 は、マウントされた Windows ホスト ファイルシステムを使用します。 コンテナーは、明示的にマウントされたホストローカル ディレクトリを使用します。 動的 VM は、使用可能なハイパーバイザー共有フォルダーを使用します。 それ以外の場合はローカルのみのままです。 Linux ゲストは、サポートされているメモリバルーン デバイスが存在する場合は動的として分類され、存在しない場合は固定として分類されます。
 
-`memory-status --all` は、検出された環境とそれぞれの環境による決定を示します。 鮮度ウィンドウ内でリフレッシュされた状態のみが参加します。
+`calando status` は、検出された環境とそれぞれの環境による決定を示します。 鮮度ウィンドウ内でリフレッシュされた状態のみが参加します。1 週間更新のないピアのファイルは自動的に削除されます。
+
+共有フォルダーは `.calando/instances` です。0.2.x と 0.3.x が混在する間は、`.memory-supervisor/instances` も読みます。ピアは `instance` が単純な識別子（英数字、`.`、`-`、`_`、128 文字まで）でファイル名と一致する場合だけ受け入れ、ピアの文字列はエージェントの文脈に入りません。
 
 <a id="what-crosses-the-boundary"></a>
 ## 境界を越えるものは

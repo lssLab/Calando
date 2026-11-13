@@ -1,4 +1,4 @@
-# How Memory Supervisor works
+# How Calando works
 
 <p align="center">
   <strong>English</strong> · <a href="how-it-works.ko.md">한국어</a> · <a href="how-it-works.zh-CN.md">简体中文</a> · <a href="how-it-works.ja.md">日本語</a>
@@ -6,7 +6,7 @@
 
 ## How does it work?
 
-Memory Supervisor does not sit between you and either CLI. You continue to
+Calando does not sit between you and either CLI. You continue to
 launch `claude` and `codex` normally while a small background program watches
 their memory use.
 
@@ -254,8 +254,8 @@ CLI lead awareness follows a fixed order:
 3. A physical process action is shown in the exact terminal immediately.
    Worker incidents without a separate terminal are delivered once at the
    lead's next real hook.
-4. If selected, OS, Discord, and Telegram receive one protection-start notice
-   and one fully-recovered notice.
+4. If configured, Telegram receives one protection-start notice and one
+   fully-recovered notice.
 
 For example, suppose a Claude lead on Windows is packaging edits while Codex in
 WSL is about to start a subagent and a large test, and their shared physical

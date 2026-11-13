@@ -1434,6 +1434,22 @@ pub fn decide(
 
 pub fn run_gate(arguments: &[OsString]) -> i32 {
     if power_is_off() {
+        // Pass everything through, except answer a session command so it never reaches the model.
+        let mut input = String::new();
+        let _ = io::stdin().read_to_string(&mut input);
+        let prompt = serde_json::from_str::<Value>(&input)
+            .ok()
+            .and_then(|payload| payload.get("prompt")?.as_str().map(str::to_owned));
+        if prompt
+            .as_deref()
+            .and_then(crate::session::parse_command)
+            .is_some()
+        {
+            println!(
+                "{}",
+                json!({"decision":"block","reason":"Calando is off for this whole environment. Run `calando on` in a terminal to turn it back on."})
+            );
+        }
         return 0;
     }
     let first = arguments

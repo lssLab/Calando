@@ -15,7 +15,7 @@ SHA-256 checksum을 먼저 검증하지만, 이 무결성 검사는 Windows가 �
 - PowerShell, Windows Terminal 또는 Windows 네이티브 Codex App Server에서 실행하면 Windows
   네이티브 경로이므로 Smart App Control의 영향을 받습니다.
 - Windows의 Codex App 화면을 사용하더라도 App Server와 도구가 WSL 안에서 실행되면 WSL용
-  Supervisor를 사용합니다. Windows 실행 파일을 실행하지 않으므로 이 안내가 적용되지 않습니다.
+  Calando를 사용합니다. Windows 실행 파일을 실행하지 않으므로 이 안내가 적용되지 않습니다.
 - 회사의 App Control 정책, Windows 11 S 모드, 다운로드 평판을 확인하는 SmartScreen은 Smart App
   Control과 별개의 제한일 수 있습니다. 설치기는 이런 정책을 우회하지 않습니다.
 
@@ -45,7 +45,7 @@ Windows 11 24H2 build 26100.8117 이상과 25H2 build 26200.8117 이상에서 �
 검증합니다. 수동으로 내려받은 실행 파일의 서명 상태는 PowerShell에서 다음처럼 확인할 수 있습니다.
 
 ```powershell
-Get-AuthenticodeSignature .\memory-supervisor.exe | Format-List Status, StatusMessage, SignerCertificate
+Get-AuthenticodeSignature .\calando.exe | Format-List Status, StatusMessage, SignerCertificate
 ```
 
 현재 준비 버전은 `NotSigned`가 예상 결과입니다. release가 코드 서명된 상태로 바뀌면 설치 안내와

@@ -17,18 +17,18 @@
 | **プロセス ID (PID)** | 実行中の 1 つのプロセスのオペレーティング システムの番号。 アクションは開始 ID に対して再検証されるため、再利用された番号は対象になりません。 |
 | **PID 制御環境** | 1 つの daemon が 1 つの保護されたユーザー (ホスト、1 つの WSL ディストリビューション、VM ゲスト、または PID 分離コンテナー) の PID を列挙して通知できるローカル プロセスの名前空間。 必ずしも別個のカーネルである必要はありません。 |
 | **Supervisor daemon** | 1 人の保護された OS ユーザーおよび PID 制御環境用の常駐ネイティブ プロセス。 可視リソースをサンプリングし、ポリシーを決定し、ローカル プロセス アクションを所有します。 |
-| **Hook ゲート** | サポートされているライフサイクル イベントの前後に AI CLI によって開始される、`memory-supervisor gate <event>` の短期間の呼び出し。 |
+| **Hook ゲート** | サポートされているライフサイクル イベントの前後に AI CLI によって開始される、`calando gate <event>` の短期間の呼び出し。 |
 | **Admission** | まだ始まっていない作業についての決定: 許可するか、観察しながら許可するか、新たな拡張を保留するか、今後の作業を減らすか。 これは、実行中のプロセスの一時停止とは別のものです。 |
 | **Federation** | 同じ物理メモリを使用するローカル環境間で、最新の admission 決定のみを共有します。 リモート PID 制御は許可されません。 |
 | **TTE** | 「枯渇までの時間」: 現在の減少が続いた場合に使用可能なメモリがなくなるまでの推定秒数。 |
-| **Supervisor コマンド** | `memory-supervisor` および読み取り専用の `memory-status` ショートカット。これらは、supervisor を検査または制御するための端末コマンドです。 これらは、Claude Code または Codex セッションではありません。 |
+| **Calando コマンド** | 端末で使う `calando` コマンド（`status`、`on`、`off` など）。0.3.x の間は `memory-supervisor` と `memory-status` も別名として使えます。Claude Code や Codex のセッションではありません。セッション内の `/calando`（Codex は `$calando`）はそのセッションだけに作用し、UserPromptSubmit hook が答えます。 |
 
 従来のフィールド `provider` は、互換性インターフェイスでのみ存続します。 これは AI CLI タイプ (`claude` または `codex`) を意味し、ユーザー、アカウント、モデル ベンダー、オペレーティング システム、クラウド プロバイダーを意味するものではありません。
 
 <a id="the-most-important-architectural-fact"></a>
 ## 最も重要な建築上の事実
 
-Memory Supervisor は端末と AI CLI の間に存在しません。 打ち上げ滞在:
+Calando は端末と AI CLI の間に存在しません。 打ち上げ滞在:
 
 ```text
 terminal → claude
@@ -50,7 +50,7 @@ terminal → supervisor → claude/codex
 flowchart TB
     User["User in Claude Code or Codex"]
     AI["AI CLI session<br/>lead + workers"]
-    Gate["Short-lived hook gate<br/>memory-supervisor gate EVENT"]
+    Gate["Short-lived hook gate<br/>calando gate EVENT"]
     Daemon["Long-lived supervisor daemon<br/>one per user and PID-control environment"]
     Sensors["OS memory counters<br/>process table + PID identity"]
     Policy["Adaptive stopping-distance policy<br/>capacity · robust trend · native pressure · cause"]
@@ -58,9 +58,9 @@ flowchart TB
     Runtime["runtime.json<br/>logical epoch + roster · pause ownership · incidents · pending edges"]
     Observations["hook-observations/pending<br/>identity · lifecycle · tool class"]
     Queue["control/*.json<br/>request + acknowledgement"]
-    Status["memory-status<br/>short-lived read command"]
-    Control["memory-supervisor<br/>short-lived control command"]
-    Notice["Exact terminal · OS<br/>Discord · Telegram"]
+    Status["calando status<br/>short-lived read command"]
+    Control["calando<br/>short-lived control command"]
+    Notice["Exact terminal<br/>Telegram"]
     HookFiles["Claude/Codex hook configuration<br/>installed and verified by integration mode"]
 
     User --> AI
@@ -88,7 +88,7 @@ flowchart TB
     Queue -->|"completed, rejected, or unconfirmed"| Control
 ```
 
-すべての実行可能ボックスは、1 つの Rust バイナリのモードまたはエイリアスです。 daemon のみが常駐します。 `gate`、`memory-status`、および `memory-supervisor` 制御動詞は、1 つの hook またはコマンドに対して続きます。 永続的に開いているソケットはありません。daemon は状態をアトミックに公開し、ゲートがそれを読み取り、手動プロセス アクションではプライベートなリクエスト/確認応答キューを使用するため、daemon は動作する前にターゲットを再検証できます。 Hook 観測は一方向のアトミック ファイルであり、2 番目のスケジューラーではありません。daemon はそれらを単調論理エポックに消費し、その後すべての lead が正確な制限されたロスターを受け取ります。
+すべての実行可能ボックスは、1 つの Rust バイナリのモードまたはエイリアスです。 daemon のみが常駐します。 `gate` と `calando` の各コマンドは、1 つの hook またはコマンドの間だけ動きます。 永続的に開いているソケットはありません。daemon は状態をアトミックに公開し、ゲートがそれを読み取り、プロセスに関わるコマンド（`off` による再開など）はプライベートなリクエスト/確認応答キューを使用するため、daemon は動作する前にターゲットを再検証できます。 Hook 観測は一方向のアトミック ファイルであり、2 番目のスケジューラーではありません。daemon はそれらを単調論理エポックに消費し、その後すべての lead が正確な制限されたロスターを受け取ります。
 
 <a id="how-a-terminal-logical-agent-and-pid-map"></a>
 ## 端末、論理エージェント、および PID のマッピング方法
@@ -122,7 +122,7 @@ Linux および macOS では、TTY (端末デバイス) は `/dev/pts/` また�
 3. `HOLD` は新しい拡張を閉じます。 `DRAIN` では、圧力や明示的な地方予算により、指名されたエージェントの今後の業務が徐々に制限される可能性があります。 外部からのみの圧力は、既存の AI の作業を制限したり一時停止したりすることはありません。
 4. 物理的な一時停止は別のバックストップです。 追跡された役割/ツリーと成長の証拠により、適格な候補者が選択されます。 信号の直前に、daemon は正確な PID と開始 ID を再読み込みし、lead の場合、記録された端末が依然として同じ適格な端末であることを確認します。 その 1 つの PID を一時停止し、一時所有権とインシデントを記録して永続的に保持し、通知を書き込みます。 永続化または必要な lead 通知が失敗した場合、所有されていないまたは非表示の一時停止を残す代わりにプロセスを再開します。
 
-Worker/サポート プロセスは別個の端末を所有できない場合があります。 したがって、彼らのインシデントは、lead の次の hook コンテキストと設定された OS またはリモート通知ルートを通じて表面化します。
+Worker/サポート プロセスは別個の端末を所有できない場合があります。 したがって、彼らのインシデントは、lead の次の hook コンテキストと、設定していれば Telegram を通じて伝わります。
 
 <a id="three-simultaneous-terminals-two-wsl-one-powershell"></a>
 ## 3 つの同時端末: 2 つの WSL、1 つの PowerShell
@@ -143,7 +143,7 @@ flowchart LR
         WD["WSL supervisor daemon"] -->|"write"| WS
         WD -. "scan and, only with evidence,<br/>signal WSL PIDs" .-> A
         WD -. "scan and, only with evidence,<br/>signal WSL PIDs" .-> B
-        WC["WSL memory-status / memory-supervisor"] --> WS
+        WC["WSL calando"] --> WS
         WC -->|"local control request"| WD
     end
 
@@ -154,7 +154,7 @@ flowchart LR
         NG -->|"read"| NS["Windows state.json"]
         ND["Windows supervisor daemon"] -->|"write"| NS
         ND -. "scan and, only with evidence,<br/>suspend Windows PIDs" .-> C
-        NC["PowerShell memory-status / memory-supervisor"] --> NS
+        NC["PowerShell calando"] --> NS
         NC -->|"local control request"| ND
     end
 
@@ -167,9 +167,9 @@ flowchart LR
 | Supervisor daemon | 共有 | 別 |
 | 検出容量 | 同じ WSL/cgroup の可視容量 | Linux ゲストと Windows ホストの容量を個別に測定 |
 | Admission 決定 | ローカルでの決定の共有 | federation を通じて共有された最悪の新たな決定 |
-| ハードキャップ | 1 つの WSL アグリゲート（明示的に有効化されている場合） | 制御環境ごとに個別のキャップ。 決してプールされなかった |
+| `calando cap` | 1 つの WSL アグリゲート（明示的に有効化されている場合） | 制御環境ごとに個別のキャップ。 決してプールされなかった |
 | PID一時停止/再開 | WSL daemon はローカル WSL PID で動作できます | どちらの daemon も、PID 制御環境外では PID を信号で送信できません |
-| `memory-status --all` | 両方のローカル セッションを表示します | 両側からの新しいスナップショットを組み合わせることができます |
+| `calando status` | 両方のローカル セッションを表示します | 両側からの新しいスナップショットを組み合わせることができます |
 
 WSL 2 ディストリビューションは、別個の PID、マウント、ユーザー、および cgroup 名前空間を使用しながら、マネージド VM、Linux カーネル、およびホストバックアップ メモリ プールを共有できます。 したがって、各ディストリビューションには独自のローカル インスタンスが必要です。 Federation は admission のみを座標します。 RAM の合計の追加、workers の移動、リモート設定の変更、または WSL PID 信号を Windows メモリ再利用に変換することはありません。
 
@@ -229,23 +229,22 @@ Calando/
 │   ├── supervisor.rs           one-second control loop and protective actions
 │   ├── runtime.rs + events.rs  durable pause/incident state and user messages
 │   ├── gate.rs                 hook admission and incident-context response
-│   ├── status.rs + control.rs  memory-status and memory-supervisor control behavior
-│   ├── notify.rs + terminal.rs optional routes and exact-terminal delivery
+│   ├── status.rs + control.rs  calando status and control commands
+│   ├── notify.rs + terminal.rs Telegram and exact-terminal delivery
 │   ├── integration.rs          CLI version checks, owned hook merge, path migration
 │   └── storage.rs              private directories and atomic/bounded file I/O
-├── SKILL.md                    shared Claude Code/Codex operating skill
+├── SKILL.md                    the calando skill and /calando session command
 ├── agents/                     Codex skill presentation metadata
 ├── integrations/
-│   ├── claude/                 hook template and in-CLI status command
-│   └── codex/                  hook template, adapter notes, and status command
+│   ├── claude/                 hook template
+│   └── codex/                  hook template and adapter notes
 ├── packaging/
 │   ├── install.*               transactional runtime, service, skill, and hook setup
 │   ├── power.* + uninstall.*   persistent power control and owned removal
 │   └── release/                source packaging and artifact verification
 ├── runtime/
-│   ├── bin/                    compatibility command launchers
 │   ├── hooks/                  fail-open hook wrappers
-│   └── notifications/          default private-notification template and wrapper
+│   └── notifications/          Telegram settings template and wrapper
 ├── docs/
 │   ├── detailed-guide.*        complete four-language product guide
 │   ├── guides/                 installation, usage, security, and architecture guides
@@ -254,25 +253,25 @@ Calando/
 └── .github/                    community documents and cross-platform test matrix
 ```
 
-インストーラによって生成された hooks は、`memory-supervisor gate <event>` を直接呼び出します。 `runtime/hooks/` と `integrations/` はフェールオープン契約、互換性、およびテストを保持します。 彼らは別の居住者 daemon ではありません。 リポジトリ ルートにある短いメンテナンス ファイルは、v0.2.0 チェックアウト パスを保持し、`packaging/` に委任します。 新しいランタイム コードはグループ化されたパスを優先し、更新中に従来のレイアウトに戻ります。
+インストーラによって生成された hooks は、`calando gate <event>` を直接呼び出します。 `runtime/hooks/` と `integrations/` はフェールオープン契約、互換性、およびテストを保持します。 彼らは別の居住者 daemon ではありません。 リポジトリ ルートにある短いメンテナンス ファイルは、v0.2.0 チェックアウト パスを保持し、`packaging/` に委任します。 新しいランタイム コードはグループ化されたパスを優先し、更新中に従来のレイアウトに戻ります。
 
 <a id="installed-file-and-process-layout"></a>
 ## インストールされたファイルとプロセスのレイアウト
 
 | 目的 | Linux / WSL / macOS | 窓 |
 | --- | --- | --- |
-| 維持されたチェックアウト | `~/.local/share/memory-supervisor` | `%LOCALAPPDATA%\MemorySupervisor` |
-| ネイティブランタイム | `~/.local/lib/memory-supervisor/memory-supervisor` | `$HOME\.local\lib\memory-supervisor\memory-supervisor.exe` |
-| ユーザーコマンド | `~/.local/bin/memory-supervisor` および `memory-status` のシンボリックリンク | `$HOME\.local\bin\*.cmd` ランチャー |
-| 現在のスナップショットと実行時台帳 | `~/.cache/memory-supervisor/` | `$HOME\.cache\memory-supervisor\` |
-| 構成 | `~/.config/memory-supervisor/` | `$HOME\.config\memory-supervisor\` |
-| パス ポインターとデフォルト federation | `~/.memory-supervisor/` | `$HOME\.memory-supervisor\` |
-| 永続的な電源状態 | `~/.memory-supervisor/power-off` | `$HOME\.memory-supervisor\power-off` |
-| 長寿のスタートアップ | ユーザー systemd、macOS LaunchAgent、または監視対象フォールバック | `MemorySupervisor` スケジュールされたタスク |
-| Claude Code 統合 | `~/.claude/settings.json`、スキルおよびコマンドディレクトリ | `$HOME` 以下も同じパス |
-| Codex 統合 | `$CODEX_HOME/hooks.json` (それ以外の場合は `~/.codex/hooks.json`)、`~/.agents/skills`、互換性プロンプト/スキル | 環境は効果的です `CODEX_HOME`; スキルと互換性ファイルは `$HOME` の下に残ります |
+| 維持されたチェックアウト | `~/.local/share/calando` | `%LOCALAPPDATA%\Calando` |
+| ネイティブランタイム | `~/.local/lib/calando/calando` | `%USERPROFILE%\.local\lib\calando\calando.exe` |
+| ユーザーコマンド | `~/.local/bin/calando`（別名 `memory-supervisor`、`memory-status`）のシンボリックリンク | `$HOME\.local\bin\*.cmd` ランチャー |
+| 現在のスナップショットと実行時台帳 | `~/.cache/calando/` | `$HOME\.cache\calando\` |
+| 構成 | `~/.config/calando/` | `$HOME\.config\calando\` |
+| パス ポインターとデフォルト federation | `~/.calando/` | `$HOME\.calando\` |
+| 永続的な電源状態 | `~/.calando/power-off` | `$HOME\.calando\power-off` |
+| 長寿のスタートアップ | ユーザー systemd、macOS LaunchAgent、または監視対象フォールバック | `Calando` スケジュールされたタスク |
+| Claude Code 統合 | `~/.claude/settings.json`、`~/.claude/skills/calando` | `$HOME` 以下も同じパス |
+| Codex 統合 | `$CODEX_HOME/hooks.json` (それ以外の場合は `~/.codex/hooks.json`)、`~/.agents/skills/calando`、`~/.codex/skills/calando` | 有効な `CODEX_HOME` を使います。スキルは `$HOME` の下に置きます |
 
-チェックアウトではアップデートが提供されます。 コピーされたネイティブ ランタイムはサービスと hooks を提供します。 `memory-status` はそのバイナリのエイリアスであり、すべての制御動詞は `memory-supervisor` サブコマンドです。 端末や AI CLI ごとではなく、インストールされているユーザーおよび PID 制御環境ごとに 1 つの常駐 daemon があります。 `off` マーカーが存在する場合、daemon は実行されず、フェールオープン警告なしでゲートが通過します。 サービス登録と hook 配線はインストールされたままであるため、`on` はマーカーを削除して同じインストールを再開できます。
+チェックアウトではアップデートが提供されます。 コピーされたネイティブ ランタイムはサービスと hooks を提供します。 すべてのコマンドは `calando` のサブコマンドで、`memory-supervisor` と `memory-status` は 0.3.x の間の別名です。インストールされた daemon は 1 日 1 回最新リリースを確認し、自動更新を自分のサービスの外で実行します。 端末や AI CLI ごとではなく、インストールされているユーザーおよび PID 制御環境ごとに 1 つの常駐 daemon があります。 `off` マーカーが存在する場合、daemon は実行されず、フェールオープン警告なしでゲートが通過します。 サービス登録と hook 配線はインストールされたままであるため、`on` はマーカーを削除して同じインストールを再開できます。
 
 <a id="module-ownership-rules"></a>
 ## モジュールの所有権ルール
@@ -282,7 +281,7 @@ Calando/
 - `containment` は、論理アイデンティティ、ツール/状態契約、暴走証拠を定義します。 OS のアクションは実行されません。
 - `supervisor` は、両方を組み合わせて永続的なアクションを記録する唯一の長命の所有者です。
 - `gate` は、機密扱いの将来のアクションを許可/拒否し、コンテキストを提供できます。 プロセスを一時停止することはできません。
-- `memory-supervisor` 制御動詞はアクションを要求します。 daemon はそれを再検証して実行します。
+- `calando` の制御コマンドはアクションを要求します。 daemon はそれを再検証して実行します。
 - `federation` は admission スナップショットのみを共有します。 すべての PID アクションは、それが所有する PID 制御環境に対してローカルなままです。
 
 これらの境界により、ユーザーに特別なラッパーを介して Claude Code または Codex を起動させることなく、複数の端末が調整されます。

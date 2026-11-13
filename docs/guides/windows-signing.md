@@ -15,8 +15,8 @@ expected by Windows.
 
 - PowerShell, Windows Terminal, and a Windows-native Codex App Server use the native Windows path and
   are subject to Smart App Control.
-- If the Codex App window is on Windows while its App Server and tools run inside WSL, install the WSL
-  Supervisor. No Windows executable is launched, so this guidance does not apply.
+- If the Codex App window is on Windows while its App Server and tools run inside WSL, install Calando in
+  WSL. No Windows executable is launched, so this guidance does not apply.
 - Organization App Control, Windows 11 S mode, and the separate SmartScreen download-reputation check
   can impose other restrictions. The installer does not bypass them.
 
@@ -46,7 +46,7 @@ SHA-256 values automatically. For a manually downloaded executable, inspect its 
 PowerShell:
 
 ```powershell
-Get-AuthenticodeSignature .\memory-supervisor.exe | Format-List Status, StatusMessage, SignerCertificate
+Get-AuthenticodeSignature .\calando-x86_64-pc-windows-msvc.exe | Format-List Status, StatusMessage, SignerCertificate
 ```
 
 `NotSigned` is the expected result for this preparation build. When release artifacts become code

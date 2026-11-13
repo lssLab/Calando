@@ -1,4 +1,4 @@
-# Memory Supervisor 的工作原理
+# Calando 的工作原理
 
 <p align="center">
   <a href="how-it-works.md">English</a> · <a href="how-it-works.ko.md">한국어</a> · <strong>简体中文</strong> · <a href="how-it-works.ja.md">日本語</a>
@@ -7,7 +7,7 @@
 <a id="how-does-it-work"></a>
 ## 它是如何运作的？
 
-Memory Supervisor 不位于您和任一 CLI 之间。 您继续正常启动`claude`和`codex`，同时一个小后台程序监视它们的内存使用情况。
+Calando 不位于您和任一 CLI 之间。 您继续正常启动`claude`和`codex`，同时一个小后台程序监视它们的内存使用情况。
 
 1. 每个**操作系统环境** 中运行一个后台监视器。 Windows、macOS 或 Linux 基础系统是一种环境，每个 WSL 发行版、虚拟机或隔离容器是另一种环境。 如果同时使用 Windows 和 WSL，则一台显示器在 Windows 中运行，另一台显示器在 WSL 中运行。 每个监视器都会测量可用内存、本机压力信号、短窗口和长窗口下降速度、预期近期增长以及可见的 Claude Code 和 Codex 程序。 一个环境中的多个终端共享相同的监视器和新工作决策。
 2. 它通过进程表和hooks来区分终端，而不是窗口标题。 每个顶层Claude Code或Codex进程都是一个独立的lead； 后代被分组为 workers 和工具。 Hook 会话和代理 ID 与 PID 和进程启动标识一起记录，因此不同的会话或重用的 PID 不会被错误控制。
@@ -133,7 +133,7 @@ CLI lead 认知遵循固定顺序：
 1. supervisor首先在其事件账本中记录原因、目标、主动限制和恢复路径。
 2. 延迟工作的hook会在同一调用中返回原因。
 3. 物理过程操作立即显示在确切的终端中。 没有单独终端的Worker事件将在lead的下一个真实的hook处传送一次。
-4. 如果选择，操作系统、Discord 和 Telegram 会收到一份保护启动通知和一份完全恢复通知。
+4. 开启 Telegram 时，会收到一条保护开始通知和一条完全恢复通知。
 
 例如，Windows上的Claude lead正在打包修改，而WSL中的Codex准备启动subagent和大型测试，此时二者共用的物理内存余量开始快速下降。WSL supervisor记录`DRAIN`后，federation会把该判断传给Windows。两边的hook只会暂缓新的subagent和测试；编辑、结果和消息仍可继续。如果原因是外部虚拟机，则不会暂停任何AI PID。状态持续恢复后，新工作会重新开放。只有确认同一AI worker持续增长，才会进一步收窄逻辑范围，并最终考虑精确暂停本地PID。
 

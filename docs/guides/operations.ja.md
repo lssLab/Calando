@@ -4,121 +4,104 @@
   <a href="operations.md">English</a> · <a href="operations.ko.md">한국어</a> · <a href="operations.zh-CN.md">简体中文</a> · <strong>日本語</strong>
 </p>
 
+<a id="common-commands"></a>
+## 共通コマンド
+
+ターミナルのコマンドは、その OS 環境全体に作用します。Windows、各 WSL ディストリビューション、VM、コンテナはそれぞれ別の環境なので、必要な環境ごとに実行します。
+
+| コマンド | 目的 |
+| --- | --- |
+| `calando status [--json]` | この環境、CLI の接続、同じマシン上の他のすべての環境 |
+| `calando on` / `off` | この環境の保護をオンまたはオフにします。`off` はまず Calando が一時停止したものをすべて再開してから切ります |
+| `calando telegram [CHAT_ID]` / `telegram off` | Telegram 通知の設定と削除 |
+| `calando cap [<GB> \| off]` | 上級: この環境の全エージェントにメモリ上限をかけます |
+| `calando update` | 今すぐ更新 |
+| `calando update auto on` / `off` | 自動更新（既定はオン） |
+| `calando uninstall` | 削除（設定と状態は残します） |
+| `calando lock on` / `off` | 管理者のみ: オンの間は `off` とアンインストールを拒否します |
+| `calando help` | ヘルプ |
+
+0.3.x の間は `memory-supervisor` と `memory-status` も別名として使えます。
+
+`off` の状態は再起動と更新のあとも保たれ、`calando on` 一つで元に戻ります。`off` の間もフックは接続されたままで、何もせずに通します。意図的な `off` なしにサービスが止まった場合、フックは 10 秒より古い判断を捨て、**保護が利用できない**と警告します。そのときは `calando status` で確認し、`calando update` で再接続します。
+
+<a id="skills-and-commands-in-claude-code-and-codex"></a>
+## セッション内のコマンド
+
+セッションの中では、入力したそのセッションだけに作用するコマンドを使えます。Claude Code は `/calando`、Codex CLI と App は `$calando` です。
+
+```text
+/calando on | off | status | help
+/calando cap <GB> | off
+```
+
+- UserPromptSubmit フックが答えるので、プロンプトはモデルに届かず、トークンもコンテキストも使いません。
+- 対象はフックが受け取ったセッション ID のセッションです。PID やセッション一覧を指定することはありません。
+- `/calando off` にしたセッションも測定は続きますが、待機・一時停止・通知の対象にはなりません。
+- `/calando status` はそのセッションのエージェントが見ている状態を表示し、必要なら更新の案内も 1 行加えます。
+- `/calando cap <GB>` は最初の返答で説明し、`/calando cap <GB> yes` で適用します。上限はそのセッションのプロセスツリーにかかります。90% に近づくと重い作業の開始を待たせ、上限を超えると増え続けているサブエージェントを一つ一時停止し、セッションが 90% を下回ると再開します。
+
+これは `calando` という一つのスキルとしてインストールされます（`~/.claude/skills`、`~/.agents/skills`、`~/.codex/skills` にリンクではなくコピー）。以前の `memory-status` コマンドファイルは削除されます。詳しくは [Claude Code ガイド](usage-claude.ja.md) と [Codex ガイド](usage-codex.ja.md) を参照してください。
+
 <a id="notifications"></a>
 ## 通知
 
-Memory Supervisor は、メモリ読み取りごとに通知しません。 実際の保護アクションが開始されるか完全に回復するたび、または接続または保護状態にユーザーの注意が必要な場合に、通知が 1 つ送信されます。
+Calando は実際に保護の操作をしたときだけ通知します。エージェントの文脈、フックの 1 行メッセージ、一時停止したプロセスの端末への通知は常にオンです。外部へのプッシュ通知は Telegram だけで、`calando telegram` で設定します。形式と送られる条件は[通知](notifications.ja.md)を参照してください。
 
-| ルート | 出現する場所 | いつ、何を報告するか |
-| --- | --- | --- |
-| ターミナル | 影響を受ける Claude Code または Codex CLI プロセスを実行している正確な端末 | プロセスが一時停止または再開されたとき、または回復を確認するためにlead 一時停止が一度解除されたときに、理由、PID、および回復コマンドが即座に表示されます。 このルートは常にオンです。 |
-| OS | Linux、WSL、macOS、または Windows デスクトップ通知 | 保護が最初に機能したとき、または完全に回復したとき、または federation 接続または保護に注意が必要なときに表示されます。 このオプションのルートは、デスクトップ通知が利用可能な場合に機能します。 |
-| 電報 | ユーザーが選択したボットのプライベート チャットまたはグループ | 重要なアクションの開始と回復、および接続または保護の問題を報告します。 メモリの状態、理由、ターゲットが存在する場合のPID、次のアクションが含まれており、ユーザーが外出中に確認できる履歴を残します。 |
-| 不和 | 接続されたチャネル、Webhook、またはダイレクト メッセージ | 同じ重要な行動や回復、注目アイテムを掲載しています。 このオプションのルートは、チーム チャネルまたは個人通知を目的としています。 |
+<a id="control-and-recovery"></a>
+## 一時停止と回復
 
-端末、OS、テレグラム、および Discord の配信は、イベントが記録された直後に試行されます。 変更されていない状態は繰り返し送信されません。 lead は、次の hook 境界で同じ状況と回復状態を受け取ります。 終端ルートは常に接続されたままになります。 次のコマンドを使用して、オプションのルートを構成およびテストします。
+手動で再開するコマンドはありません。
+
+- メモリ逼迫のために一時停止したプロセスは、メモリが回復すると一つずつ自動的に再開します。
+- 主エージェント自身の増加が続いて一時停止した場合は、見守り付きで一度だけ自動的に再開します。同じ増加が戻ると再び一時停止します。
+- 主エージェントが一時停止したままの場合は、その端末を閉じて CLI 自身の再開機能（`claude --resume`、`codex resume`）で続けるか、`calando off` でその場で再開します。
+- CLI で再開したあとの最初のフックは、前のプロセスが一時停止したまま終了したこと、その実行のサブエージェントの結果が欠けている可能性があることを伝えます。
+- Codex App の共有 App Server は、見守り付きの再開に失敗しても一時停止したままにはしません。スレッドごとの制限に戻ります。
+
+主エージェントの一時停止は意図的にまれにしています。新しい作業を段階的に遅らせ、サブエージェントとツールの制御でも危険が残り、同じ主エージェントの増加が続くことを確認できた場合だけの最終段階です。
+
+<a id="memory-cap"></a>
+## メモリ上限（上級）
 
 ```bash
-memory-supervisor notifications show
-memory-supervisor notifications routes os
-memory-supervisor notifications discord-webhook
-memory-supervisor notifications telegram
-memory-supervisor notifications test
+calando cap 6
+calando cap off
 ```
 
-Discord Webhook URL、Discord または Telegram ボット トークンをコマンド ラインに入力しないでください。 setup コマンドの実行後に表示される非表示のプロンプトにこれを入力します。 変更は、supervisor や AI プログラムを再起動しなくても、次の通知に適用されます。 ルートの選択と削除、Discord チャンネルと DM の設定、Telegram グループの設定、およびトラブルシューティングについては、[通知の設定](notifications.ja.md)を参照してください。
+`calando cap` はこの環境のすべてのエージェントに合計の上限をかけます。説明を表示してから `[y/N]` で確認します。対話できない呼び出し元は `--yes` を付けます。値は、この環境で今使える量と照らして検証します。
 
-<a id="skills-and-commands-in-claude-code-and-codex"></a>
-## Claude Code と Codex のスキルとコマンド
+- 上限に近づくと新しい重い作業を待たせ、上限を超えると増え続けているサブエージェントを一つ一時停止します。
+- 一時停止しても、すでに使ったメモリは戻りません。使用量が一時的に上限を超えることもあります。
+- バイト単位で正確な上限が必要なら、cgroup・コンテナ・VM の制限を使ってください。
 
-インストーラーは、自動決定を行う **hooks**、エージェントにステータスを理解して説明する方法を教える **スキル**、そのワークフローを呼び出す **短いコマンド**の 3 つの個別の部分を接続します。 Hooks ユーザーによる呼び出しなしで実行されます。 スキルはメモリ ポリシー自体を強制しません。
+通常の利用には勧めません。厳密な研究やベンチマークの実行向けです。
 
-| 使用される場所 | 何を入力するか | 何をするのか |
-| --- | --- | --- |
-| Claude Code | 「メモリの状態を確認してください」と尋ね、`/memory-supervisor` を使用するか、`/memory-status` を使用してください | インストールされたスキルまたはショートカットは完全なステータスを読み取り、原因、自動回復、および必要なコマンドを説明します。 |
-| Codex CLI | `$memory-supervisor check memory status` を使用します。 `/skills` を使用して発見を確認します。 `/prompts:memory-status` は互換性ショートカットです。 | Codex のプライマリ スキル パスを通じて同じステータス ワークフローを実行します。 Hook 信頼と有効化は、`/hooks` では分離されたままになります。 |
-| Codex Desktop App | `$memory-supervisor check memory status` を使用するか、タスク内で自然に質問します | 各タスクで同じユーザーレベルの Codex スキルを使用します。 個別のアプリスキルはありません。 hooks は **設定 → Hooks** で管理します。 |
-| オペレーティング システム端末 | `memory-status` または `memory-supervisor ...` を使用してください | これらはスキルではなく、実際のステータス、セットアップ、回復コマンドです。 `resume`、`terminate`、および `kill` は、明示的なユーザー要求の後にのみ実行されます。 |
+<a id="updates"></a>
+## 更新
 
-スキルは「`memory-status --all`」を読み取り、原因と次のアクションを説明しますが、ユーザーの承認なしにプロセスを再開または終了することはありません。 Claude Code または Codex が Memory Supervisor の後にインストールされている場合は、`memory-supervisor update` を実行して、`memory-status --connections` との接続を確認します。 詳しい違いについては、[Claude Code ガイド](usage-claude.ja.md) と [Codex ガイド](usage-codex.ja.md) を参照してください。
+インストールされた監視プログラムは 1 日 1 回、最新の GitHub リリースを確認します。一時停止中のものがなく、メモリが落ち着いているときに、自分のサービスの外で更新を実行します。忙しいときは 1 時間ごとに再試行します。
+
+- **Claude Code:** フックの変更も含めて自動で適用されます。新しいセッションから反映されます。
+- **Codex:** Codex が接続されていて、フック定義が変わるリリース（0.3 → 0.4 のようなマイナーバージョン）は自動適用しません。Codex は変更されたフックを、CLI の `/hooks` または App の **設定 → Hooks** で信頼するまで黙って飛ばすためです。`calando status` と Telegram（1 回）が `calando update` の実行とフックの信頼を案内します。パッチリリースではフックは変わりません。
+- **自動更新がオフ:** `calando status`、`/calando status`、Telegram（バージョンごとに 1 回）が新しいバージョンを知らせます。エージェントのフックは更新について触れません。
+- 毎日の確認では、Claude Code が `settings.json` から Calando のフックを消していた場合に元に戻します。
+
+0.2.x から 0.3.0 への更新ではフックのコマンドが変わるため、Codex では Calando のフックを一度信頼し直す必要があります。古い `memory-supervisor` のフォルダーは一度だけ移動され、Unix では古い名前がリンクとして残ります。
+
+<a id="administrator-lock"></a>
+## 管理者ロック
+
+```bash
+sudo "$(command -v calando)" lock on
+```
+
+Windows では管理者の PowerShell で `calando lock on` を実行します。オンの間は、ターミナルとセッションの `off`、およびアンインストールが拒否されます。同じユーザーで動くエージェントが Calando を切るのを防ぐ唯一の方法です。ロックは管理者だけが変更できるポリシーファイル（`/etc/calando/lock` または `%ProgramData%\Calando\lock`）で、サンドボックスではありません。限界は[セキュリティ](security.ja.md)を参照してください。
 
 <a id="security"></a>
 ## 安全
 
-Memory Supervisor は、オペレーティング システムのメモリとプロセス情報に加えて、セッション、エージェント、ツール、作業ディレクトリ、および接続状態の情報と、Claude Code および Codex hooks によって提供されるコマンド プレフィックスを読み取ります。 この情報は、新しい作業を開始できるかどうかを決定し、正確な制御ターゲットを特定するためにのみ使用されます。
-
-自動制御は、今後の Claude Code または Codex の作業を遅らせると停止し、最終保護段階で 1 つの検証済みローカル作業プロセスを一時停止して再開します。 プログラムを自動的に終了したり、無関係なプログラムを制御したりすることはありません。 通常の監視では外部要求は行われません。 GitHub のインストールと更新、およびオペレーターが有効にした Discord または Telegram の通知のみがネットワークを使用します。
-
-**これは完全な検査と管理の境界です。 Memory Supervisor は外部の何も処理しません。** 制御決定の hook ペイロードに存在する可能性があるプロンプト、会話テキスト、模範応答、またはファイルの内容を使用せず、それらを保持しません。 プロジェクト ファイルやプロセス メモリを直接開いたり、ブラウザや IDE の内部データ、Claude や ChatGPT の資格情報、オペレーティング システムのカーネル、メモリ、スワップ、ファイアウォールの設定を検査したり変更したりすることはありません。 保存されたデータ、同一マシンの federation フィールド、および安全対策の完全なリストについては、[セキュリティとデータ/制御境界](security.ja.md)を参照してください。
-
-<a id="control-and-recovery"></a>
-## 制御と回復
-
-メモリが再び安定すると、一時停止していた作業が 1 項目ずつ自動的に再開されます。 lead 自体のメモリが増加し続けたため一時停止された場合は、supervisor が結果を確認できるように自動的に再開されます。 同じ成長が戻った場合、lead は再び一時停止し、ユーザーの決定を待ちます。 手動で再開するには、まず現在のステータスを確認し、そこに表示されている PID を使用します。
-
-```bash
-memory-status
-memory-supervisor resume [pid]
-```
-
-lead の一時停止は意図的に非常にまれです。 これは**最終保護段階**であり、新たな作業が段階的に遅延し、subagentとツール制御によって危険が除去されず、同じleadとその正確な終端からの持続的な成長が確認された場合にのみ使用されます。 ほとんどのインシデントは、作業範囲の縮小、worker の一時停止、または自動回復によって早期に終了します。
-
-Claude Code または Codex が誤って終了した場合、CLI は会話を復元し、インストールされた `SessionStart` hook は、保持されているメモリ インシデントと現在の決定を lead に 1 回送信します。
-
-```bash
-claude --resume
-codex resume
-```
-
-意図的に保護をオフまたはオンにする場合は、これら 2 つのコマンドのみを使用してください。 `off` は、インストールされている Claude Code および Codex hooks をサイレント パススルー モードで接続したまま、バックグラウンド サービスを停止して無効にします。 選択は再起動後も有効であり、`memory-supervisor update`; 1 つの `on` コマンドで保護が復元されます。
-
-```bash
-memory-supervisor off
-memory-supervisor on
-```
-
-`off` は、supervisor が管理する一時停止された PID または進行中のプロセス アクションを保留することを拒否します。 最初にリストされた PID を解決します。 意図的な `off` なしにサービスが停止した場合でも、hooks は 10 秒後に古い決定を破棄し、**保護が利用できない** と警告します。
-
-```bash
-memory-status --connections
-memory-supervisor update
-```
-
-固定制限が必要な場合は、ローカル環境内のすべての Claude Code および Codex プログラムに対して 1 つの合計メモリ上限をオプションで設定できます。
-
-```bash
-memory-supervisor budget
-memory-supervisor budget set 6
-memory-supervisor budget off
-```
-
-コマンドは、制御対象ごとにグループ化されています。
-
-- `memory-status` コマンドは読み取り専用です: ローカル原因、federation、サービス、hook、および通知接続。
-- `on` と `off` は、現在のインストール全体を制御します。 1 つのコマンドで、接続されているすべての Claude Code および Codex セッションがカバーされます。 その環境内で別の OS、WSL ディストリビューション、または VM を切り替える必要があります。
-- `resume` は、supervisor によって一時停止されたプロセスを続行します。 `terminate` および `kill` は、原因を調査した後にオペレーターが選択したプロセス終了です。
-- `budget` は、コンピューター全体や Chrome ではなく、現在の環境の Claude Code と Codex にのみオプションのキャップを適用します。
-- `update` はサービスを再適用し、CLI 接続を検出します。 `notifications` は、オプションの OS、Discord、および Telegram ルートを制御します。 lead hooks および正確な最終通知は引き続き必須です。
-
-<a id="common-commands"></a>
-## 共通コマンド
-
-| 指示 | 目的 |
-| --- | --- |
-| `memory-status` | 地域の健康状態、原因、次のアクション |
-| `memory-status --all` | 同じコンピューター上の Windows、WSL、仮想マシン、およびコンテナーの状態 |
-| `memory-status --connections` | バックグラウンド サービス、AI CLI、および通知接続 |
-| `memory-supervisor on` / `off` | この環境での保護を永続的に有効または無効にします。 接続済み hooks オフ時に通過 |
-| `memory-supervisor update` | 検出された CLI を更新して再接続する |
-| `memory-supervisor budget` | この環境の適応能力とオプションの上限を表示します |
-| `memory-supervisor budget set <GiB>` / `budget off` | 集約ローカル Claude Code および Codex の上限を設定または削除します |
-| `memory-supervisor resume [pid]` | supervisor で一時停止されたプロセスを再開します。 1 つだけが一時停止されている場合にのみ PID を省略します |
-| `memory-supervisor terminate <pid>` | 1 つの検証済み管理プロセスを正常に終了する |
-| `memory-supervisor kill <pid>` | 最後の手段として、検証済みの 1 つのプロセスを強制終了する |
-| `memory-supervisor notifications show` | シークレットを非表示にした通知設定を表示する |
-| `memory-supervisor 通知ルート <all\|なし\|ルート>` | オプションの OS、Discord、および Telegram ルートを選択します |
-| `memory-supervisor notifications test` | 有効になっているオプションの通知ルートをテストする |
-| `memory-supervisor uninstall` | 状態を維持しながらサービスと AI CLI 接続を削除します |
+Calando は OS のメモリとプロセス情報、Claude Code と Codex のフックが渡すセッション・エージェント・ツール・作業ディレクトリ・コマンドの先頭部分を読みます。使い道は、新しい作業を始めてよいかの判断と、制御対象の特定だけです。プロンプト、会話、モデルの応答、ファイルの内容は判断に使わず、保存もしません。自動の物理制御は、確認済みのローカル作業プロセス一つの一時停止と再開までで、終了はしません。ネットワークを使うのは、インストール、更新、Telegram 通知のときだけです。詳しくは[セキュリティとデータ/制御境界](security.ja.md)を参照してください。
 
 <a id="verification"></a>
 ## 検証
@@ -131,4 +114,4 @@ bash tests/run.sh
 powershell -File .\tests\run.ps1
 ```
 
-Rust ユニット、統合、およびインストーラのテストでは、ポリシー、プロセスの安全性、Claude Code および Codex の配線、federation、リカバリ、およびリリース バンドルがカバーされます。 GitHub Actions は、Rosetta 上の Linux x86-64、Windows x86-64、Apple Silicon macOS、および macOS x86-64 上のビルドとプラットフォーム コントラクトをチェックします。 実際のほぼ枯渇の境界は、境界のある物理マシン検証と決定論的シミュレーションによってカバーされます。 [テストカバレッジ](../testing/test-matrix.ja.md)を参照してください。
+Rust のユニット・統合・インストーラーのテストは、ポリシー、プロセスの安全性、Claude Code と Codex の配線、federation、回復、リリースバンドルを対象にしています。詳しくは[テストカバレッジ](../testing/test-matrix.ja.md)を参照してください。

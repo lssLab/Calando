@@ -58,8 +58,7 @@ WSL2 发行版可以共享相同的底层实用程序 VM，同时保留单独的
 AI CLI hooks 是第二条路径，而不是进程检测器。 他们在新的扇出之前询问最新的本地/联邦状态，并将事件注入到下一个真实hook边界的主代理中。 如果缺少 hook，daemon 仍然可以观察其本地进程表，但无法阻止 AI CLI 在新进程启动之前进行分配。 使用以下命令检查两条路径：
 
 ```bash
-memory-status --connections
-memory-status --all
+calando status
 ```
 
 <a id="how-usable-capacity-is-learned"></a>
@@ -69,7 +68,7 @@ memory-status --all
 | --- | --- | --- | --- |
 | Linux 和 WSL | `MemTotal`，减少到最小的有限cgroup祖先限制 | `MemAvailable` 和每个有限 `limit - current` cgroup 余数的最小值 | PSI `some/full`、回收、交换和 OOM 计数器 |
 | macOS | `sysctl -n hw.memsize` | `vm_stat` 免费 + 非活动 + 可清除页面 | 暴露时的内核压力水平、页面输出/压缩和交换趋势 |
-| 视窗 | `GlobalMemoryStatusEx.totalPhys` | `GlobalMemoryStatusEx.availPhys` | 提交限制减去 `GetPerformanceInfo` 中提交的页面 |
+| Windows | `GlobalMemoryStatusEx.totalPhys` | `GlobalMemoryStatusEx.availPhys` | 提交限制减去 `GetPerformanceInfo` 中提交的页面 |
 | 任何虚拟机访客 | 上面的相关行在客人内部报告 | 访客可见值，因此已经受到固定或动态 VM 分配的限制 | 来宾本地压力信号 |
 
 已解决的容量和自适应策略会在每次更新时重新计算。 因此，无需固定机器大小配置文件即可拾取 VM 动态内存更改或 cgroup 更改。 如果主传感器发生故障，状态报告保护降级并保留admission； 8 GiB 后备标签是诊断性的，而不是声称该计算机确实具有 8 GiB。
@@ -103,33 +102,32 @@ new-fan-out floor     = min(automatic reserve + one minimum breathing/work block
 | 物理或虚拟机分配 | 操作系统/管理程序默认值 | 物理RAM无法通过软件更改； 更改该平台中的 WSL、Hyper-V、Parallels、VMware、UTM 或云 VM 内存 | 主机或来宾操作系统本身 | 提高来宾内存可以提供更多可能性headroom，但会减少主机的最坏情况储备。 降低它会使客人的自适应阈值和预订向下重新计算。 通常需要来宾关闭/重新启动。 |
 | 自动检测容量 | 原生传感器 | 正常情况下什么也不做。 仅当本机值明显错误时，`MEMORY_SUPERVISOR_CAPACITY_MB` 才是高级校准覆盖 | 一个已安装的实例 | 它改变了策略计算，但不改变实际的操作系统/虚拟机限制。 设置得太高是不安全的； 太低是不必要的保守。 |
 | 适应性压力政策 | `balanced`; 没有手动预算 | 可选的 `protect`、`balanced` 或 `performance` 配置文件，或高级阈值覆盖 | 一个已安装的实例 | Federation 可以将该实例更严格的 admission 决策传播给同级。 `performance` 永远不会绕过实际崩溃、降级保护或显式上限。 |
-| 聚合支持的 CLI 内存预算（硬上限） | **关闭** | 该环境中的`memory-supervisor budget set <GiB>`或`budget off` | 该 OS/PID 域可见的所有Claude Code 和 Codex 根树； 不是 Chrome 或整个机器 | 在上限附近，举行新的扇出。 在此之上，每个反应间隔最多可以暂停一个经过验证的增长worker/支持流程。 上限邻近保持在本地：`near/exceeded`状态不再在联合对等点上关闭admission（仅测量压力联合），并且无法暂停其PID。 |
+| 所有代理的硬上限（`calando cap`） | **关闭** | 该环境中的 `calando cap <GB>` 或 `calando cap off` | 该 OS/PID 域可见的所有 Claude Code 和 Codex 根树；不包括 Chrome 或整台机器 | 接近上限时暂缓新的高内存工作；超过上限时暂停一个正在增长的子代理。 上限邻近保持在本地：`near/exceeded`状态不再在联合对等点上关闭admission（仅测量压力联合），并且无法暂停其PID。 |
 | Federationadmission | 当实例共享目录时启用 | 配置共享`MEMORY_SUPERVISOR_FEDERATION_DIR`； WSL 分发名称是自动的，而其他克隆来宾需要唯一的 `MEMORY_SUPERVISOR_INSTANCE` 值 | 新的扇出仅在新的同行之间进行 | 使用最近十秒中最差的有效快照。 它从不池化硬上限、添加 RAM 总量、迁移作业或更改远程配置。 |
 
 <a id="changing-a-supported-cli-memory-budget"></a>
-## 更改支持的 CLI 内存预算
+## 设置硬上限
 
-**在进程树应更改的每个环境**中运行以下命令：
+**在进程树需要受限的每个环境中**运行：
 
 ```bash
-memory-supervisor budget
-memory-supervisor budget set 12
-memory-supervisor budget off
+calando cap 12
+calando cap off
 ```
 
-`12` 只是 GiB 语法示例，不是推荐的大小（`memory-supervisor hard-cap set <MB>` 仍然是 MB 精度别名）。 裸露的`budget`报告使用共享的federation快照显示了该环境的理论最大值和当前可能的总计（在对等环境的显式预算之后）； 只有明确的预算才算作声明，而不是环境的默认分配。 `set` 针对当前可能的总数进行验证 — 过大的请求会被拒绝，并根据每个环境进行精确的缩减以使其适合，而当前可能总数的 90% 或更多的请求 — 或者将机器范围的显式预算总数推至物理估计的 90% 或更多的请求 — 要求确认（对于脚本来说是`--yes`）。 `set` 保留不相关的配置并重新加载该本地服务； `off` 将环境返回到仅自适应模式。
+`12` 只是 GB 语法示例，不是推荐大小。命令先打印说明并询问 `[y/N]`，脚本可加 `--yes`。请求会对照本环境当前能用的内存校验，放不下时会被拒绝。`off` 让环境回到仅自适应模式。正常使用不建议开启，它适合严格的研究或基准测试。
 
-示例：
-
-| 期望的结果 | 行动 |
+| 期望的结果 | 做法 |
 | --- | --- |
-| 本机 Windows Claude Code 和 Codex 的一份共享预算 | 在 PowerShell 中运行一次 `budget set <GiB>` |
-| WSL 课程的不同预算 | 在该 WSL 发行版中运行单独的值 |
-| 主机和来宾虚拟机中的策略相同 | 在主机上和访客内部运行相同的命令一次 |
-| 两个虚拟机的预算不同 | 在每个虚拟机内运行不同的值 |
-| 无处不在的默认智能行为 | 在之前有覆盖的每个环境中运行 `budget off` |
+| 本机 Windows 的 Claude Code 和 Codex 共用一个上限 | 在 PowerShell 中运行一次 `calando cap <GB>` |
+| WSL 使用不同的上限 | 在该 WSL 发行版中单独设置 |
+| 两个虚拟机使用不同的上限 | 在每个虚拟机内分别设置 |
+| 只限制一个会话 | 在该会话中输入 `/calando cap <GB>`（Codex：`$calando cap <GB>`），再用 `... yes` 应用 |
+| 恢复默认的自适应行为 | 在之前设置过的每个环境中运行 `calando cap off` |
 
-该上限对每个完整支持的 CLI 根树进行一次计数。 它被采样，可能在滴答之间超调，并且暂停不会立即返回已驻留的内存。 使用本机 cgroup、容器或 VM 限制来实现字节精确分配上限。
+上限对每个受支持的 CLI 根树计数一次。它是采样值，两次采样之间可能超出，暂停也无法收回已经占用的内存。需要精确到字节的分配上限时，请用 cgroup、容器或 VM 限制。
+
+会话上限只限制该会话自己的进程树：接近 90% 时暂缓其高内存启动；超过上限时暂停一个正在增长的子代理，会话回落到 90% 以下后恢复。
 
 <a id="changing-wsl-or-vm-allocation"></a>
 ## 更改 WSL 或 VM 分配
@@ -152,7 +150,7 @@ autoMemoryReclaim=gradual
 <a id="advanced-policy-changes"></a>
 ## 高级政策变更
 
-普通用户应该保留这些未设置。 高级设置位于 Unix 上的 `~/.config/memory-supervisor/config.json` 和 Windows 上的 `$HOME\.config\memory-supervisor\config.json`：
+普通用户应该保留这些未设置。 高级设置位于 Unix 上的 `~/.config/calando/config.json` 和 Windows 上的 `%USERPROFILE%\.config\calando\config.json`（键名仍为 `MEMORY_SUPERVISOR_*`）：
 
 ```json
 {
@@ -160,7 +158,7 @@ autoMemoryReclaim=gradual
 }
 ```
 
-手动编辑后，运行`memory-supervisor update`并检查`memory-status`。 `protect` 较早起作用，`performance` 较晚起作用，`balanced` 为默认值。 细粒度的`MEMORY_SUPERVISOR_MEM_*`、`MEMORY_SUPERVISOR_PSI_*`和过程观察覆盖可用于测量兼容性问题，但它们的顺序经过验证，无效组回退到自适应值。 斜率或原始阈值仍然是观察值； 共享执行器不变量仍然控制暂停权限。
+手动编辑后，运行 `calando update` 并用 `calando status` 确认。 `protect` 较早起作用，`performance` 较晚起作用，`balanced` 为默认值。 细粒度的`MEMORY_SUPERVISOR_MEM_*`、`MEMORY_SUPERVISOR_PSI_*`和过程观察覆盖可用于测量兼容性问题，但它们的顺序经过验证，无效组回退到自适应值。 斜率或原始阈值仍然是观察值； 共享执行器不变量仍然控制暂停权限。
 
 
 <a id="verification-boundary"></a>

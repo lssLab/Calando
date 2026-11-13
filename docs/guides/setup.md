@@ -11,7 +11,7 @@ command below. There is no Git, Python, Rust, or separate installer to prepare.
 A normal installation is scoped to your user account and does not require
 `sudo` or an administrator shell.
 
-### 1. Install Memory Supervisor
+### 1. Install Calando
 
 #### Linux, WSL2, or macOS terminal
 
@@ -55,9 +55,9 @@ and [initial rollout notes](https://support.microsoft.com/en-au/help/5079391) fo
 Install for the environment where the **App Server and its tools actually run**,
 not the operating system where the Codex App window is displayed.
 
-- When Codex App on Windows uses a WSL engine, the Supervisor installed in that
+- When Codex App on Windows uses a WSL engine, Calando installed in that
   WSL environment protects its WSL App Server, per-task logical threads, and
-  WSL-side tools. This path does not run the native Windows Supervisor, so it
+  WSL-side tools. This path does not run native Windows Calando, so it
   does not require turning off Smart App Control. The Windows App UI process and
   any separate Windows-native Claude Code or Codex CLI remain outside that WSL
   installation's measurement and control boundary.
@@ -75,7 +75,7 @@ not the operating system where the Codex App window is displayed.
 
 ### 2. Set up Claude Code
 
-The installer connects the Memory Supervisor user hook automatically. There
+The installer connects the Calando user hook automatically. There
 is nothing to configure, approve, or enable in Claude Code.
 
 **If Claude Code was already running during installation:** keep working.
@@ -83,7 +83,7 @@ Claude Code automatically reloads user-settings changes, so a restart is not
 normally required.
 
 **To verify:** confirm `Claude Code CONNECTED` in step 5's
-`memory-status --connections` output. Open the read-only `/hooks` screen and
+`calando status` output. Open the read-only `/hooks` screen and
 inspect `User Settings` only if you want to see the hook details. Restart
 Claude Code after the current work only in the exceptional case where this
 optional view does not show the entry.
@@ -91,7 +91,7 @@ optional view does not show the entry.
 ### 3. Set up Codex CLI
 
 1. Open `/hooks` in the Codex CLI you will use.
-2. Confirm that all seven Memory Supervisor hooks are **trusted and on**.
+2. Confirm that all seven Calando hooks are **trusted and on**.
 3. Trust entries marked for review and turn on any disabled entry.
 4. Close `/hooks` and continue working.
 
@@ -102,9 +102,9 @@ that CLI once.
 
 ### 4. Set up Codex Desktop App
 
-1. Open Codex App and go to **Settings → Hooks**. If the Memory Supervisor
+1. Open Codex App and go to **Settings → Hooks**. If the Calando
    entries are not there yet, wait up to 60 seconds and reopen Settings.
-2. Trust and turn on all seven Memory Supervisor hooks. **Trust all** does not
+2. Trust and turn on all seven Calando hooks. **Trust all** does not
    turn on a previously disabled switch, so check both states.
 3. Return to an existing task and send the next request you intended to send.
    Create a new task only if there is no existing task to continue.
@@ -116,7 +116,7 @@ create a new task.
 ### 5. Verify the installation
 
 ```bash
-memory-status --connections
+calando status
 ```
 
 Check the lines for the programs you use:
@@ -133,14 +133,14 @@ If a line is not healthy, act only on what it reports:
 - `disabled` or `not trusted`: use `/hooks` in Codex CLI or **Settings →
   Hooks** in Codex App to trust and enable the named entry.
 - `missing`, `stale`, `DEGRADED`, or `NOT RUNNING`: run
-  `memory-supervisor update`, then repeat this check.
+  `calando update`, then repeat this check.
 - `NEEDS ATTENTION`: satisfy the reported program-version or hook requirement,
-  then run `memory-supervisor update`.
-- `Core daemon OFF`: run `memory-supervisor on`.
+  then run `calando update`.
+- `Core daemon OFF`: run `calando on`.
 - If all seven App hooks look correct but the App still does not become
   `ACTIVE` after a request, restart the App once, send the next request in an
   existing task, and check again.
-- If a new installation cannot find the `memory-status` command, reopen only
+- If a new installation cannot find the `calando` command, reopen only
   the terminal and run it again. Claude Code, Codex CLI, and Codex App do not
   need to restart for this PATH refresh.
 
@@ -151,6 +151,11 @@ organization policy or Windows security policy blocks installation. See the
 [Codex hooks guide](https://learn.chatgpt.com/docs/hooks#review-and-trust-hooks)
 for the underlying trust rules.
 
+Upgrading from 0.2.x moves the old `memory-supervisor` folders to the `calando` names once (on Unix
+the old names are left as links) and changes the hook commands, so Codex CLI and App users trust the
+seven Calando hooks once more. After that, updates run automatically; see
+[operations](operations.md#update).
+
 These commands install the latest public release. A Rust build tool is not
 required; the verified executable included in that release is used automatically.
 
@@ -159,7 +164,7 @@ required; the verified executable included in that release is used automatically
 To remove Calando, run this once in each environment where it is installed:
 
 ```bash
-memory-supervisor uninstall
+calando uninstall
 ```
 
 It removes the background service, executable, and Calando-owned hook and skill connections while

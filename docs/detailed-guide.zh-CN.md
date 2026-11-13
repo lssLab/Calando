@@ -32,15 +32,15 @@
 </p>
 
 <a id="what-problem-does-memory-supervisor-solve"></a>
-## Memory Supervisor解决什么问题？
+## Calando 解决什么问题？
 
 在Claude Code、Codex CLI或Codex Desktop App、subagents中长时间运行的工作期间，构建、测试和浏览器工具可能会堆积起来。 如果可用内存快速下降，CLI 终端可能会停止响应或退出； 在桌面应用程序中，共享App Server的多个对话可能会同时受到影响。 在任何一种情况下，待处理的结果和正在进行的工作都可能被中断。
 
-Memory Supervisor 不会仅仅因为内存使用率高而限制工作。 在 CLI 和桌面应用程序中，只有当真正的风险接近时，它才会分阶段延迟新工作，同时尽可能保持正在进行的工作和结果交付运行。 这有助于防止会话突然结束。
+Calando 不会仅仅因为内存使用率高而限制工作。 在 CLI 和桌面应用程序中，只有当真正的风险接近时，它才会分阶段延迟新工作，同时尽可能保持正在进行的工作和结果交付运行。 这有助于防止会话突然结束。
 
 保护不会从无限制运行直接跳到完全停止。实际风险越近，措施就逐级加强；状态恢复后，再按相反顺序逐级解除。
 
-1. **自动设置** — 像往常一样启动`claude`或`codex`，或在Codex Desktop App中开始对话。 Memory Supervisor 自动区分 CLI 会话和 App 会话，读取总容量、可用内存、下降速度以及即将进行的工作所需的缓冲区，然后设置保护级别。 没有需要配置的预算，也没有需要持续检查的状态。
+1. **自动设置** — 像往常一样启动`claude`或`codex`，或在Codex Desktop App中开始对话。 Calando 自动区分 CLI 会话和 App 会话，读取总容量、可用内存、下降速度以及即将进行的工作所需的缓冲区，然后设置保护级别。 没有需要配置的预算，也没有需要持续检查的状态。
 2. **无限制运行** - 当可用内存及其变化率保持稳定时，仅高内存使用不会触发限制。
 3. **以最佳性能观察** - 快速下降本身并不会限制工作，同时还有大量内存。 supervisor 保持一切开放，同时检查下跌是否持续以及真正的风险是否越来越近。
 4. **首先延迟新的subagents、工作流程和任务** - 当内存headroom持续丢失使风险更接近或为另一个工作块留下的空间太少时，此阶段仅延迟创建新的subagents、工作流程和任务，而不影响已经正在进行的工作。 它本身不会延迟构建或测试启动或暂停正在运行的程序，从而提供当前工作的完成时间和内存的恢复时间。
@@ -55,7 +55,7 @@ Memory Supervisor 不会仅仅因为内存使用率高而限制工作。 在 CLI
 <a id="how-does-it-work"></a>
 ## 它是如何运作的？
 
-Memory Supervisor 不位于您和任一 CLI 之间。 您继续正常启动`claude`和`codex`，同时一个小后台程序监视它们的内存使用情况。
+Calando 不位于您和任一 CLI 之间。 您继续正常启动`claude`和`codex`，同时一个小后台程序监视它们的内存使用情况。
 
 1. 每个**操作系统环境** 中运行一个后台监视器。 Windows、macOS 或 Linux 基础系统是一种环境，每个 WSL 发行版、虚拟机或隔离容器是另一种环境。 如果同时使用 Windows 和 WSL，则一台显示器在 Windows 中运行，另一台显示器在 WSL 中运行。 每个监视器都会测量可用内存、本机压力信号、短窗口和长窗口下降速度、预期近期增长以及可见的 Claude Code 和 Codex 程序。 一个环境中的多个终端共享相同的监视器和新工作决策。
 2. 它通过进程表和hooks来区分终端，而不是窗口标题。 每个顶层Claude Code或Codex进程都是一个独立的lead； 后代被分组为 workers 和工具。 Hook 会话和代理 ID 与 PID 和进程启动标识一起记录，因此不同的会话或重用的 PID 不会被错误控制。
@@ -181,7 +181,7 @@ CLI lead 认知遵循固定顺序：
 1. supervisor首先在其事件账本中记录原因、目标、主动限制和恢复路径。
 2. 延迟工作的hook会在同一调用中返回原因。
 3. 物理过程操作立即显示在确切的终端中。 没有单独终端的Worker事件将在lead的下一个真实的hook处传送一次。
-4. 如果选择，操作系统、Discord 和 Telegram 会收到一份保护启动通知和一份完全恢复通知。
+4. 开启 Telegram 时，会收到一条保护开始通知和一条完全恢复通知。
 
 例如，Windows上的Claude lead正在打包修改，而WSL中的Codex准备启动subagent和大型测试，此时二者共用的物理内存余量开始快速下降。WSL supervisor记录`DRAIN`后，federation会把该判断传给Windows。两边的hook只会暂缓新的subagent和测试；编辑、结果和消息仍可继续。如果原因是外部虚拟机，则不会暂停任何AI PID。状态持续恢复后，新工作会重新开放。只有确认同一AI worker持续增长，才会进一步收窄逻辑范围，并最终考虑精确暂停本地PID。
 
@@ -256,7 +256,7 @@ CLI lead 认知遵循固定顺序：
 打开适合您环境的**终端**，然后粘贴下面匹配的一行命令。 无需准备 Git、Python、Rust 或单独的安装程序。 正常安装的范围仅限于您的用户帐户，不需要 `sudo` 或管理员 shell。
 
 <a id="1-install-memory-supervisor"></a>
-### 1.安装Memory Supervisor
+### 1. 安装 Calando
 
 <a id="linux-wsl2-or-macos-terminal"></a>
 #### Linux、WSL2 或 macOS 终端
@@ -276,7 +276,7 @@ irm https://raw.githubusercontent.com/lssLab/Calando/main/bootstrap.ps1 | iex
 
 命令完成后，后台服务正在运行，检测到的Claude Code和Codexhooks会自动连接。 它不会关闭正在运行的 AI 程序或中断正在进行的工作。
 
-> [！重要的]
+> [!IMPORTANT]
 > Windows 可执行文件目前正在由 [SignPath Foundation](https://signpath.org/) 进行审核，
 > 因此 Windows 11 需要 **Windows 安全 → 应用程序和浏览器控制 → Smart App Control** 保留
 > `Off`，同时安装和使用本机构建，直到审核完成。
@@ -300,17 +300,17 @@ irm https://raw.githubusercontent.com/lssLab/Calando/main/bootstrap.ps1 | iex
 <a id="2-set-up-claude-code"></a>
 ### 2. 设置Claude Code
 
-安装程序自动连接Memory Supervisor用户hook。 Claude Code 中无需配置、批准或启用任何内容。
+安装程序自动连接 Calando 用户 hook。 Claude Code 中无需配置、批准或启用任何内容。
 
 **如果 Claude Code 在安装过程中已在运行：** 继续工作。 Claude Code 自动重新加载用户设置更改，因此通常不需要重新启动。
 
-**验证：**确认步骤 5 的 `memory-status --connections` 输出中的 `Claude Code CONNECTED`。 仅当您想查看 hook 详细信息时，才打开只读 `/hooks` 屏幕并检查 `User Settings`。 仅在该可选视图不显示条目的特殊情况下，在当前工作之后重新启动 Claude Code。
+**验证：**确认步骤 5 的 `calando status` 输出中的 `Claude Code CONNECTED`。 仅当您想查看 hook 详细信息时，才打开只读 `/hooks` 屏幕并检查 `User Settings`。 仅在该可选视图不显示条目的特殊情况下，在当前工作之后重新启动 Claude Code。
 
 <a id="3-set-up-codex-cli"></a>
 ### 3. 设置Codex CLI
 
 1. 在您将使用的Codex CLI中打开`/hooks`。
-2. 确认所有七个 Memory Supervisor hooks 均**受信任且处于** 状态。
+2. 确认所有七个 Calando hooks 均为**已信任且已开启**。
 3. 信任标记为要审查的条目并打开任何禁用的条目。
 4. 关闭`/hooks`并继续工作。
 
@@ -319,8 +319,8 @@ irm https://raw.githubusercontent.com/lssLab/Calando/main/bootstrap.ps1 | iex
 <a id="4-set-up-codex-desktop-app"></a>
 ### 4. 设置Codex Desktop App
 
-1. 打开Codex App并进入**设置→Hooks**。 如果 Memory Supervisor 条目尚未存在，请等待最多 60 秒，然后重新打开“设置”。
-2. 信任并打开所有七个Memory Supervisorhooks。 **全部信任** 不会打开之前禁用的开关，因此请检查这两个状态。
+1. 打开Codex App并进入**设置→Hooks**。 如果 Calando 条目尚未出现，请等待最多 60 秒，然后重新打开“设置”。
+2. 信任并打开所有七个 Calando hooks。 **全部信任** 不会打开之前禁用的开关，因此请检查这两个状态。
 3. 返回现有任务并发送您想要发送的下一个请求。 仅当没有要继续的现有任务时才创建新任务。
 
 **如果 Codex App 在安装过程中已在运行：** 让应用程序及其现有任务保持打开状态，然后按照步骤 1-3 进行操作。 您无需重新启动应用程序或创建新任务。
@@ -329,7 +329,7 @@ irm https://raw.githubusercontent.com/lssLab/Calando/main/bootstrap.ps1 | iex
 ### 5. 验证安装
 
 ```bash
-memory-status --connections
+calando status
 ```
 
 检查您使用的程序的行：
@@ -343,15 +343,15 @@ memory-status --connections
 如果线路不健康，则仅根据其报告的内容采取行动：
 
 - `disabled` 或 `not trusted`：使用 Codex CLI 中的 `/hooks` 或 Codex App 中的 **设置 → Hooks** 来信任并启用指定条目。
-- `missing`、`stale`、`DEGRADED` 或`NOT RUNNING`：运行`memory-supervisor update`，然后重复此检查。
-- `NEEDS ATTENTION`：满足报告的程序版本或hook要求，然后运行`memory-supervisor update`。
-- `Core daemon OFF`：运行`memory-supervisor on`。
+- `missing`、`stale`、`DEGRADED` 或`NOT RUNNING`：运行 `calando update`，然后重复此检查。
+- `NEEDS ATTENTION`：满足报告的程序版本或hook要求，然后运行 `calando update`。
+- `Core daemon OFF`：运行 `calando on`。
 - 如果所有七个应用程序hooks看起来都正确，但在请求后应用程序仍然没有变成`ACTIVE`，请重新启动应用程序一次，在现有任务中发送下一个请求，然后再次检查。
-- 如果新安装找不到`memory-status`命令，请仅重新打开终端并再次运行。 Claude Code、Codex CLI 和 Codex App 不需要为此 PATH 刷新重新启动。
+- 如果新安装找不到 `calando` 命令，请仅重新打开终端并再次运行。 Claude Code、Codex CLI 和 Codex App 不需要为此 PATH 刷新重新启动。
 
 Codex hook 信任不是管理员访问权限。 这是您对 Codex 将运行的确切本地命令的批准。 仅当组织策略或 Windows 安全策略阻止安装时才检查管理员策略。 有关底层信任规则，请参阅 [Claude Code hooks 指南](https://code.claude.com/docs/en/hooks) 和 [Codex hooks 指南](https://learn.chatgpt.com/docs/hooks#review-and-trust-hooks)。
 
-这些命令安装最新的公开版本。 不需要 Rust 构建工具； 自动使用该版本中包含的经过验证的可执行文件。
+这些命令安装最新的公开版本。不需要 Rust 构建工具，会自动使用该版本中经过校验的可执行文件。之后服务每天检查一次更新并自动应用（`calando update auto off` 可关闭）。从 0.2.x 升级时，旧的 `memory-supervisor` 文件夹会被移动一次；在 Unix 上旧名称保留为链接。升级到 0.3.0 会改变 hook 命令，Codex 用户需要在 `/hooks`（CLI）或**设置 → Hooks**（App）中重新信任一次。
 
 <a id="6-uninstall"></a>
 ### 6. 卸载
@@ -359,10 +359,10 @@ Codex hook 信任不是管理员访问权限。 这是您对 Codex 将运行的�
 要删除 Calando，请在安装它的每个环境中运行一次：
 
 ```bash
-memory-supervisor uninstall
+calando uninstall
 ```
 
-它删除后台服务、可执行文件以及Calando拥有的hook和技能连接，同时保留状态和用户设置。
+它删除后台服务、可执行文件以及 Calando 拥有的 hook 和技能，同时保留状态和用户设置。如果管理员开启了 `calando lock`，卸载会被拒绝。
 
 <a id="supported-environments"></a>
 ## 支持的环境
@@ -397,121 +397,125 @@ memory-supervisor uninstall
 <a id="notifications"></a>
 ## 通知
 
-Memory Supervisor 不会在每次内存读取时发出通知。 每次真正的保护操作开始或完全恢复时，或者当连接或保护状况需要用户注意时，它都会发送一个通知。
+Calando 不会为每次内存读数发通知。只有真正的保护措施开始或完全恢复时，或者连接与保护状态需要用户处理时，才发出一条通知。
 
-| 路线 | 它出现在哪里 | 报告的时间和内容 |
+| 去向 | 显示位置 | 内容 |
 | --- | --- | --- |
-| 终端 | 运行受影响的 Claude Code 或 Codex CLI 进程的确切终端 | 当进程暂停或恢复时，或者当 lead 暂停被释放一次以检查恢复时，立即显示原因、PID 和恢复命令。 这条路线永远畅通。 |
-| 操作系统 | Linux、WSL、macOS 或 Windows 桌面通知 | 当保护首次起作用或完全恢复时，或者当federation连接或保护需要注意时出现。 当桌面通知可用时，此可选路由有效。 |
-| 电报 | 用户选择的机器人私人聊天或群组 | 报告重要操作的启动和恢复以及连接或保护问题。 它包括内存状态、原因、存在目标时的 PID 以及下一步操作，并留下用户可以在离开时查看的历史记录。 |
-| 不和谐 | 连接的通道、Webhook 或直接消息 | 发布相同的重要操作、恢复和注意事项。 此可选路线适用于团队频道或个人通知。 |
+| 代理的 hook 上下文 | 受影响会话的主代理 | 在下一个 hook 边界传递一次原因、当前范围和恢复状态。始终开启。 |
+| 终端 | 运行受影响 Claude Code 或 Codex CLI 进程的那个终端 | hook 显示的一行消息，以及进程暂停或恢复时写入该终端的通知。始终开启。 |
+| Telegram | 用户选择的机器人私聊或群组 | 重要措施的开始与恢复、连接或保护问题。可选，是唯一的推送渠道。 |
 
-记录事件后立即尝试终端、操作系统、Telegram 和 Discord 传送。 未改变的条件不会重复发送。 lead 在其下一个 hook 边界接收相同的情况和恢复状态。 终端路由始终保持连通； 使用以下命令配置和测试可选路由：
+推送只通过 Telegram。随时可以用 `calando status`（终端）或 `/calando status`（会话内）查看状态。
 
 ```bash
-memory-supervisor notifications show
-memory-supervisor notifications routes os
-memory-supervisor notifications discord-webhook
-memory-supervisor notifications telegram
-memory-supervisor notifications test
+calando telegram
+calando telegram off
 ```
 
-请勿将 Discord Webhook URL 或 Discord 或 Telegram 机器人令牌放在命令行上。 在运行安装命令后出现的隐藏提示中输入它。 更改适用于下一个通知，无需重新启动 supervisor 或 AI 程序。 请参阅[通知设置](guides/notifications.zh-CN.md)了解路由选择和删除、Discord 频道和 DM 设置、Telegram 群组设置以及故障排除。
+令牌在隐藏提示中输入，不要写在命令行上。设置方法、消息格式和故障排查见[通知设置](guides/notifications.zh-CN.md)。
 
 <a id="skills-and-commands-in-claude-code-and-codex"></a>
-## Claude Code和Codex中的技能和命令
+## Claude Code 和 Codex 中的命令
 
-安装程序连接三个独立的部分：做出自动决策的**hooks**、教代理理解和解释状态的**技能**以及调用该工作流程的**简短命令**。 Hooks 无需用户调用即可运行； 该技能本身并不强制执行内存策略。
+安装程序连接两部分：自动判断的 **hooks**，以及一个名为 `calando` 的**技能**。技能以复制方式安装到 `~/.claude/skills`、`~/.agents/skills` 和 `~/.codex/skills`。旧的 `memory-status` 命令文件会被删除。
 
-| 使用地点 | 输入什么 | 它的作用 |
-| --- | --- | --- |
-| Claude Code | 询问“检查内存状态”，使用`/memory-supervisor`，或使用`/memory-status` | 安装的技能或快捷方式会读取完整状态并解释原因、自动恢复以及任何所需的命令。 |
-| Codex CLI | 使用`$memory-supervisor check memory status`； 使用`/skills`确认发现。 `/prompts:memory-status` 是兼容性快捷方式。 | 通过Codex的主要技能路径运行相同的状态工作流程。 Hook 信任和支持在`/hooks` 中保持分离。 |
-| Codex Desktop App | 使用`$memory-supervisor check memory status`或在任务中自然询问 | 在每个任务中使用相同的用户级别Codex技能。 没有单独的App技能； 在 ** 设置 → Hooks** 中管理 hooks。 |
-| 操作系统终端 | 使用`memory-status`或`memory-supervisor ...` | 这些是真实的状态、设置和恢复命令，而不是技能。 `resume`、`terminate` 和 `kill` 仅在明确的用户请求后运行。 |
+会话命令只作用于输入它的那个会话：
 
-该技能读取 `memory-status --all` 并解释原因和下一步操作，但未经用户批准，它不会恢复或终止进程。 如果Claude Code或Codex是在Memory Supervisor之后安装的，请运行`memory-supervisor update`并验证与`memory-status --connections`的连接。 有关详细差异，请参阅[Claude Code指南](guides/usage-claude.zh-CN.md)和[Codex指南](guides/usage-codex.zh-CN.md)。
+```text
+/calando on | off | status | help        (Codex CLI 和 App：$calando ...)
+/calando cap <GB> | off                  高级；第一次回复先说明，用 `/calando cap <GB> yes` 应用
+```
+
+- `UserPromptSubmit` hook 直接回答这些命令，提示不会发给模型，不消耗 token 和上下文。
+- 目标是输入命令的会话（取自 hook 负载中的会话 ID），不需要 PID 或会话列表。
+- 会话 `off`：该会话仍被测量，但不会被暂缓、暂停或收到通知。
+- 会话 `cap`：限制该会话自己的进程树。接近 90% 时暂缓其高内存启动；超过上限时暂停一个正在增长的子代理，会话回落到 90% 以下后恢复。
+- `/calando status` 显示该会话的代理看到的内容；有更新时附加一行更新提示。
+
+终端里的 `calando ...` 作用于整个环境，见下文。详细差异见 [Claude Code 指南](guides/usage-claude.zh-CN.md)和 [Codex 指南](guides/usage-codex.zh-CN.md)。
 
 <a id="security"></a>
 ## 安全
 
-Memory Supervisor 读取操作系统内存和进程信息，以及会话、代理、工具、工作目录和连接状态信息以及由 Claude Code 和 Codex hooks 提供的命令前缀。 它仅使用此信息来决定是否可以开始新的工作并确定确切的控制目标。
+Calando 读取操作系统的内存和进程信息，以及 Claude Code 和 Codex hooks 提供的会话、代理、工具、工作目录、连接状态和命令前缀。这些信息只用于判断能否开始新工作，以及确定准确的控制目标。
 
-自动控制在延迟未来Claude Code或Codex工作时停止，并在最后的保护阶段暂停和恢复一个经过验证的本地工作流程。 它永远不会自动终止程序或控制不相关的程序。 正常监控不向外部发出请求； 只有 GitHub 安装和更新以及运营商启用的 Discord 或 Telegram 通知使用网络。
+自动控制只做两件事：暂缓之后的 Claude Code 或 Codex 工作；在最后阶段暂停并恢复一个经过核对的本地进程。它不会自动结束程序，也不控制无关程序。正常监控不访问外部网络；只有 GitHub 安装与更新、用户开启的 Telegram 会使用网络。
 
-**这是完整的检查和控制边界； Memory Supervisor 不处理其之外的任何内容。** 它不使用可能存在于 hook 负载中的提示、对话文本、模型响应或文件内容来进行控制决策，并且不保留它们。 它不会直接打开项目文件或进程内存，也不会检查或更改浏览器或 IDE 内部数据、Claude 或 ChatGPT 凭据或操作系统内核、内存、交换和防火墙设置。 请参阅[安全和数据/控制边界](guides/security.zh-CN.md)，了解存储数据、同一机器federation字段和安全措施的完整列表。
+它不把 hook 负载中可能出现的提示、对话、模型回复或文件内容用于控制，也不保留它们；不直接打开项目文件或进程内存；不读取或修改浏览器与 IDE 内部数据、Claude 或 ChatGPT 凭据，以及操作系统内核、内存、交换区和防火墙设置。完整列表见[安全和数据/控制边界](guides/security.zh-CN.md)。
 
 <a id="control-and-recovery"></a>
 ## 控制与恢复
 
-当内存再次稳定时，暂停的工作会自动恢复，一次一项。 如果lead因为自身内存不断增长而暂停，它会自动恢复一次，以便supervisor可以检查结果。 如果返回相同的增长，则lead再次暂停并等待用户决定。 要手动恢复，请首先检查当前状态并使用其中显示的 PID。
+没有手动恢复命令。
+
+- 因内存压力暂停的进程，在内存恢复后自动恢复，一次一个。
+- 因自身失控增长而暂停的主代理，会获得一次受保护的自动恢复。
+- 如果主代理仍处于暂停：关闭那个终端，用 CLI 自带的恢复功能继续（`claude --resume`、`codex resume`）；或者运行 `calando off`，它会就地恢复该进程。
+- 通过 CLI 恢复后，会话的第一个 hook 会说明上一个进程曾被暂停并已结束，那次运行中子代理的结果可能缺失。
+- Codex App：受保护的恢复失败后，共享的 App Server 不会一直停在暂停状态，而是退回到按对话限制。
+
+主代理暂停非常少见。它是**最后的保护阶段**：只有在暂缓新工作、限制子代理和工具之后风险仍在，并且已确认同一个主代理及其终端持续增长时才会使用。
+
+<a id="on-off-cap-update-lock"></a>
+### 开关、上限、更新和锁
 
 ```bash
-memory-status
-memory-supervisor resume [pid]
+calando off
+calando on
 ```
 
-lead 暂停是故意非常罕见的。 它是**最终保护阶段**，仅在新工作延迟且subagent和工具控制尚未消除危险，并且已确认同一lead及其确切终点的持续增长时使用。 大多数事件通过较小的工作范围、worker 暂停或自动恢复来提前完成。
-
-如果 Claude Code 或 Codex 意外终止，CLI 将恢复其对话，并且已安装的 `SessionStart` hook 将保留内存事件和当前决策传递给 lead 一次：
+`off` 先恢复 Calando 暂停的所有进程，再停止并禁用后台服务。已安装的 hooks 保持连接，但静默放行。这一选择在重启和更新后保持不变，`on` 恢复保护。如果服务意外停止，hooks 会在十秒后丢弃过期判断并提示**保护不可用**。
 
 ```bash
-claude --resume
-codex resume
+calando cap 6
+calando cap off
 ```
 
-当您有意想要关闭或打开保护时，仅使用这两个命令。 `off` 停止并禁用后台服务，同时保持安装的 Claude Code 和 Codex hooks 以静默直通模式连接。 该选择在重新启动和`memory-supervisor update`后仍然有效； 一条`on`命令恢复保护。
+`calando cap` 是高级功能，为本环境中所有代理设置硬上限。它会先打印说明并询问 `[y/N]`，非交互调用可加 `--yes`。请求会对照本环境当前可用的内存校验。接近上限时暂缓新的高内存工作；超过上限时暂停一个正在增长的子代理。暂停无法收回已经占用的内存，使用量可能短暂超过上限；需要精确到字节的配额时，请用 cgroup、容器或 VM 限制。正常使用不建议开启，它适合严格的研究或基准测试。
 
 ```bash
-memory-supervisor off
-memory-supervisor on
+calando update
+calando update auto off
+calando update auto on
 ```
 
-`off` 拒绝搁置supervisor 管理的暂停 PID 或正在进行的流程操作； 首先解析列出的 PID。 如果服务在无意中停止`off`，hooks 仍会在十秒后丢弃其过时的决策，并警告**保护不可用**。
+已安装的服务每天在后台检查一次 GitHub 最新版本，在没有暂停进程且内存平稳时，在自身服务之外执行更新；忙时每小时重试。
+
+- Claude Code：自动应用，包括 hook 变更，新会话会使用新的 hooks。
+- Codex：如果新版本改变了 hook 定义（次版本，如 0.3 → 0.4），并且 Codex 已连接，则**不会**自动应用。因为 Codex 会静默跳过变更过的 hook，直到用户在 CLI 的 `/hooks` 或 App 的**设置 → Hooks** 中信任它们。状态输出和一条 Telegram 消息会提示运行 `calando update` 并信任 hooks。补丁版本不会改变 hooks。
+- 关闭自动更新后，`calando status`、`/calando status` 以及每个版本一条 Telegram 消息会提示有更新。代理的 hooks 从不提及更新。
+- 每日检查也会在 Claude Code 从 `settings.json` 中丢失 Calando 的 hooks 时把它们恢复。
+- 从 0.2.x 升级到 0.3.0 会改变 hook 命令，Codex 用户需要在 `/hooks`（CLI）或**设置 → Hooks**（App）中重新信任一次 Calando hooks。
 
 ```bash
-memory-status --connections
-memory-supervisor update
+calando lock on
+calando lock off
 ```
 
-如果您需要固定限制，您可以选择为该本地环境中的所有 Claude Code 和 Codex 程序设置一个总内存上限：
-
-```bash
-memory-supervisor budget
-memory-supervisor budget set 6
-memory-supervisor budget off
-```
-
-命令按其控制的内容进行分组：
-
-- `memory-status` 命令是只读的：本地原因、federation、服务、hook 和通知连接。
-- `on` 和 `off` 控制整个当前安装。 一条命令涵盖每个已连接的Claude Code和Codex会话； 必须在该环境内切换另一个操作系统、WSL 发行版或 VM。
-- `resume` 继续由supervisor 暂停的进程。 `terminate` 和 `kill` 是操作员在检查原因后选择的进程退出。
-- `budget` 仅对当前环境中的 Claude Code 和 Codex 应用可选上限，而不是对整个计算机或 Chrome。
-- `update` 重新应用服务并检测到 CLI 连接。 `notifications` 控制可选的操作系统、Discord 和 Telegram 路由； lead hooks 和确切的终端通知仍然是强制性的。
+`lock` 只能由管理员运行。开启后，终端和会话中的 `off` 以及 `uninstall` 都会被拒绝。锁文件是 `/etc/calando/lock` 或 `%ProgramData%\Calando\lock`。它是策略文件，不是沙箱，边界见[安全](guides/security.zh-CN.md)。
 
 <a id="common-commands"></a>
 ## 常用命令
 
-| 命令 | 目的 |
+每个环境（Windows、每个 WSL 发行版、VM、容器）分别执行。
+
+| 命令 | 作用 |
 | --- | --- |
-| `memory-status` | 当地健康状况、原因和下一步行动 |
-| `memory-status --all` | 同一计算机上的 Windows、WSL、虚拟机和容器状态 |
-| `memory-status --connections` | 后台服务、AI CLI 和通知连接 |
-| `memory-supervisor on` / `off` | 在此环境中持续启用或禁用保护； 已连接 hooks 关闭时通过 |
-| `memory-supervisor update` | 更新并重新连接检测到的 CLI |
-| `memory-supervisor budget` | 显示此环境中的适应能力和任何可选上限 |
-| `memory-supervisor budget set <GiB>` / `budget off` | 设置或删除聚合本地 Claude Code 和 Codex 上限 |
-| `memory-supervisor resume [pid]` | 恢复supervisor暂停的进程； 仅当恰好有一个暂停时才忽略 PID |
-| `memory-supervisor terminate <pid>` | 优雅地终止一个经过验证的托管进程 |
-| `memory-supervisor kill <pid>` | 作为最后手段强制终止一个经过验证的进程 |
-| `memory-supervisor notifications show` | 显示隐藏秘密的通知设置 |
-| `内存-supervisor通知路由<全部\|没有任何\|路线>` | 选择可选的操作系统、Discord 和 Telegram 路由 |
-| `memory-supervisor notifications test` | 测试启用的可选通知路由 |
-| `memory-supervisor uninstall` | 删除其服务和 AI CLI 连接，同时保留状态 |
+| `calando status [--json]` | 本环境、CLI 连接以及其他所有环境的状态 |
+| `calando on` / `off` | 开启或关闭保护；`off` 先恢复 Calando 暂停的所有进程 |
+| `calando telegram [CHAT_ID]` | 询问机器人令牌（隐藏输入），找到聊天并发送测试消息 |
+| `calando telegram off` | 删除 Telegram 设置 |
+| `calando cap [<GB> \| off]` | 高级：本环境所有代理的硬上限，需要确认 |
+| `calando update` | 立即更新 |
+| `calando update auto on` / `off` | 自动更新（默认开启） |
+| `calando uninstall` | 删除程序，保留设置和状态 |
+| `calando lock on` / `off` | 仅管理员；开启期间拒绝 `off` 和 `uninstall` |
+| `calando help` | 显示帮助 |
+
+`memory-supervisor` 和 `memory-status` 在 0.3.x 期间仍可作为命令别名使用。
 
 <a id="verification"></a>
-## 确认
+## 验证
 
 ```bash
 bash tests/run.sh
@@ -521,7 +525,7 @@ bash tests/run.sh
 powershell -File .\tests\run.ps1
 ```
 
-Rust 单元、集成和安装程序测试涵盖策略、流程安全、Claude Code 和 Codex 接线、federation、恢复和发布捆绑包。 GitHub Actions 检查 Linux x86-64、Windows x86-64、Apple Silicon macOS 和 Rosetta 下的 macOS x86-64 上的构建和平台合同。 有界物理机验证加上确定性模拟涵盖了真正的接近耗尽边界。 请参阅[测试覆盖率](testing/test-matrix.zh-CN.md)。
+Rust 单元、集成和安装程序测试覆盖策略、进程安全、Claude Code 与 Codex 接线、federation、恢复和发布包。GitHub Actions 在 Linux x86-64、Windows x86-64、Apple Silicon macOS 和 Rosetta 下的 macOS x86-64 上检查构建与平台约定。真实的接近耗尽边界由有界的实机验证加确定性模拟覆盖。见[测试覆盖范围](testing/test-matrix.zh-CN.md)。
 
 <a id="documentation"></a>
 ## 文档
@@ -533,15 +537,15 @@ Rust 单元、集成和安装程序测试涵盖策略、流程安全、Claude Co
 | [Codex Desktop App](guides/codex-app.zh-CN.md) | 逻辑对话，blind control，以及共享App Server内部的恢复 |
 | [自适应停车距离](testing/stopping-distance.zh-CN.md) | 计算、测量边界、逐渐制动和恢复 |
 | [平台和多环境行为](guides/platforms.zh-CN.md) | 操作系统和虚拟环境如何共享新工作决策 |
-| [安全和数据/控制边界](guides/security.zh-CN.md) | 信息读取、存储和共享，以及自动和手动控制限制 |
+| [安全和数据/控制边界](guides/security.zh-CN.md) | 信息读取、存储和共享，控制范围和隔离边界 |
 | [测试覆盖率](testing/test-matrix.zh-CN.md) | 公开测试涵盖的产品行为和平台 |
 | [Claude Code](guides/usage-claude.zh-CN.md) / [Codex](guides/usage-codex.zh-CN.md) | CLI 和桌面应用程序集成和会话行为 |
-| [通知](guides/notifications.zh-CN.md) | 终端、操作系统、Discord 和 Telegram 交付 |
+| [通知](guides/notifications.zh-CN.md) | 终端、hook 上下文和 Telegram |
 | [性能](guides/performance.zh-CN.md) | 后台内存使用和启动前检查时间 |
 | [安全策略](../.github/SECURITY.zh-CN.md) | 私有漏洞报告路径 |
 | [贡献](../.github/CONTRIBUTING.zh-CN.md) | 变更原则和提交前检查 |
 
 <a id="license"></a>
-## 执照
+## 许可证
 
-[麻省理工学院](../LICENSE)
+[MIT](../LICENSE)

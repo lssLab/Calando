@@ -13,7 +13,7 @@ supervisor 从不在其本地 PID 控制环境之外发出信号。 在主机中
 
 | 基础操作系统 | 上面的环境 | 需要安装 | Federation 边界 |
 | --- | --- | --- | --- |
-| 视窗 | 一个或多个 WSL2 发行版 | Windows 以及每个 WSL 发行版 | 每个 WSL 实例都会自动检测 Windows 用户的 `.memory-supervisor/instances` |
+| Windows | 一个或多个 WSL2 发行版 | Windows 以及每个 WSL 发行版 | 每个 WSL 实例都会自动找到 Windows 用户的 `.calando/instances`（版本混用期间也读取 `.memory-supervisor/instances`） |
 | Windows、macOS 或 Linux | 动态内存虚拟机 | 主人加上每一位客人 | 仅通过主机本地共享文件夹连接实际竞争相同物理 RAM 的双方 |
 | Windows、macOS 或 Linux | 固定内存虚拟机 | 主人加上每一位客人 | 保持各方独立； 不要跨越固定分配边界进行联合 |
 | Linux 内核（本机 Linux、WSL 或桌面 VM） | 一个或多个 PID 隔离容器 | 内核主机环境加上每个隔离的容器 | 在该内核内共享主机本地卷 |
@@ -22,7 +22,7 @@ supervisor 从不在其本地 PID 控制环境之外发出信号。 在主机中
 <a id="codex-app-follows-the-app-server-environment"></a>
 ### Codex App 遵循 App Server 环境
 
-Codex App窗口及其执行引擎不必在同一操作系统环境中运行。 Memory Supervisor 遵循`codex ... app-server` 进程，而不是桌面窗口：
+Codex App窗口及其执行引擎不必在同一操作系统环境中运行。 Calando 遵循`codex ... app-server` 进程，而不是桌面窗口：
 
 - 使用 WSL 引擎的 Windows Codex App 受该 WSL 发行版中安装的 Supervisor 的保护。 它检测 WSL App Server，解析该进程的活动 `CODEX_HOME`，并管理其逻辑线程、hook 决策、WSL child 工具和 WSL 端物理制动器。 这不需要未签名的本机 Windows Supervisor 或Smart App Control 更改。
 - 该 WSL 实例无法测量或暂停 Windows 应用程序 UI 进程或单独的 Windows 本机Claude Code 或 Codex CLI。 当必须覆盖这些 Windows 进程时，还要安装 Windows Supervisor； 然后，Windows 和 WSL 实例通过 federation 共享 admission，同时保留本地 PID 控制。
@@ -31,7 +31,7 @@ Codex App窗口及其执行引擎不必在同一操作系统环境中运行。 M
 
 这是一般的进程边界规则，而不是硬编码的 Windows/WSL 异常。 共享 Windows/WSL `CODEX_HOME` 仅作为文件布局情况进行处理：hook 文件保留两个本机命令字段，但每个命令仍然仅到达其自己环境中的 Supervisor 和 PID。
 
-如果没有共享路径，每个实例仍然保护自己的本地环境。 仅跨环境admission和组合`memory-status --all`视图不可用。
+如果没有共享路径，每个实例仍然保护自己的本地环境。 只是跨环境 admission 和 `calando status` 中其他环境的视图不可用。
 
 federation 阅读器未将 Windows/WSL 对列入白名单。 一个主机本地内存边界内的 Windows、WSL、Linux 和 macOS 对等体使用相同的快照合约，并且仅应用过去 10 秒中最严格的有效新工作决策。 Windows/WSL 的特殊之处仅在于可以自动发现共享路径。 macOS 和 Linux 主机、动态 VM、容器和嵌套环境使用共享文件夹作为其实际边界。 为具有相同主机名的克隆来宾或容器提供唯一的`MEMORY_SUPERVISOR_INSTANCE`值。
 
@@ -46,14 +46,14 @@ Windows 10 没有 Smart App Control。 Supervisor 可执行文件的[最低 Wind
 
 | 平台 | 用户级启动机制 |
 | --- | --- |
-| Linux/WSL | `~/.config/systemd/user/memory-supervisor.service`; 安装者拥有的 linger（可用时） |
-| macOS | `~/Library/LaunchAgents/io.github.lsslab.memory-supervisor.plist` |
-| 视窗 | `MemorySupervisor` 用户登录时的计划任务 |
+| Linux/WSL | `~/.config/systemd/user/calando.service`；可用时启用安装程序拥有的 linger |
+| macOS | `~/Library/LaunchAgents/io.github.lsslab.calando.plist` |
+| Windows | 用户登录时运行的计划任务 `Calando` |
 | 没有用户 systemd 的 Unix | PID 监督后备； 立即启动，但引导启动是手动的 |
 
-`memory-supervisor update` 在可能的情况下更新结账，验证并激活本机运行时，重新加载本地服务，并重新连接每个检测到的支持的 CLI。 在 daemon 切换期间，它从不发出代理 PID 信号，新的 daemon 会从 `runtime.json` 重新加载暂停的身份。
+`calando update` 更新发布源，校验并激活本机运行时，重新加载本地服务，并重新连接检测到的每个受支持 CLI。服务也会每天在后台检查一次新版本，在没有暂停进程且内存平稳时，在自身服务之外运行更新（忙时每小时重试；`calando update auto off` 可关闭）。 在 daemon 切换期间，它从不发出代理 PID 信号，新的 daemon 会从 `runtime.json` 重新加载暂停的身份。
 
-最安全的更新时间是在活动 CLI 会话之间。 实时更新通常会保留它们，但可能会存在短暂的故障开放保护间隙。 更新后始终运行`memory-status --connections`。 只有实际的Codexhook定义更改需要用户再次亲自信任该CLI进程的`/hooks`或桌面应用程序**设置→Hooks**； 重新启动永远不能取代信任。 应用程序设置更改会刷新共享 App Server 加载的现有任务，但不会刷新单独的 CLI 进程。 Claude Code 没有每hook 哈希批准：其用户设置 hook 处于活动状态，无需类似 Codex 的项目审核，但交互式 Claude 保留所有设置文件 hooks，直到用户接受当前文件夹或其父文件夹之一的工作区信任。 受信任的运行会话通常会自动重新加载以后的用户设置更改。 这些信任和重新加载边界的持续时间比daemon重新启动本身还要长。
+手动更新最好在活动 CLI 会话之间进行。在线更新通常会保留会话，但可能有短暂的放行间隙。更新后运行 `calando status`。改变 hook 定义的版本在 Codex 已连接时不会自动应用；只有实际的 Codex hook 定义更改需要用户再次亲自信任该CLI进程的`/hooks`或桌面应用程序**设置→Hooks**； 重新启动永远不能取代信任。 应用程序设置更改会刷新共享 App Server 加载的现有任务，但不会刷新单独的 CLI 进程。 Claude Code 没有每hook 哈希批准：其用户设置 hook 处于活动状态，无需类似 Codex 的项目审核，但交互式 Claude 保留所有设置文件 hooks，直到用户接受当前文件夹或其父文件夹之一的工作区信任。 受信任的运行会话通常会自动重新加载以后的用户设置更改。 这些信任和重新加载边界的持续时间比daemon重新启动本身还要长。
 
 支持的运行时是本机 Rust 二进制文件。 重新启动 supervisor 会重新加载其持久状态，同时应尽可能在活动 CLI 会话之间替换已安装的版本。
 
@@ -63,23 +63,23 @@ Windows 10 没有 Smart App Control。 Supervisor 可执行文件的[最低 Wind
 - Linux 和 WSL 使用启用的用户单元。 安装者拥有的linger让设备以用户管理器启动； WSL 服务仅在 WSL 分发本身启动后才开始。
 - macOS 在 GUI 登录时加载 `RunAtLoad` 和 `KeepAlive` LaunchAgent。
 - Windows 在用户登录时启动计划任务，并以一分钟的间隔重试意外的daemon 退出最多五次。 该任务请求控制台分离，仅当该控制台单独属于 daemon 进程时，daemon 才会执行该操作。 因此，后台启动时不会打开面向用户的黑色窗口，并且其定期 PowerShell 传感器使用`CREATE_NO_WINDOW`； 从现有终端运行的命令保留该共享终端。
-- Claude Code 和 Codex hook/技能文件仍保持安装状态。 登录后打开一个新的 AI CLI 会话并运行`memory-status --connections`。 只有实际的hook哈希值更改才需要审核：在Codex CLI中使用`/hooks`，在Codex App中使用**设置→Hooks**。
-- 重启不是更新。 不要运行`memory-supervisor update`，除非需要重新应用源、安装程序或以后安装的 CLI。
+- Claude Code 和 Codex hook/技能文件仍保持安装状态。 登录后打开一个新的 AI CLI 会话并运行 `calando status`。 只有实际的hook哈希值更改才需要审核：在Codex CLI中使用`/hooks`，在Codex App中使用**设置→Hooks**。
+- 重启不是更新。只有需要重新应用安装或连接之后安装的 CLI 时，才运行 `calando update`。
 
 <a id="federation-paths"></a>
 ## Federation 路径
 
-- 默认值：`~/.memory-supervisor/instances`
+- 默认值：`~/.calando/instances`（版本混用期间也读取 `~/.memory-supervisor/instances`）
 - 覆盖：`MEMORY_SUPERVISOR_FEDERATION_DIR`
-- 持久指针：`~/.memory-supervisor/federation-dir`
-- 状态指针：`~/.memory-supervisor/state-dir`
+- 持久指针：`~/.calando/federation-dir`
+- 状态指针：`~/.calando/state-dir`
 - WSL 自动查找 Windows 用户的共享实例目录。
 - WSL 默认实例名称包括 `WSL_DISTRO_NAME`，因此即使 WSL 共享 Windows 主机名，同一主机上的 Ubuntu 和 Debian 也不会相互覆盖。
-- 陈旧、格式错误或错误的快照永远不会参与admission。
+- 过期、格式错误或错误的快照永远不会参与 admission。`instance` 必须是普通标识符（字母、数字、`.`、`-`、`_`，最多 128 个字符）且与文件名相同。过期一周以上的对等文件会被自动清理。
 - 如果非 WSL 克隆来宾仍然共享身份，请将 `MEMORY_SUPERVISOR_INSTANCE` 设置为唯一名称。
 
 ```bash
-memory-status --all
+calando status
 ```
 
 Federation是全局背压，不是调度程序。 它既不迁移 workers 也不向另一个操作系统拥有的 PID 发送信号。
@@ -89,7 +89,7 @@ Federation是全局背压，不是调度程序。 它既不迁移 workers 也不
 
 一个用户级安装涵盖同一 PID 控制环境中跨 SSH 登录、终端窗口和 `tmux` 窗格的用户 Claude Code 和 Codex 会话。 他们共享一个admission 决策，而不是通过独立监管者进行竞争。 多用户服务器应为每个受保护的操作系统用户安装一次； `/proc` 限制（例如`hidepid`）可以阻止一个用户检查另一用户的进程，并且产品不会绕过该边界。
 
-受限 VPS 是一种自然的部署形式，因为本机 cgroup 上限、PSI、交换/回收以及所有同一用户远程会话都提供相同的策略。 启用已安装的用户服务，并在适当的情况下启用用户停留，以便在没有打开的 SSH shell 的情况下它仍然可用。 桌面操作系统通知通常在无头服务器上不可用，因此请使用强制性的hook/终端操作消息以及可选的 Discord 或 Telegram。 Linux 和 cgroup 合同测试涵盖了这条路径，但尚未声称是完整的长达数小时的真实 VPS 模型浸泡。
+受限 VPS 是一种自然的部署形式，因为本机 cgroup 上限、PSI、交换/回收以及所有同一用户远程会话都提供相同的策略。 启用已安装的用户服务，并在适当的情况下启用用户停留，以便在没有打开的 SSH shell 的情况下它仍然可用。 需要在离开时收到通知，可开启 Telegram；hook 和终端消息始终开启。 Linux 和 cgroup 合同测试涵盖了这条路径，但尚未声称是完整的长达数小时的真实 VPS 模型浸泡。
 
 <a id="native-capacity-and-sensors"></a>
 ## 原生容量和传感器
@@ -98,7 +98,7 @@ Federation是全局背压，不是调度程序。 它既不迁移 workers 也不
 | --- | --- | --- |
 | Linux/WSL | `/proc/meminfo` 受每个封闭 cgroup v1/v2 上限的限制 | 操作系统低内存信号（PSI、回收、交换和内存不足计数器）、`/proc/<pid>`、PID 启动标记、TTY 标识 |
 | macOS | `sysctl hw.memsize`; 来自 `vm_stat` 的空闲/非活动/可清除页面 | 暴露时的内核压力级别、主要 `vm_stat` 页面输出/压缩趋势、`ps` 启动时间和 TTY |
-| 视窗 | `GlobalMemoryStatusEx` 物理内存 | `GetPerformanceInfo`提交headroom，缓存的CIM进程清单，创建身份，控制台/ConPTY证据 |
+| Windows | `GlobalMemoryStatusEx` 物理内存 | `GetPerformanceInfo`提交headroom，缓存的CIM进程清单，创建身份，控制台/ConPTY证据 |
 
 Linux 检查每个 cgroup 祖先，而不是信任无限的叶子。 如果无法读取 macOS 压力级别 sysctl，`vm_stat` 计数器仍然可用，但本机压力被报告为未知/低置信度，压力传感器错误会暴露，并且 admission 保守地保持不变。 失败的`vm_stat`也是真正的传感器故障。 macOS 使用 RSS 作为每个进程的近似值，因为匿名 RSS 不以相同的形式公开。 Windows 每次更新都会刷新廉价的全局计数器，并将昂贵的进程库存缓存三秒钟。
 
@@ -125,22 +125,21 @@ autoMemoryReclaim=gradual
 对 `.wslconfig` 的更改需要 WSL VM 停止才能生效。 仅在空闲边界运行 `wsl --shutdown`，因为它会立即终止每个正在运行的 WSL 发行版及其内部的每个 CLI 会话。 请参阅 Microsoft 的[高级 WSL 设置](https://learn.microsoft.com/windows/wsl/wsl-config) 和 [`wsl --shutdown` 命令](https://learn.microsoft.com/windows/wsl/basic-commands#shutdown)。
 
 <a id="optional-local-cli-memory-budget"></a>
-## 可选的本地 CLI 内存预算
+## 可选的硬上限（`calando cap`）
 
-预算**默认关闭**。 它是对此安装的控制环境可见的所有 Claude Code 和 Codex 树的一个聚合上限，而不是每个 CLI 限制或池化 Windows+WSL 配额。
+上限**默认关闭**。它是本环境中所有代理的一个总上限，不是每个 CLI 的限制，也不是 Windows 与 WSL 合并的配额。
 
 ```bash
-memory-supervisor budget
-memory-supervisor budget set 6
-memory-supervisor budget off
+calando cap 6
+calando cap off
 ```
 
-`6` 只是 GiB 语法示例（`memory-supervisor hard-cap set <MB>` 是 MB 精度别名）。 在 Windows、WSL、每个 VM 或每个隔离的容器中单独运行该命令。 由于这些控制环境可以共享一台物理机，因此`memory-supervisor budget`首先报告该环境的理论最大值以及对等环境明确预算后当前可能的总数； `budget set` 拒绝不再适合的请求（指定在哪里减少多少），并要求确认当前可能总数的 90% 或更多，或者当机器范围内的显式预算总数达到物理估计的 90% 时。 环境的默认分配（例如未配置的 WSL VM 上限）永远不会被计为声明。 在天花板附近，首先举行新的扇出。 在此之上，每个反应间隔最多可以暂停一个已验证的增长worker/支持PID； lead 仍然是最后的手段，需要精确的恢复可见性。 暂停会停止进一步执行，但不会立即返回常驻内存，因此当需要字节精确配额时，请使用 cgroup/container/VM 限制。
+`6` 只是 GB 语法示例。在 Windows、每个 WSL、每个 VM 或每个隔离容器中分别运行。命令会先打印说明并询问 `[y/N]`（非交互调用加 `--yes`），并对照本环境当前能用的内存校验请求。接近上限时暂缓新的高内存工作；超过上限时暂停一个正在增长的子代理。暂停无法收回已占用的内存，使用量可能短暂超过上限；需要精确到字节的配额时，请用 cgroup、容器或 VM 限制。正常使用不建议开启，它适合严格的研究或基准测试。
 
 <a id="persistent-advanced-settings"></a>
 ## 持久的高级设置
 
-正常运行不需要配置文件。 高级覆盖位于`~/.config/memory-supervisor/config.json`； 具有相同名称的环境变量优先。 上述预算命令是设置或清除上限的首选方式。
+正常运行不需要配置文件。 高级覆盖位于 `~/.config/calando/config.json`，同名环境变量优先。键名仍为 `MEMORY_SUPERVISOR_*`。设置或清除上限请优先使用 `calando cap`。
 
 ```json
 {
@@ -152,52 +151,52 @@ memory-supervisor budget off
 
 `MEMORY_SUPERVISOR_TICK_S` 接受 0.25 到 5 秒。 五秒的上限将下一个样本保留在十秒的状态新鲜度和五秒的租赁合同内。 超出范围的值会回退到一秒并出现在 `configuration_error` 中。
 
-路径/引导设置（例如 `MEMORY_SUPERVISOR_DIR`、`MEMORY_SUPERVISOR_FEDERATION_DIR` 和 `MEMORY_SUPERVISOR_FORCE_PLATFORM`）不属于此 JSON 文件。 手动高级编辑后，运行`memory-supervisor update`并使用`memory-status`进行验证。
+路径/引导设置（例如 `MEMORY_SUPERVISOR_DIR`、`MEMORY_SUPERVISOR_FEDERATION_DIR` 和 `MEMORY_SUPERVISOR_FORCE_PLATFORM`）不属于此 JSON 文件。 手动编辑后，运行 `calando update` 并用 `calando status` 确认。
 
 <a id="pause-resume-and-restart"></a>
 ## 暂停、恢复和重新启动
 
 - Unix 上的 `SIGSTOP` 和 Windows 上的本机进程暂停保留 PID 和内存中会话。
-- `memory-supervisor resume <pid>` 在继续之前重新验证 PID 和启动标识。
-- 仅当恰好有一个托管 PID 暂停时，才接受`memory-supervisor resume`。
+- 没有手动恢复命令。内存恢复后自动恢复；因失控增长暂停的主代理获得一次受保护的自动恢复。
+- 主代理仍然暂停时，关闭那个终端并用 CLI 自带的恢复功能继续，或运行 `calando off`（就地恢复）。
 - 控制意图在信号之前持续存在，并且仅在 daemon 确认后报告完成。
 - 重新启动 supervisor 会重新加载其事件分类帐，并且不会自动恢复代理。
 - 重新启动代理 CLI 有所不同：使用 AI CLI 的脚本/会话恢复功能。
 - 远程事件必须通过其 `source` 字段命名的操作系统进行控制。
 
-AI CLI/模型上下文在下一个实际hook边界处交付，该边界可能晚于操作系统恢复。 准确的终端、操作系统、Discord 和 Telegram 操作通知是独立尝试的。
+AI CLI/模型上下文在下一个实际hook边界处交付，该边界可能晚于操作系统恢复。 终端通知和 Telegram 消息会立即单独尝试。
 
 
 <a id="turn-the-whole-installation-on-or-off"></a>
 ## 打开或关闭整个安装
 
 ```bash
-memory-supervisor off
-memory-supervisor on
+calando off
+calando on
 ```
 
-一个 `off` 命令可禁用当前 OS/PID 控制环境的服务和自动启动，并在 `~/.memory-supervisor/power-off` 中保留该选择。 安装的Claude Code和Codexhooks和技能保持连接，但每一个hook都默默地穿过。 `memory-status` 和 `--connections` 报告有意 `OFF`，`memory-supervisor update` 保留它。 `on` 删除标记，恢复自动启动，并验证是否发布了新状态。
+`off` 先恢复 Calando 暂停的所有进程，然后禁用当前 OS/PID 控制环境的服务和自动启动，并在 `~/.calando/power-off` 中保存这一选择。 安装的Claude Code和Codexhooks和技能保持连接，但每一个hook都默默地穿过。 `calando status` 报告为有意的 `OFF`，`calando update` 会保留它。 `on` 删除标记，恢复自动启动，并验证是否发布了新状态。
 
-当 supervisor 拥有已暂停的 PID 或进程控制操作处于待处理状态时，`off` 会拒绝，因此如果没有 daemon 来恢复进程，它就无法让进程陷入困境。 Windows、每个 WSL 发行版、VM 来宾和 PID 隔离的容器都有单独的服务和 PID 命名空间； 在您想要切换的每个环境中运行一次命令。
+管理员开启 `calando lock` 后，`off` 会被拒绝。Windows、每个 WSL 发行版、VM 来宾和 PID 隔离的容器都有单独的服务和 PID 命名空间； 在您想要切换的每个环境中运行一次命令。
 
 <a id="low-level-service-recovery-commands"></a>
 ## 低级服务恢复命令
 
 ```bash
 # Linux / WSL
-systemctl --user restart memory-supervisor.service
-systemctl --user is-active memory-supervisor.service
+systemctl --user restart calando.service
+systemctl --user is-active calando.service
 
 # macOS: restart a loaded agent
-launchctl kickstart -k gui/$(id -u)/io.github.lsslab.memory-supervisor
+launchctl kickstart -k gui/$(id -u)/io.github.lsslab.calando
 
 # macOS: explicitly unload, then load again
-launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/io.github.lsslab.memory-supervisor.plist
-launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/io.github.lsslab.memory-supervisor.plist
+launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/io.github.lsslab.calando.plist
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/io.github.lsslab.calando.plist
 
 # Windows
-schtasks /End /TN MemorySupervisor
-schtasks /Run /TN MemorySupervisor
+schtasks /End /TN Calando
+schtasks /Run /TN Calando
 ```
 
-使用这些命令来修复意外的服务故障，而不是作为产品电源开关。 如果服务在没有 `off` 标记的情况下不可用，hooks 将无法打开，而不是禁用 CLI，并且 `memory-status` 会报告过时或丢失的 supervisor 以及由此产生的保护间隙。
+使用这些命令来修复意外的服务故障，而不是作为产品电源开关。 如果服务在没有 `off` 标记的情况下不可用，hooks 将无法打开，而不是禁用 CLI，并且 `calando status` 会报告过时或丢失的 supervisor 以及由此产生的保护间隙。

@@ -73,8 +73,8 @@ AI CLI hook은 process detector와 다른 두 번째 경로다. 새 fan-out 전�
 table을 관측할 수 있지만 그 AI CLI가 새 process를 만들기 전에 admission을 막을 수는 없다.
 
 ```bash
-memory-status --connections
-memory-status --all
+calando status
+calando status
 ```
 
 ## 실제 사용 가능 capacity를 알아내는 방법
@@ -90,12 +90,12 @@ Resolved capacity와 적응형 정책은 매 tick 다시 계산한다. VM dynami
 machine-size profile 없이 반영한다. 주 sensor가 실패하면 보호 저하를 표시하고 admission을 Hold한다.
 8 GiB fallback 표시는 진단용이지 머신이 실제 8 GiB라는 주장이 아니다.
 
-Supervisor는 container runtime, systemd unit, scheduler, 관리자가 이미 만든 enclosing cgroup
+Calando는 container runtime, systemd unit, scheduler, 관리자가 이미 만든 enclosing cgroup
 limit를 **읽기만** 한다. Cgroup을 만들거나 CLI를 옮기거나 wrapper 명령을 요구하지 않는다.
 그래서 평소대로 실행한 `claude`·`codex`도 탐지하며, byte-exact cgroup 할당은 이 제품의 기본
 actuator가 아닌 선택적 외부 경계로 남는다.
 
-Supervisor는 프로세스에 RAM을 할당하지 않는다. 고정 비율을 남기는 대신 실제 제동거리를 계산한다.
+Calando는 프로세스에 RAM을 할당하지 않는다. 고정 비율을 남기는 대신 실제 제동거리를 계산한다.
 
 ```text
 최소 호흡 공간 = 감지 capacity의 0.5%, 256–1024 MiB 범위
@@ -130,36 +130,35 @@ worker 8개든 세션 수백 개든 고정 개체수 상한 없이 같은 최소
 | --- | --- | --- | --- | --- |
 | 물리 또는 VM 할당량 | OS/hypervisor 기본 | 물리 RAM은 software로 바꾸지 못한다. WSL, Hyper-V, Parallels, VMware, UTM, cloud VM memory를 해당 플랫폼에서 변경 | Host 또는 guest OS 자체 | Guest memory를 올리면 guest 여유는 늘지만 host의 최악 reserve가 줄어든다. 내리면 guest 적응형 임계·reserve가 작아진다. 보통 guest 종료·재시작 필요. |
 | 자동 감지 capacity | Native sensor | 정상 상태에서는 변경하지 않는다. `MEMORY_SUPERVISOR_CAPACITY_MB`는 native 값이 명백히 틀릴 때만 쓰는 고급 보정 | 설치 instance 하나 | 정책 계산만 바꾸고 실제 OS/VM limit는 바꾸지 않는다. 너무 높이면 위험하고 너무 낮추면 불필요하게 보수적이다. |
-| 적응형 pressure 정책 | `balanced`, 수동 budget 없음 | 선택형 `protect`·`balanced`·`performance` profile 또는 고급 threshold override | 설치 instance 하나 | 그 instance의 더 엄격한 admission 결정이 federation peer에 전달될 수 있다. `performance`도 실제 collapse, 보호 저하, 명시 hard cap을 우회하지 않는다. |
-| 지원 CLI aggregate 메모리 예산(hard cap) | **OFF** | 해당 환경에서 `memory-supervisor budget set <GiB>` 또는 `budget off` | 해당 OS/PID 영역에서 보이는 모든 Claude Code·Codex root tree. Chrome이나 머신 전체가 아님 | Cap 근처에서는 신규 fan-out을 먼저 Hold한다. 초과하면 reaction interval당 검증된 growing worker/support 하나만 pause 가능하다. Cap 근접은 로컬에 머문다: `near/exceeded`는 더 이상 federated peer의 admission을 닫지 않으며(측정된 압력만 연합), remote PID도 pause하지 못한다. |
+| 적응형 pressure 정책 | `balanced`, 수동 상한 없음 | 선택형 `protect`·`balanced`·`performance` profile 또는 고급 threshold override | 설치 instance 하나 | 그 instance의 더 엄격한 admission 결정이 federation peer에 전달될 수 있다. `performance`도 실제 collapse, 보호 저하, 명시 hard cap을 우회하지 않는다. |
+| 지원 CLI aggregate 메모리 상한(`calando cap`) | **OFF** | 해당 환경에서 `calando cap <GB>` 또는 `calando cap off` | 해당 OS/PID 영역에서 보이는 모든 Claude Code·Codex root tree. Chrome이나 머신 전체가 아님 | Cap 근처에서는 무거운 신규 작업을 먼저 Hold한다. 초과하면 증가 중인 서브에이전트 하나만 pause 가능하다. Cap 근접은 로컬에 머문다: `near/exceeded`는 더 이상 federated peer의 admission을 닫지 않으며(측정된 압력만 연합), remote PID도 pause하지 못한다. |
 | Federation admission | Instance가 shared directory를 쓰면 활성 | shared `MEMORY_SUPERVISOR_FEDERATION_DIR` 설정. WSL 배포판 이름은 자동이고 다른 cloned guest는 고유 `MEMORY_SUPERVISOR_INSTANCE` 지정 | Fresh peer 사이의 신규 fan-out만 | 최근 10초의 valid snapshot 중 최악을 쓴다. Hard cap pooling, RAM 합산, job migration, remote 설정 변경은 하지 않는다. |
 
-## 지원 CLI 메모리 예산 변경
+## 지원 CLI 메모리 상한 변경
 
-Process tree 경계를 바꿀 **각 환경 안에서** 실행한다.
+일반 사용에는 권하지 않는다. 엄격한 연구나 벤치마크 실행을 위한 고급 기능이다. Process tree
+경계를 바꿀 **각 환경 안에서** 실행한다.
 
 ```bash
-memory-supervisor budget
-memory-supervisor budget set 12
-memory-supervisor budget off
+calando cap
+calando cap 12
+calando cap off
 ```
 
-`12`는 GiB 문법 예시일 뿐 권장값이 아니다(`memory-supervisor hard-cap set <MB>`가 MB 정밀
-별칭). 인자 없는 `budget`은 shared federation snapshot으로 이 환경의 이론상 최대와, peer 환경의
-명시적 예산을 뺀 현재 가능 총량을 보여준다. 명시적 예산만 claim으로 세고 환경의 기본 할당은
-세지 않는다. `set`은 현재 가능 총량과 대조해, 초과 요청은 들어가려면 어느 환경에서 얼마를
-줄여야 하는지와 함께 거절하고, 현재 가능 총량의 90% 이상이거나 설정 후 machine-wide 명시 예산
-합계가 물리 추정치의 90% 이상이 되는 요청은 진행 여부를 확인한다(스크립트는 `--yes`).
-`set`은 다른 설정을 보존하고 local service를 다시 적용한다. `off`는 해당 환경을 adaptive-only
-기본으로 되돌린다.
+`12`는 GB 문법 예시일 뿐 권장값이 아니다. 인자 없는 `calando cap`은 shared federation snapshot으로
+이 환경의 이론상 최대와, peer 환경의 명시적 상한을 뺀 현재 가능 총량을 보여준다. 명시적 상한만
+claim으로 세고 환경의 기본 할당은 세지 않는다. `calando cap <GB>`는 지금 쓸 수 있는 양을 넘는 요청을
+거절하고, 설명을 출력한 뒤 `[y/N]`으로 확인한다(대화형이 아닌 호출자는 `--yes`). 다른 설정은
+보존한다. `off`는 해당 환경을 adaptive-only 기본으로 되돌린다.
 
 | 원하는 결과 | 실행 위치와 방법 |
 | --- | --- |
-| Native Windows Claude Code와 Codex 공용 예산 | PowerShell에서 `budget set <GiB>` 한 번 |
-| WSL session만 다른 예산 | 해당 WSL distribution 안에서 별도 값 실행 |
+| Native Windows Claude Code와 Codex 공용 상한 | PowerShell에서 `calando cap <GB>` 한 번 |
+| WSL session만 다른 상한 | 해당 WSL distribution 안에서 별도 값 실행 |
 | Host와 guest VM에 같은 정책 | Host와 guest에서 같은 명령을 각각 한 번 |
-| VM 두 개에 서로 다른 budget | 각 VM 안에서 다른 값 실행 |
-| 모든 환경을 기본 자동 모드로 복귀 | 예전에 override한 각 환경에서 `budget off` 실행 |
+| VM 두 개에 서로 다른 상한 | 각 VM 안에서 다른 값 실행 |
+| 세션 하나만 제한 | 그 세션에서 `/calando cap <GB>`(Codex는 `$calando`) |
+| 모든 환경을 기본 자동 모드로 복귀 | 예전에 설정한 각 환경에서 `calando cap off` 실행 |
 
 Cap은 complete 지원 CLI root tree를 한 번씩 센다. Sample 방식이라 tick 사이 burst가 초과할 수 있고
 pause는 이미 resident인 memory를 즉시 반환하지 않는다. Byte-exact 할당 상한은 native
@@ -184,14 +183,14 @@ CLI도 종료하므로 활성 session 중 실행하지 말고 유휴 경계에�
 [`wsl --shutdown`](https://learn.microsoft.com/windows/wsl/basic-commands#shutdown) 문서를 참고한다.
 
 Hyper-V, Parallels, VMware, UTM, cloud VM은 해당 hypervisor·cloud control plane에서 고정·동적 memory를
-바꾸며 보통 guest를 끈 상태에서 수행한다. Supervisor에 같은 숫자를 다시 넣을 필요는 없다. 다음 boot
+바꾸며 보통 guest를 끈 상태에서 수행한다. Calando에 같은 숫자를 다시 넣을 필요는 없다. 다음 boot
 뒤 guest kernel이 노출하는 값을 읽어 자동 재계산한다. Host·guest에는 별도 설치가 필요하고 shared
 admission을 원하면 federation folder도 공유해야 한다.
 
 ## 고급 정책 변경
 
-정상 사용자는 아래 값을 설정하지 않는다. Unix는 `~/.config/memory-supervisor/config.json`, Windows는
-`$HOME\.config\memory-supervisor\config.json`을 사용한다.
+정상 사용자는 아래 값을 설정하지 않는다. Unix는 `~/.config/calando/config.json`, Windows는
+`$HOME\.config\calando\config.json`을 사용한다.
 
 ```json
 {
@@ -199,7 +198,7 @@ admission을 원하면 federation folder도 공유해야 한다.
 }
 ```
 
-수동 편집 뒤 `memory-supervisor update`를 실행하고 `memory-status`를 확인한다. `protect`는 더 일찍,
+수동 편집 뒤 `calando update`를 실행하고 `calando status`를 확인한다. `protect`는 더 일찍,
 `performance`는 더 늦게 조치하며 `balanced`가 기본이다. 세밀한
 `MEMORY_SUPERVISOR_MEM_*`, `MEMORY_SUPERVISOR_PSI_*`, process observation override도 있지만 순서를
 검증하고 잘못된 group은 adaptive 값으로 돌아간다. Slope나 raw threshold는 여전히 관찰값이며 shared
@@ -222,7 +221,7 @@ container·장시간 작업 조합을 그대로 재현했다고 주장하지는 
 - Windows 명령 하나로 WSL·macOS VM·Linux VM hard cap을 바꿀 수 없다.
 - WSL instance는 Windows PID를, guest는 host PID를 pause할 수 없다.
 - Federation은 16 GiB host RAM과 10 GiB WSL capacity를 가상의 26 GiB pool로 합치지 않는다.
-- Supervisor는 꺼진 guest나 자기 PID·권한 영역 밖의 CLI를 보지 못한다.
+- Calando는 꺼진 guest나 자기 PID·권한 영역 밖의 CLI를 보지 못한다.
 - Apple Silicon의 macOS VM은 Intel Mac test가 아니다. Rosetta는 compatibility coverage일 뿐이다.
 - `MEMORY_SUPERVISOR_CAPACITY_MB` 변경은 physical memory를 할당하거나 회수하지 않는다.
 

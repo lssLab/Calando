@@ -4,8 +4,10 @@
   <strong>English</strong> · <a href="README.ko.md">한국어</a> · <a href="README.zh-CN.md">简体中文</a> · <a href="README.ja.md">日本語</a>
 </p>
 
-Prefer the top-level one-line installer, then use `memory-supervisor update` for upgrades or a Codex
-installation added later. Both paths merge the adapter atomically and preserve unrelated hooks.
+Prefer the top-level one-line installer, then use `calando update` for upgrades or a Codex
+installation added later. Both paths merge the adapter atomically and preserve unrelated hooks. After an update that changes
+hook commands (for example 0.2.x → 0.3.0), trust the Calando hooks again in CLI `/hooks` or App
+Settings → Hooks; Codex skips changed hooks until then.
 `hooks.json.template` is for manual inspection and custom deployments. Replace
 `__MEMORY_SUPERVISOR_ROOT__` with an absolute forward-slash path and `__CODEX_HOOKS__` with the
 absolute `hooks.json` path for that Codex home. The source path lets the gate ignore this user hook

@@ -34,7 +34,7 @@ Smart App Control にはアプリケーションごとの例外はありませ�
 1 行のインストーラーは、リリース ソースと実行可能ファイルをダウンロードし、公開されている SHA-256 値を自動的に検証します。 手動でダウンロードした実行可能ファイルの場合は、PowerShell でその署名の状態を検査します。
 
 ```powershell
-Get-AuthenticodeSignature .\memory-supervisor.exe | Format-List Status, StatusMessage, SignerCertificate
+Get-AuthenticodeSignature .\calando.exe | Format-List Status, StatusMessage, SignerCertificate
 ```
 
 `NotSigned` は、この準備ビルドの予想される結果です。 リリース アーティファクトがコード署名されると、インストール ガイドとリリース ノートにその変更が記載され、この条件もそれらとともに更新されます。

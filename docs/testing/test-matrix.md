@@ -10,13 +10,14 @@ recovery, and coordination across environments.
 | Area | What is verified |
 | --- | --- |
 | Policy and braking | `ALLOW`, `HOLD`, and `DRAIN` across capacities and decline rates; cushioning order; attribution; targets selected per interval |
-| Process safety | PID and start-identity revalidation, pause ownership, one candidate at a time, automatic and manual recovery |
+| Process safety | PID and start-identity revalidation, pause ownership, one candidate at a time, automatic recovery and guarded resume |
 | Claude Code | hook merge, supported events, fail-open behavior, and connection diagnostics after install or update |
 | Codex CLI | paths and events for all seven hooks, trust and enablement diagnostics, and connection of existing sessions |
 | Codex Desktop App | shared App Server discovery, logical-thread separation, exact/inferred/blind candidates, multiple windows, and server generation changes |
-| Install and power | Unix and Windows install, update, uninstall, `on`/`off`, and preservation of existing user settings |
+| Install and power | Unix and Windows install, update, automatic-update gating, uninstall, `on`/`off`, 0.2.x folder migration, and preservation of existing user settings |
+| Session commands | `/calando` and `$calando` answered by the hook for the typing session only |
 | Federation | kernel-local control, admission sharing for the same physical memory, and rejection of stale or invalid peers |
-| Notifications and security | exact-terminal validation, deduplication, optional routes, and private state-file permissions |
+| Notifications and security | exact-terminal validation, deduplication, Telegram delivery, and private state-file permissions |
 | Release bundle | public-only source archives, checksums, and required platform binaries |
 | Repository safety | public-file allowlist, no personal paths or credentials, matching English, Korean, Simplified Chinese, and Japanese docs, and valid internal links |
 

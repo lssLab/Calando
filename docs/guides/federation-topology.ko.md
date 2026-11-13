@@ -4,8 +4,8 @@
   <a href="federation-topology.md">English</a> · <strong>한국어</strong> · <a href="federation-topology.zh-CN.md">简体中文</a> · <a href="federation-topology.ja.md">日本語</a>
 </p>
 
-Memory Supervisor는 자기 프로세스를 보고 제어할 수 있는 운영체제 커널마다 하나씩 실행됩니다.
-Federation은 한 컴퓨터 안의 여러 커널이 같은 물리 메모리를 함께 쓸 때 각 Supervisor의 판단을
+Calando는 자기 프로세스를 보고 제어할 수 있는 운영체제 커널마다 하나씩 실행됩니다.
+Federation은 한 컴퓨터 안의 여러 커널이 같은 물리 메모리를 함께 쓸 때 각 Calando의 판단을
 맞춥니다.
 
 ## 판정 기준
@@ -22,7 +22,7 @@ Federation은 현재의 새 작업 허용 판단만 공유합니다. 메모리�
 
 | 환경 | Host RAM을 동적으로 함께 쓰나? | Federation 동작 |
 | --- | --- | --- |
-| 네이티브 Linux·macOS·Windows | 두 번째 커널이 없음 | 로컬 Supervisor만 사용 |
+| 네이티브 Linux·macOS·Windows | 두 번째 커널이 없음 | 로컬 Calando만 사용 |
 | WSL2와 Windows host | 예 | Host 파일시스템에서 만나 새 작업 판단 공유 |
 | 여러 WSL2 배포판 | 예 | 같은 host 파일시스템에서 서로 연결 |
 | Host와 일반 container | 예 | 같은 host-local 폴더를 마운트한 경우 연결 |
@@ -48,7 +48,7 @@ WSL2는 마운트된 Windows host 파일시스템을 사용합니다. Container�
 자기 환경만 관리합니다. Linux guest는 지원되는 메모리 balloon 장치가 있으면 동적 VM, 없으면 고정
 메모리 VM으로 판정합니다.
 
-`memory-status --all`은 감지된 환경과 각 환경이 제공한 판단을 보여줍니다. 정해진 시간 안에 갱신된
+`calando status`은 감지된 환경과 각 환경이 제공한 판단을 보여줍니다. 정해진 시간 안에 갱신된
 상태만 현재 판단에 참여합니다.
 
 ## 공유되는 정보와 공유되지 않는 정보
@@ -61,7 +61,7 @@ Federation 상태에는 보호 판단에 필요한 정보만 들어갑니다.
 - Hook 연결 상태와 아직 전달되지 않은 보호 사건 상태
 
 프롬프트, 대화, 모델 응답, 프로젝트 파일 내용, 전체 명령줄, 인증 정보와 알림 비밀값은 넣지
-않습니다. 각 Supervisor는 자기 커널 안에서 다시 확인한 프로세스만 일시정지하거나 재개할 수 있습니다.
+않습니다. 각 Calando는 자기 커널 안에서 다시 확인한 프로세스만 일시정지하거나 재개할 수 있습니다.
 
 ## 같은 컴퓨터인지 확인하는 방법
 
@@ -74,12 +74,12 @@ UNC 경로와 원격으로 연결된 드라이브를 거부합니다.
 
 ## 여러 터미널을 함께 사용할 때
 
-한 커널 안의 여러 터미널은 이미 로컬 Supervisor 하나가 함께 관찰합니다. 터미널 수만큼 데몬을
+한 커널 안의 여러 터미널은 이미 로컬 Calando 하나가 함께 관찰합니다. 터미널 수만큼 데몬을
 만들거나 메모리를 중복 합산하지 않습니다. Windows·WSL2·container·동적 guest처럼 같은 컴퓨터에
-다른 커널이 추가되면 각 커널에 Supervisor 하나가 실행되고, Federation은 새 작업 판단만 맞춥니다.
+다른 커널이 추가되면 각 커널에 Calando 하나가 실행되고, Federation은 새 작업 판단만 맞춥니다.
 
 공유 자원에는 갱신된 판단 중 가장 보수적인 새 작업 허용 수준을 적용합니다. 프로세스 제어는 계속
-로컬이며 선택적입니다. 한 Supervisor가 다른 환경의 PID에 신호를 보내는 일은 없습니다.
+로컬이며 선택적입니다. 한 Calando가 다른 환경의 PID에 신호를 보내는 일은 없습니다.
 
 설정 방법은 [플랫폼 배포](platforms.ko.md), 검증 범위는
 [테스트 표](../testing/test-matrix.ko.md)를 참고하십시오.

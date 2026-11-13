@@ -598,7 +598,7 @@ fn lock(arguments: &[String]) -> i32 {
                 if cfg!(windows) {
                     "run this in an Administrator terminal"
                 } else {
-                    "run `sudo calando lock ...`"
+                    "run `sudo \"$(command -v calando)\" lock ...`"
                 }
             );
             1

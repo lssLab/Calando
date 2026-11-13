@@ -4,7 +4,7 @@
   <strong>English</strong> · <a href="federation-topology.ko.md">한국어</a> · <a href="federation-topology.zh-CN.md">简体中文</a> · <a href="federation-topology.ja.md">日本語</a>
 </p>
 
-Memory Supervisor runs once in each operating-system kernel that can see and control its own
+Calando runs once in each operating-system kernel that can see and control its own
 processes. Federation lets those supervisors coordinate when several kernels compete for the same
 physical memory.
 
@@ -48,7 +48,7 @@ directory. A dynamic VM uses an available hypervisor shared folder; otherwise it
 Linux guests are classified as dynamic when a supported memory-balloon device is present and fixed
 when it is absent.
 
-`memory-status --all` shows the detected environments and the decision contributed by each one.
+`calando status` shows the detected environments and the decision contributed by each one.
 Only state refreshed within the freshness window participates.
 
 ## What crosses the boundary

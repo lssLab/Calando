@@ -102,13 +102,14 @@ at admission control instead of signaling a guessed PID.
 
 ## Lead awareness, notifications, and recovery
 
-The terminal and enabled OS or remote routes receive a notice when a material protection action
+The terminal and, when configured, Telegram receive a notice when a material protection action
 starts and when it fully recovers. The affected logical lead receives the same reason and current
 recovery state at its next hook boundary.
 
 Pressure-paused children resume one at a time after headroom stabilizes. A lead or shared App Server
-paused for sustained self-growth receives one guarded probation resume. If the same growth returns,
-the supervisor pauses it again and waits for the owner rather than repeating automatic resumes.
+paused for sustained self-growth receives one guarded probation resume. The shared App Server is
+never left paused after a failed guarded resume; Calando falls back to per-thread limits instead.
+There is no manual resume command.
 
 If a hook is disabled, untrusted, or routed through a stale path, the daemon can still observe
 system and process memory but loses part of its logical control surface. It reports degraded

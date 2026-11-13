@@ -16,18 +16,18 @@
 | **Process ID (PID)** | The operating system's number for one running process. Actions are revalidated against its start identity so a reused number is not targeted. |
 | **PID-control environment** | The local process namespace in which one daemon can enumerate and signal PIDs for one protected user: a host, one WSL distribution, a VM guest, or a PID-isolated container. It is not necessarily a distinct kernel. |
 | **Supervisor daemon** | The resident native process for one protected OS user and PID-control environment. It samples visible resources, decides policy, and owns local process actions. |
-| **Hook gate** | A short-lived invocation of `memory-supervisor gate <event>` started by an AI CLI before or after a supported lifecycle event. |
+| **Hook gate** | A short-lived invocation of `calando gate <provider> <event>` started by an AI CLI before or after a supported lifecycle event. |
 | **Admission** | The decision for work that has not started yet: allow it, allow while observing, hold new expansion, or reduce future work. It is separate from pausing a running process. |
 | **Federation** | Sharing only the latest admission decision between local environments that use the same physical memory. It does not allow remote PID control. |
 | **TTE** | “Time to exhaustion”: the estimated seconds until usable memory runs out if the current decline continues. |
-| **Supervisor commands** | `memory-supervisor` and the read-only `memory-status` shortcut, which are terminal commands for inspecting or controlling the supervisor. They are not Claude Code or Codex sessions. |
+| **Supervisor commands** | The `calando` terminal commands (with the `memory-supervisor` and `memory-status` aliases during 0.3.x) for inspecting or controlling the supervisor. They are not Claude Code or Codex sessions. Session commands (`/calando`, Codex `$calando`) are answered by the `UserPromptSubmit` hook instead. |
 
 The legacy field `provider` survives only in compatibility interfaces. It means the AI CLI type
 (`claude` or `codex`), never the user, account, model vendor, operating system, or cloud provider.
 
 ## The most important architectural fact
 
-Memory Supervisor does not sit between the terminal and the AI CLI. Launches stay:
+Calando does not sit between the terminal and the AI CLI. Launches stay:
 
 ```text
 terminal → claude
@@ -50,7 +50,7 @@ The interactive CLI remains directly attached to the user's terminal.
 flowchart TB
     User["User in Claude Code or Codex"]
     AI["AI CLI session<br/>lead + workers"]
-    Gate["Short-lived hook gate<br/>memory-supervisor gate EVENT"]
+    Gate["Short-lived hook gate<br/>calando gate PROVIDER EVENT"]
     Daemon["Long-lived supervisor daemon<br/>one per user and PID-control environment"]
     Sensors["OS memory counters<br/>process table + PID identity"]
     Policy["Adaptive stopping-distance policy<br/>capacity · robust trend · native pressure · cause"]
@@ -58,9 +58,9 @@ flowchart TB
     Runtime["runtime.json<br/>logical epoch + roster · pause ownership · incidents · pending edges"]
     Observations["hook-observations/pending<br/>identity · lifecycle · tool class"]
     Queue["control/*.json<br/>request + acknowledgement"]
-    Status["memory-status<br/>short-lived read command"]
-    Control["memory-supervisor<br/>short-lived control command"]
-    Notice["Exact terminal · OS<br/>Discord · Telegram"]
+    Status["calando status<br/>short-lived read command"]
+    Control["calando off<br/>short-lived control command"]
+    Notice["Exact terminal<br/>Telegram"]
     HookFiles["Claude/Codex hook configuration<br/>installed and verified by integration mode"]
 
     User --> AI
@@ -89,9 +89,9 @@ flowchart TB
 ```
 
 Every executable box is a mode or alias of one Rust binary. Only the daemon stays resident;
-`gate`, `memory-status`, and the `memory-supervisor` control verbs last for one hook or command. There is no permanently
-open socket: the daemon atomically publishes state, the gate reads it, and manual process actions
-use a private request/acknowledgement queue so the daemon can revalidate the target before acting.
+`gate`, `calando status`, and the other `calando` commands last for one hook or command. There is no permanently
+open socket: the daemon atomically publishes state, the gate reads it, and `calando off` resumes
+paused processes through a private request/acknowledgement queue so the daemon can revalidate the target before acting.
 Hook observations are one-way atomic files, not a second scheduler: the daemon consumes them into a
 monotonic logical epoch and every lead later receives the exact restricted roster.
 
@@ -128,7 +128,7 @@ The control sequence is deliberately split:
    admission and logical roster, emits one bounded observation, and returns an allow/deny result.
 2. The resident daemon samples native memory and the visible process trees, consumes observations,
    and publishes `state.json` plus the durable logical/incident ledger in `runtime.json`.
-3. `HOLD` closes new expansion. Under `DRAIN`, attributed pressure or an explicit local budget can
+3. `HOLD` closes new expansion. Under `DRAIN`, attributed pressure or an explicit local cap can
    progressively restrict named agents' future work; external-only pressure does not restrict or
    pause existing AI work.
 4. A physical pause is a separate backstop. Tracked role/tree and growth evidence select an eligible
@@ -161,7 +161,7 @@ flowchart LR
         WD["WSL supervisor daemon"] -->|"write"| WS
         WD -. "scan and, only with evidence,<br/>signal WSL PIDs" .-> A
         WD -. "scan and, only with evidence,<br/>signal WSL PIDs" .-> B
-        WC["WSL memory-status / memory-supervisor"] --> WS
+        WC["WSL calando"] --> WS
         WC -->|"local control request"| WD
     end
 
@@ -172,7 +172,7 @@ flowchart LR
         NG -->|"read"| NS["Windows state.json"]
         ND["Windows supervisor daemon"] -->|"write"| NS
         ND -. "scan and, only with evidence,<br/>suspend Windows PIDs" .-> C
-        NC["PowerShell memory-status / memory-supervisor"] --> NS
+        NC["PowerShell calando"] --> NS
         NC -->|"local control request"| ND
     end
 
@@ -187,7 +187,7 @@ flowchart LR
 | Admission decision | Shared local decision | Worst fresh decision shared through federation |
 | Hard cap | One WSL aggregate, if explicitly enabled | Separate cap per control environment; never pooled |
 | PID pause/resume | WSL daemon can act on local WSL PIDs | Neither daemon can signal a PID outside its PID-control environment |
-| `memory-status --all` | Shows both local sessions | Can combine fresh snapshots from both sides |
+| `calando status` | Shows both local sessions | Can combine fresh snapshots from both sides |
 
 WSL 2 distributions can share the managed VM, Linux kernel, and host-backed memory pool while still
 using separate PID, mount, user, and cgroup namespaces. Each distribution therefore needs its own
@@ -250,23 +250,24 @@ Calando/
 │   ├── supervisor.rs           one-second control loop and protective actions
 │   ├── runtime.rs + events.rs  durable pause/incident state and user messages
 │   ├── gate.rs                 hook admission and incident-context response
-│   ├── status.rs + control.rs  memory-status and memory-supervisor control behavior
-│   ├── notify.rs + terminal.rs optional routes and exact-terminal delivery
+│   ├── status.rs + control.rs  calando status and control commands
+│   ├── notify.rs + terminal.rs Telegram and exact-terminal delivery
 │   ├── integration.rs          CLI version checks, owned hook merge, path migration
+│   ├── session.rs              /calando session commands
+│   ├── update.rs               daily update check and automatic update
 │   └── storage.rs              private directories and atomic/bounded file I/O
-├── SKILL.md                    shared Claude Code/Codex operating skill
+├── SKILL.md                    the calando skill for Claude Code and Codex
 ├── agents/                     Codex skill presentation metadata
 ├── integrations/
-│   ├── claude/                 hook template and in-CLI status command
-│   └── codex/                  hook template, adapter notes, and status command
+│   ├── claude/                 hook template
+│   └── codex/                  hook template and adapter notes
 ├── packaging/
 │   ├── install.*               transactional runtime, service, skill, and hook setup
 │   ├── power.* + uninstall.*   persistent power control and owned removal
 │   └── release/                source packaging and artifact verification
 ├── runtime/
-│   ├── bin/                    compatibility command launchers
 │   ├── hooks/                  fail-open hook wrappers
-│   └── notifications/          default private-notification template and wrapper
+│   └── notifications/          notification wrapper
 ├── docs/
 │   ├── detailed-guide.*        complete four-language product guide
 │   ├── guides/                 installation, usage, security, and architecture guides
@@ -275,7 +276,7 @@ Calando/
 └── .github/                    community documents and cross-platform test matrix
 ```
 
-Installer-generated hooks call `memory-supervisor gate <event>` directly. `runtime/hooks/` and
+Installer-generated hooks call `calando gate <provider> <event>` directly. `runtime/hooks/` and
 `integrations/` hold fail-open contracts, compatibility, and tests; they are not another resident
 daemon. The short maintenance files at the repository root preserve v0.2.0 checkout paths and
 delegate to `packaging/`; new runtime code prefers the grouped paths and falls back to the legacy
@@ -285,21 +286,26 @@ layout during an update.
 
 | Purpose | Linux / WSL / macOS | Windows |
 | --- | --- | --- |
-| Maintained checkout | `~/.local/share/memory-supervisor` | `%LOCALAPPDATA%\MemorySupervisor` |
-| Native runtime | `~/.local/lib/memory-supervisor/memory-supervisor` | `$HOME\.local\lib\memory-supervisor\memory-supervisor.exe` |
-| User commands | `~/.local/bin/memory-supervisor` and `memory-status` symlinks | `$HOME\.local\bin\*.cmd` launchers |
-| Current snapshot and runtime ledger | `~/.cache/memory-supervisor/` | `$HOME\.cache\memory-supervisor\` |
-| Configuration | `~/.config/memory-supervisor/` | `$HOME\.config\memory-supervisor\` |
-| Path pointers and default federation | `~/.memory-supervisor/` | `$HOME\.memory-supervisor\` |
-| Persistent power state | `~/.memory-supervisor/power-off` | `$HOME\.memory-supervisor\power-off` |
-| Long-lived startup | user systemd, macOS LaunchAgent, or supervised fallback | `MemorySupervisor` Scheduled Task |
-| Claude Code integration | `~/.claude/settings.json`, skill and command directories | Same paths below `$HOME` |
-| Codex integration | `$CODEX_HOME/hooks.json` (otherwise `~/.codex/hooks.json`), `~/.agents/skills`, compatibility prompt/skill | The environment's effective `CODEX_HOME`; skill and compatibility files remain below `$HOME` |
+| Release source | `~/.local/share/calando` | `%LOCALAPPDATA%\Calando` |
+| Native runtime | `~/.local/lib/calando/calando` | `%USERPROFILE%\.local\lib\calando\calando.exe` |
+| User commands | `~/.local/bin/calando` plus `memory-supervisor` and `memory-status` alias links | `%USERPROFILE%\.local\bin\*.cmd` launchers |
+| Current snapshot and runtime ledger | `~/.cache/calando/` | `%USERPROFILE%\.cache\calando\` |
+| Configuration (`config.json`, `notifications.conf`) | `~/.config/calando/` | `%USERPROFILE%\.config\calando\` |
+| Path pointers and default federation | `~/.calando/` | `%USERPROFILE%\.calando\` |
+| Persistent power state | `~/.calando/power-off` | `%USERPROFILE%\.calando\power-off` |
+| Administrator lock | `/etc/calando/lock` | `%ProgramData%\Calando\lock` |
+| Long-lived startup | `calando.service` (systemd user), `io.github.lsslab.calando` LaunchAgent, or supervised fallback | `Calando` Scheduled Task |
+| Claude Code integration | `~/.claude/settings.json`, `~/.claude/skills/calando` | Same paths below `%USERPROFILE%` |
+| Codex integration | `$CODEX_HOME/hooks.json` (otherwise `~/.codex/hooks.json`), `~/.agents/skills/calando`, `~/.codex/skills/calando` | The environment's effective `CODEX_HOME`; skill files remain below `%USERPROFILE%` |
 
-The checkout supplies updates; the copied native runtime serves the service and hooks.
-`memory-status` is an alias of that binary, and every control verb is a `memory-supervisor`
-subcommand. There is one resident daemon per installed user and PID-control environment, not per
-terminal or AI CLI.
+Upgrading from 0.2.x moves the old `memory-supervisor` folders once; on Unix the old names are left
+as links. Federation reads both `.calando/instances` and `.memory-supervisor/instances` while
+environments run mixed versions.
+
+The release source supplies updates; the copied native runtime serves the service and hooks.
+`calando` is that binary; `memory-supervisor` and `memory-status` are aliases of it during 0.3.x.
+There is one resident daemon per installed user and PID-control environment, not per terminal or AI
+CLI.
 When the `off` marker exists, the daemon does not run and gates pass through without a fail-open
 warning. Service registration and hook wiring remain installed, so `on` can remove the marker and
 restart the same installation.
@@ -312,7 +318,7 @@ restart the same installation.
   perform an OS action.
 - `supervisor` is the only long-lived owner that combines both and records durable actions.
 - `gate` can allow/deny a classified future action and deliver context; it cannot pause a process.
-- A `memory-supervisor` control verb requests an action; the daemon revalidates and executes it.
+- A `calando` control command requests an action; the daemon revalidates and executes it.
 - `federation` shares admission snapshots only; every PID action remains local to its owning
   PID-control environment.
 

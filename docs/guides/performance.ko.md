@@ -4,7 +4,7 @@
   <a href="performance.md">English</a> · <strong>한국어</strong> · <a href="performance.zh-CN.md">简体中文</a> · <a href="performance.ja.md">日本語</a>
 </p>
 
-Memory Supervisor는 동기식 Rust 실행 파일 하나를 사용합니다. 백그라운드 측정이나 hook 판단을
+Calando는 동기식 Rust 실행 파일 하나를 사용합니다. 백그라운드 측정이나 hook 판단을
 위해 별도 언어 runtime 또는 상주 worker pool을 실행하지 않습니다.
 
 ## 네이티브 release build 실측

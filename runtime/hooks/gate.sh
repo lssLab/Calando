@@ -8,7 +8,7 @@ case "$EVENT" in
   claude|codex) EVENT=${2:-} ;;
 esac
 case "$EVENT" in
-  PreToolUse|PostToolUse|PostToolBatch|AfterTool|UserPromptSubmit|BeforeAgent)
+  PreToolUse|PostToolUse|PostToolBatch|AfterTool)
     STATE_ROOT=${MEMORY_SUPERVISOR_DIR:-}
     if [ -z "$STATE_ROOT" ] && [ -r "$HOME/.calando/state-dir" ]; then
       IFS= read -r STATE_ROOT < "$HOME/.calando/state-dir" 2>/dev/null || :

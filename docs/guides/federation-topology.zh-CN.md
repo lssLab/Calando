@@ -4,7 +4,7 @@
   <a href="federation-topology.md">English</a> · <a href="federation-topology.ko.md">한국어</a> · <strong>简体中文</strong> · <a href="federation-topology.ja.md">日本語</a>
 </p>
 
-Memory Supervisor 在每个操作系统内核中运行一次，可以查看和控制自己的进程。 当多个内核竞争相同的物理内存时，Federation 让这些管理程序进行协调。
+Calando 在每个操作系统内核中运行一次，可以查看和控制自己的进程。 当多个内核竞争相同的物理内存时，Federation 让这些管理程序进行协调。
 
 <a id="the-deciding-rule"></a>
 ## 决定规则
@@ -44,7 +44,7 @@ topology adapter    -> which co-resident kernels share RAM and where they exchan
 
 WSL2 使用已安装的 Windows 主机文件系统。 容器使用显式安装的主机本地目录。 动态VM使用可用的虚拟机管理程序共享文件夹； 否则它仅保留本地。 当支持的内存气球设备存在时，Linux 客户机被分类为动态；当不存在时，Linux 客户机被分类为固定。
 
-`memory-status --all` 显示检测到的环境以及每个环境做出的决策。 只有在新鲜度窗口内刷新的状态才参与。
+`calando status` 显示检测到的环境以及每个环境做出的决策。 只有在新鲜度窗口内刷新的状态才参与。
 
 <a id="what-crosses-the-boundary"></a>
 ## 什么跨越了界限
@@ -56,7 +56,7 @@ WSL2 使用已安装的 Windows 主机文件系统。 容器使用显式安装�
 - 诊断所需的环境、进程、终端和逻辑代理标识符；
 - hook 连接运行状况和待处理事件状态。
 
-它不包括提示、对话、模型响应、项目文件内容、完整命令行、凭据或通知机密。 每个supervisor只能暂停或恢复它在自己的内核中重新验证的进程。
+它不包括提示、对话、模型响应、项目文件内容、完整命令行、凭据或 Telegram 令牌。 每个supervisor只能暂停或恢复它在自己的内核中重新验证的进程。
 
 <a id="host-local-safety-check"></a>
 ## 主机本地安全检查

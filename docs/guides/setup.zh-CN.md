@@ -10,7 +10,7 @@
 打开适合您环境的**终端**，然后粘贴下面匹配的一行命令。 无需准备 Git、Python、Rust 或单独的安装程序。 正常安装的范围仅限于您的用户帐户，不需要 `sudo` 或管理员 shell。
 
 <a id="1-install-memory-supervisor"></a>
-### 1.安装Memory Supervisor
+### 1. 安装 Calando
 
 <a id="linux-wsl2-or-macos-terminal"></a>
 #### Linux、WSL2 或 macOS 终端
@@ -30,7 +30,7 @@ irm https://raw.githubusercontent.com/lssLab/Calando/main/bootstrap.ps1 | iex
 
 命令完成后，后台服务正在运行，检测到的Claude Code和Codexhooks会自动连接。 它不会关闭正在运行的 AI 程序或中断正在进行的工作。
 
-> [！重要的]
+> [!IMPORTANT]
 > Windows 可执行文件目前正在由 [SignPath Foundation](https://signpath.org/) 进行审核，
 > 因此 Windows 11 需要 **Windows 安全 → 应用程序和浏览器控制 → Smart App Control** 保留
 > `Off`，同时安装和使用本机构建，直到审核完成。
@@ -54,17 +54,17 @@ irm https://raw.githubusercontent.com/lssLab/Calando/main/bootstrap.ps1 | iex
 <a id="2-set-up-claude-code"></a>
 ### 2. 设置Claude Code
 
-安装程序自动连接Memory Supervisor用户hook。 Claude Code 中无需配置、批准或启用任何内容。
+安装程序自动连接 Calando 用户 hook。 Claude Code 中无需配置、批准或启用任何内容。
 
 **如果 Claude Code 在安装过程中已在运行：** 继续工作。 Claude Code 自动重新加载用户设置更改，因此通常不需要重新启动。
 
-**验证：**确认步骤 5 的 `memory-status --connections` 输出中的 `Claude Code CONNECTED`。 仅当您想查看 hook 详细信息时，才打开只读 `/hooks` 屏幕并检查 `User Settings`。 仅在该可选视图不显示条目的特殊情况下，在当前工作之后重新启动 Claude Code。
+**验证：**确认步骤 5 的 `calando status` 输出中的 `Claude Code CONNECTED`。 仅当您想查看 hook 详细信息时，才打开只读 `/hooks` 屏幕并检查 `User Settings`。 仅在该可选视图不显示条目的特殊情况下，在当前工作之后重新启动 Claude Code。
 
 <a id="3-set-up-codex-cli"></a>
 ### 3. 设置Codex CLI
 
 1. 在您将使用的Codex CLI中打开`/hooks`。
-2. 确认所有七个 Memory Supervisor hooks 均**受信任且处于** 状态。
+2. 确认所有七个 Calando hooks 均为**已信任且已开启**。
 3. 信任标记为要审查的条目并打开任何禁用的条目。
 4. 关闭`/hooks`并继续工作。
 
@@ -73,8 +73,8 @@ irm https://raw.githubusercontent.com/lssLab/Calando/main/bootstrap.ps1 | iex
 <a id="4-set-up-codex-desktop-app"></a>
 ### 4. 设置Codex Desktop App
 
-1. 打开Codex App并进入**设置→Hooks**。 如果 Memory Supervisor 条目尚未存在，请等待最多 60 秒，然后重新打开“设置”。
-2. 信任并打开所有七个Memory Supervisorhooks。 **全部信任** 不会打开之前禁用的开关，因此请检查这两个状态。
+1. 打开Codex App并进入**设置→Hooks**。 如果 Calando 条目尚未出现，请等待最多 60 秒，然后重新打开“设置”。
+2. 信任并打开所有七个 Calando hooks。 **全部信任** 不会打开之前禁用的开关，因此请检查这两个状态。
 3. 返回现有任务并发送您想要发送的下一个请求。 仅当没有要继续的现有任务时才创建新任务。
 
 **如果 Codex App 在安装过程中已在运行：** 让应用程序及其现有任务保持打开状态，然后按照步骤 1-3 进行操作。 您无需重新启动应用程序或创建新任务。
@@ -83,7 +83,7 @@ irm https://raw.githubusercontent.com/lssLab/Calando/main/bootstrap.ps1 | iex
 ### 5. 验证安装
 
 ```bash
-memory-status --connections
+calando status
 ```
 
 检查您使用的程序的行：
@@ -97,15 +97,15 @@ memory-status --connections
 如果线路不健康，则仅根据其报告的内容采取行动：
 
 - `disabled` 或 `not trusted`：使用 Codex CLI 中的 `/hooks` 或 Codex App 中的 **设置 → Hooks** 来信任并启用指定条目。
-- `missing`、`stale`、`DEGRADED` 或`NOT RUNNING`：运行`memory-supervisor update`，然后重复此检查。
-- `NEEDS ATTENTION`：满足报告的程序版本或hook要求，然后运行`memory-supervisor update`。
-- `Core daemon OFF`：运行`memory-supervisor on`。
+- `missing`、`stale`、`DEGRADED` 或`NOT RUNNING`：运行 `calando update`，然后重复此检查。
+- `NEEDS ATTENTION`：满足报告的程序版本或hook要求，然后运行 `calando update`。
+- `Core daemon OFF`：运行 `calando on`。
 - 如果所有七个应用程序hooks看起来都正确，但在请求后应用程序仍然没有变成`ACTIVE`，请重新启动应用程序一次，在现有任务中发送下一个请求，然后再次检查。
-- 如果新安装找不到`memory-status`命令，请仅重新打开终端并再次运行。 Claude Code、Codex CLI 和 Codex App 不需要为此 PATH 刷新重新启动。
+- 如果新安装找不到 `calando` 命令，请仅重新打开终端并再次运行。 Claude Code、Codex CLI 和 Codex App 不需要为此 PATH 刷新重新启动。
 
 Codex hook 信任不是管理员访问权限。 这是您对 Codex 将运行的确切本地命令的批准。 仅当组织策略或 Windows 安全策略阻止安装时才检查管理员策略。 有关底层信任规则，请参阅 [Claude Code hooks 指南](https://code.claude.com/docs/en/hooks) 和 [Codex hooks 指南](https://learn.chatgpt.com/docs/hooks#review-and-trust-hooks)。
 
-这些命令安装最新的公开版本。 不需要 Rust 构建工具； 自动使用该版本中包含的经过验证的可执行文件。
+这些命令安装最新的公开版本。不需要 Rust 构建工具，会自动使用该版本中经过校验的可执行文件。之后服务每天检查一次更新并自动应用（`calando update auto off` 可关闭）。从 0.2.x 升级时，旧的 `memory-supervisor` 文件夹会被移动一次；在 Unix 上旧名称保留为链接。升级到 0.3.0 会改变 hook 命令，Codex 用户需要在 `/hooks`（CLI）或**设置 → Hooks**（App）中重新信任一次。
 
 <a id="6-uninstall"></a>
 ### 6. 卸载
@@ -113,10 +113,10 @@ Codex hook 信任不是管理员访问权限。 这是您对 Codex 将运行的�
 要删除 Calando，请在安装它的每个环境中运行一次：
 
 ```bash
-memory-supervisor uninstall
+calando uninstall
 ```
 
-它删除后台服务、可执行文件以及Calando拥有的hook和技能连接，同时保留状态和用户设置。
+它删除后台服务、可执行文件以及 Calando 拥有的 hook 和技能，同时保留状态和用户设置。如果管理员开启了 `calando lock`，卸载会被拒绝。
 
 <a id="supported-environments"></a>
 ## 支持的环境

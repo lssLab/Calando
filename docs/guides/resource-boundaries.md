@@ -79,8 +79,7 @@ If a hook is missing, the daemon can still observe its local process table, but 
 that AI CLI's allocation before the new process starts. Check both paths with:
 
 ```bash
-memory-status --connections
-memory-status --all
+calando status
 ```
 
 ## How usable capacity is learned
@@ -143,43 +142,39 @@ near-suffocation evidence is in
 | --- | --- | --- | --- | --- |
 | Physical or VM allocation | OS/hypervisor default | Physical RAM cannot be changed in software; change WSL, Hyper-V, Parallels, VMware, UTM, or cloud VM memory in that platform | The host or guest OS itself | Raising guest memory gives it more possible headroom but reduces the host's worst-case reserve. Lowering it makes the guest's adaptive thresholds and reserve recalculate downward. Usually requires guest shutdown/restart. |
 | Auto-detected capacity | Native sensor | Do nothing normally. `MEMORY_SUPERVISOR_CAPACITY_MB` is an advanced calibration override only when the native value is demonstrably wrong | One installed instance | It changes policy calculations but does not change the real OS/VM limit. Setting it too high is unsafe; too low is unnecessarily conservative. |
-| Adaptive pressure policy | `balanced`; no manual budget | Optional `protect`, `balanced`, or `performance` profile, or advanced threshold overrides | One installed instance | Federation can propagate that instance's stricter admission decision to peers. `performance` never bypasses actual collapse, degraded protection, or an explicit cap. |
-| Aggregate supported-CLI memory budget (hard cap) | **OFF** | `memory-supervisor budget set <GiB>` or `budget off` in that environment | All Claude Code and Codex root trees visible to that OS/PID domain; not Chrome or the entire machine | Near the cap, new fan-out is held. Above it, at most one verified growing worker/support process can pause per reaction interval. Cap proximity stays local: a `near/exceeded` state no longer closes admission on federated peers (only measured pressure federates), and it cannot pause their PIDs. |
+| Adaptive pressure policy | `balanced`; no manual cap | Optional `protect`, `balanced`, or `performance` profile, or advanced threshold overrides | One installed instance | Federation can propagate that instance's stricter admission decision to peers. `performance` never bypasses actual collapse, degraded protection, or an explicit cap. |
+| Aggregate supported-CLI memory cap | **OFF** | `calando cap <GB>` or `calando cap off` in that environment; one session: `/calando cap <GB>` | All Claude Code and Codex root trees visible to that OS/PID domain; not Chrome or the entire machine | Near the cap, new heavy work is held. Above it, one growing subagent is paused. Cap proximity stays local: a `near/exceeded` state no longer closes admission on federated peers (only measured pressure federates), and it cannot pause their PIDs. |
 | Federation admission | Enabled when instances share a directory | Configure a shared `MEMORY_SUPERVISOR_FEDERATION_DIR`; WSL distribution names are automatic, while other cloned guests need unique `MEMORY_SUPERVISOR_INSTANCE` values | New fan-out only across fresh peers | Uses the worst valid snapshot from the last ten seconds. It never pools hard caps, adds RAM totals, migrates jobs, or changes a remote configuration. |
 
-## Changing a supported-CLI memory budget
+## Changing a supported-CLI memory cap
 
-Run these commands **inside each environment** whose process trees should change:
+The cap is advanced and not recommended for normal use; it is meant for strict research or benchmark
+runs. Run these commands **inside each environment** whose process trees should change:
 
 ```bash
-memory-supervisor budget
-memory-supervisor budget set 12
-memory-supervisor budget off
+calando cap
+calando cap 12
+calando cap off
 ```
 
-`12` is only a GiB syntax example, not a recommended size (`memory-supervisor hard-cap set <MB>`
-remains the MB-precision alias). The bare `budget` report shows this environment's theoretical
-maximum and the currently possible total after peer environments' explicit budgets, using the
-shared federation snapshots; only explicit budgets count as claims, never an environment's default
-allocation. `set` validates against that currently possible total — an oversized request is refused
-with the exact per-environment reductions that would make it fit, and a request at 90% or more of
-the currently possible total — or one that pushes the machine-wide explicit-budget total to 90% or
-more of the physical estimate — asks for confirmation
-(`--yes` for scripts). `set` preserves unrelated configuration and reloads that local service;
-`off` returns the environment to adaptive-only mode.
+`12` is only a GB syntax example, not a recommended size. The value is checked against what this
+environment can use now. The command prints an explanation and asks `[y/N]` (`--yes` for scripts).
+It preserves unrelated configuration and reloads the local service; `off` returns the environment to
+adaptive-only mode.
 
 Examples:
 
 | Desired result | Action |
 | --- | --- |
-| One shared budget for native Windows Claude Code and Codex | Run `budget set <GiB>` once in PowerShell |
-| A different budget for WSL sessions | Run a separate value inside that WSL distribution |
+| One cap for native Windows Claude Code and Codex | Run `calando cap <GB>` once in PowerShell |
+| A different cap for WSL sessions | Run a separate value inside that WSL distribution |
 | Same policy in host and guest VM | Run the same command once on the host and once inside the guest |
-| Different budgets for two VMs | Run a different value inside each VM |
-| Default smart behavior everywhere | Run `budget off` in every environment that previously had an override |
+| Different caps for two VMs | Run a different value inside each VM |
+| A cap for one session only | Type `/calando cap <GB>` (Codex: `$calando cap <GB>`) in that session |
+| Default smart behavior everywhere | Run `calando cap off` in every environment that previously had a cap |
 
-The cap counts each complete supported-CLI root tree once. It is sampled, can overshoot between ticks,
-and suspension does not return already resident memory immediately. Use a native cgroup, container,
+The cap counts each complete supported-CLI root tree once. It is sampled, and pausing cannot reclaim
+memory already used, so use can briefly pass the cap. Use a native cgroup, container,
 or VM limit for a byte-exact allocation ceiling.
 
 ## Changing WSL or VM allocation
@@ -208,8 +203,8 @@ need separate installations and, for shared admission, a shared federation folde
 ## Advanced policy changes
 
 Normal users should leave these unset. Advanced settings live at
-`~/.config/memory-supervisor/config.json` on Unix and
-`$HOME\.config\memory-supervisor\config.json` on Windows:
+`~/.config/calando/config.json` on Unix and
+`%USERPROFILE%\.config\calando\config.json` on Windows:
 
 ```json
 {
@@ -217,7 +212,7 @@ Normal users should leave these unset. Advanced settings live at
 }
 ```
 
-After a manual edit, run `memory-supervisor update` and inspect `memory-status`. `protect` acts earlier,
+After a manual edit, run `calando update` and inspect `calando status`. `protect` acts earlier,
 `performance` acts later, and `balanced` is the default. Fine-grained
 `MEMORY_SUPERVISOR_MEM_*`, `MEMORY_SUPERVISOR_PSI_*`, and process-observation overrides are available
 for measured compatibility problems, but their ordering is validated and invalid groups fall back
@@ -238,7 +233,7 @@ claim to reproduce every physical host, guest, container, or long-running worklo
 
 ## What is deliberately not possible
 
-- One Windows command cannot set a WSL, macOS VM, or Linux VM hard cap.
+- One Windows command cannot set a WSL, macOS VM, or Linux VM cap.
 - A WSL instance cannot pause a Windows PID, and a guest cannot pause a host PID.
 - Federation cannot combine 16 GiB host RAM and 10 GiB WSL capacity into a fictional 26 GiB pool.
 - A supervisor does not see a powered-off guest or a CLI outside its visible PID/permission domain.

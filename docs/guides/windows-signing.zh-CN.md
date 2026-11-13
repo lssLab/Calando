@@ -34,7 +34,7 @@ Smart App Control 没有每个应用程序的异常。 要使用未签名的本�
 一行安装程序下载发布源和可执行文件，然后自动验证其发布的 SHA-256 值。 对于手动下载的可执行文件，请在 PowerShell 中检查其签名状态：
 
 ```powershell
-Get-AuthenticodeSignature .\memory-supervisor.exe | Format-List Status, StatusMessage, SignerCertificate
+Get-AuthenticodeSignature .\calando.exe | Format-List Status, StatusMessage, SignerCertificate
 ```
 
 `NotSigned` 是此准备构建的预期结果。 当发布工件进行代码签名时，安装指南和发行说明将说明该更改，并且此条件将随之更新。
