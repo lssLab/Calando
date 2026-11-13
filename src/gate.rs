@@ -12,7 +12,7 @@ use crate::containment::{
     HookObservation, LogicalState, ToolClass, agent_id, classify_tool, logical_key,
 };
 use crate::events::{
-    acknowledge_event, event_should_notify, make_event, queue_event, user_message,
+    acknowledge_event, concise_message, event_should_notify, make_event, queue_event,
 };
 use crate::integration::{
     CodexHookSurface, audit_codex_app_hooks, audit_codex_hooks, codex_hook_source_is_authoritative,
@@ -654,31 +654,26 @@ fn incident_context(incident: &Value) -> String {
         .map(Value::to_string)
         .unwrap_or_else(|| "unknown".to_owned());
     let evidence = if text("reason", "unknown") == "runaway-memory" {
-        let reserve_tte = incident
-            .get("process_time_to_reserve_s")
-            .map(|value| format!("; projected recovery-reserve arrival={value}s"))
-            .unwrap_or_default();
         format!(
-            "; direct process evidence={} MiB at {} MiB/s over the configured observation window{}",
+            " · {} MiB, +{} MiB/s",
             incident
                 .get("anon_mb")
                 .map(Value::to_string)
-                .unwrap_or_else(|| "unknown".to_owned()),
+                .unwrap_or_else(|| "?".to_owned()),
             incident
                 .get("slope_mb_s")
                 .map(Value::to_string)
-                .unwrap_or_else(|| "unknown".to_owned()),
-            reserve_tte
+                .unwrap_or_else(|| "?".to_owned()),
         )
     } else {
         String::new()
     };
     format!(
-        "Process event: {} {} ({}), PID {}; reason={}{}.",
+        "• Process {}: {} PID {} ({}) · {}{}",
         text("status", "recorded"),
         text("name", "process"),
-        text("role", "unknown role"),
         pid,
+        text("role", "unknown role"),
         text("reason", "unknown"),
         evidence
     )
@@ -905,7 +900,7 @@ fn consume_memory_notice(
                     .get("created_at")
                     .and_then(Value::as_f64)
                     .unwrap_or_default(),
-                user_message(event),
+                concise_message(event),
             )
         })
         .chain(selected_incidents.iter().map(|incident| {
@@ -944,16 +939,13 @@ fn consume_memory_notice(
         || incidents
             .iter()
             .any(|incident| incident.get("status").and_then(Value::as_str) == Some("suspended"));
+    // Agents get only what changes their next step; the owner already has the notice.
     let guidance = if active {
-        "Do not recreate existing workers. Inspect `memory-status`; resume a paused PID only with `memory-supervisor resume <pid>` in its owning OS."
+        format!("paused PIDs {stopped}; do not recreate those workers or resume them yourself")
     } else {
-        "No supervisor-managed pause is active. Do not issue another resume; continue under the current admission decision."
+        "no action needed; keep working".to_owned()
     };
-    let paused = if stopped.is_empty() { "none" } else { &stopped };
-    let context = format!(
-        "[memory-supervisor]\nEvent: {detail}\nCurrent: {}.\nPaused PIDs: {paused}.\nRequired behavior: {guidance} Report the action and recovery state to the user.",
-        pressure_summary(state)
-    );
+    let context = format!("[memory-supervisor] {detail}\nFor you: {guidance}.");
     Some((context, detail))
 }
 
@@ -1106,7 +1098,7 @@ fn decide_with_session_health(
             Some(context(
                 "SessionStart",
                 &format!(
-                    "[memory-supervisor] Active. All visible Claude Code and Codex sessions for this user in the same local process space share one new-work decision. Current: {}. High memory use is fine while useful work can continue safely. Only measured danger delays new work, and pausing an existing program requires stronger evidence that it is causing the problem. A program pause is a separate, clearly reported last resort. Use `memory-status` for details and `memory-supervisor resume <pid>` only for a program paused by Memory Supervisor.{suffix}",
+                    "[memory-supervisor] Active. Current: {}. New heavy work is held only under measured memory danger; you are told when it affects you.{suffix}",
                     pressure_summary(state)
                 ),
                 notice_user,
@@ -1703,7 +1695,7 @@ mod tests {
             first["hookSpecificOutput"]["additionalContext"]
                 .as_str()
                 .unwrap()
-                .contains("Process event: resumed claude")
+                .contains("Process resumed: claude")
         );
         assert!(second.is_none());
         fs::remove_dir_all(directory).unwrap();
@@ -1745,7 +1737,7 @@ mod tests {
         let first = consume_memory_notice(&directory, "codex", &payload, &state, true)
             .unwrap()
             .0;
-        assert!(first.contains("MEMORY PROTECTION ACTIVE"));
+        assert!(first.contains("Memory protection on"));
         for index in 1..=4 {
             assert!(first.contains(&format!("worker-{index}")));
         }
@@ -1754,7 +1746,7 @@ mod tests {
         let second = consume_memory_notice(&directory, "codex", &payload, &state, true)
             .unwrap()
             .0;
-        assert!(!second.contains("MEMORY PROTECTION ACTIVE"));
+        assert!(!second.contains("Memory protection on"));
         assert!(!second.contains("worker-1"));
         assert!(second.contains("worker-5"));
         assert!(consume_memory_notice(&directory, "codex", &payload, &state, true).is_none());
@@ -1788,7 +1780,7 @@ mod tests {
         let first = consume_memory_notice(&directory, "claude", &payload, &state, true)
             .unwrap()
             .0;
-        assert!(first.contains("MEMORY PROTECTION ACTIVE"));
+        assert!(first.contains("Memory protection on"));
         assert!(consume_memory_notice(&directory, "claude", &payload, &state, true).is_none());
         let kept: Value = serde_json::from_slice(&fs::read(&marker).unwrap()).unwrap();
         assert_eq!(kept["seen_events"], json!(["0a0a0a0a0a0a0a0a0a0a0a0a"]));
@@ -1828,7 +1820,7 @@ mod tests {
             startup["hookSpecificOutput"]["additionalContext"]
                 .as_str()
                 .unwrap()
-                .contains("memory-status")
+                .starts_with("[memory-supervisor] Active.")
         );
         let setup = decide_with_session_health(
             "codex",
@@ -1916,13 +1908,13 @@ mod tests {
             first["systemMessage"]
                 .as_str()
                 .unwrap()
-                .contains("GUARDED RESUME")
+                .contains("Guarded resume")
         );
         assert!(
             first["hookSpecificOutput"]["additionalContext"]
                 .as_str()
                 .unwrap()
-                .contains("State: same PID under probation")
+                .contains("Running under watch")
         );
         assert!(
             !first["hookSpecificOutput"]["additionalContext"]
@@ -2004,13 +1996,11 @@ mod tests {
         let context = lead["hookSpecificOutput"]["additionalContext"]
             .as_str()
             .unwrap();
-        assert!(context.contains("MEMORY PROTECTION ACTIVE"));
-        assert!(context.contains("MEMORY PROTECTION RECOVERED"));
+        assert!(context.contains("Memory protection on"));
+        assert!(context.contains("Memory protection off"));
         assert!(context.contains("Lead handoff"));
         assert!(context.contains("worker-1: bash denied at logical epoch 4"));
-        assert!(
-            context.find("MEMORY PROTECTION ACTIVE") < context.find("MEMORY PROTECTION RECOVERED")
-        );
+        assert!(context.find("Memory protection on") < context.find("Memory protection off"));
         assert!(
             decide(
                 "claude",

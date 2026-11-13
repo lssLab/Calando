@@ -600,6 +600,7 @@ pub struct Supervisor {
     cli_hard_cap_mb: Option<f64>,
     logical_recovery_since: Option<f64>,
     pressure_episode_clear_since: Option<f64>,
+    vm_held_mb: Option<u64>,
     codex_app_snapshot: CodexAppSnapshot,
     last_codex_app_hook_sync_at: f64,
 }
@@ -694,6 +695,7 @@ impl Supervisor {
             cli_hard_cap_mb,
             logical_recovery_since: None,
             pressure_episode_clear_since: None,
+            vm_held_mb: None,
             codex_app_snapshot: CodexAppSnapshot::default(),
             last_codex_app_hook_sync_at: 0.0,
         }
@@ -1308,12 +1310,23 @@ impl Supervisor {
                 "[Memory Supervisor] MEMORY PROTECTION RECOVERED\nWhy: the calculated braking decision is clear, every live logical agent is ACTIVE, and no App surface gate, supervisor-managed PID, or probation remains.\nEffect: the protection episode is complete; component actions remain in the event ledger, and normal admission may continue under the current decision.\nNext: no recovery command is required; check `memory-status` before new fan-out if the workload is still memory-heavy.".to_owned(),
             )
         };
+        let guest_used_mb = self
+            .vm_held_mb
+            .and_then(|_| co_resident_wsl_used_mb(&fresh_federated_states(30.0)));
         let event = self.notification_event(
             "pressure-episode",
             status,
             &message,
             &format!("episode:{episode_started_at:.3}"),
             Map::from_iter([
+                ("restricted".to_owned(), json!(restricted)),
+                ("paused".to_owned(), json!(paused)),
+                (
+                    "duration_s".to_owned(),
+                    json!((!active).then(|| rounded(now - episode_started_at, 0))),
+                ),
+                ("vm_held_mb".to_owned(), json!(self.vm_held_mb)),
+                ("guest_used_mb".to_owned(), json!(guest_used_mb)),
                 ("severity".to_owned(), Value::String(severity.to_owned())),
                 (
                     "cause".to_owned(),
@@ -5720,6 +5733,7 @@ impl Supervisor {
         let utilization_transition =
             self.update_level(raw_level, now, snapshot.available_mb, pressure.some_avg10);
         let process_map = list_processes(&self.platform);
+        self.vm_held_mb = windows_vm_held_mb(&self.platform, &process_map);
         self.refresh_codex_app_adapter(now, &process_map);
         let initial_tracked = tracked_processes(&process_map);
         self.system_history.push(HistorySample {
@@ -6260,6 +6274,38 @@ fn admission_rank(state: &Value, is_peer: bool) -> (Level, i64) {
         f64::INFINITY
     };
     (level, -(ratio * 1_000_000.0) as i64)
+}
+
+/// Memory the Hyper-V WSL VM holds on a Windows host. Windows counts it as used even when the
+/// guest itself is mostly cache, so notices show it apart from the host total.
+fn windows_vm_held_mb(platform: &str, processes: &BTreeMap<u32, ProcessInfo>) -> Option<u64> {
+    if platform != "windows" {
+        return None;
+    }
+    let held: u64 = processes
+        .values()
+        .filter(|process| process.name.to_ascii_lowercase().starts_with("vmmem"))
+        .map(|process| process.rss_mb)
+        .sum();
+    (held > 0).then_some(held)
+}
+
+/// What WSL peers on this machine actually use (capacity minus their own available memory).
+fn co_resident_wsl_used_mb(peers: &[Value]) -> Option<u64> {
+    let used: Vec<u64> = peers
+        .iter()
+        .filter(|peer| {
+            peer.get("instance")
+                .and_then(Value::as_str)
+                .is_some_and(|instance| instance.starts_with("wsl-"))
+        })
+        .filter_map(|peer| {
+            let capacity = peer.get("memory_capacity_mb")?.as_u64()?;
+            let available = peer.get("mem_available_mb")?.as_u64()?;
+            Some(capacity.saturating_sub(available))
+        })
+        .collect();
+    (!used.is_empty()).then(|| used.iter().sum())
 }
 
 pub fn admission_snapshot(local: &Value, peers: Option<Vec<Value>>, tick_s: f64) -> Value {
@@ -7304,6 +7350,37 @@ mod tests {
             calls += 1;
         }
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn windows_notice_figures_count_only_the_vm_and_co_resident_wsl_use() {
+        let process = |pid: u32, name: &str, rss_mb: u64| {
+            (
+                pid,
+                ProcessInfo {
+                    pid,
+                    ppid: 1,
+                    name: name.to_owned(),
+                    rss_mb,
+                    anon_mb: rss_mb,
+                    args: Vec::new(),
+                    start_token: String::new(),
+                    terminal: String::new(),
+                    terminal_identity: String::new(),
+                },
+            )
+        };
+        let processes = BTreeMap::from([
+            process(10, "vmmemWSL", 9830),
+            process(11, "chrome.exe", 400),
+        ]);
+        assert_eq!(windows_vm_held_mb("windows", &processes), Some(9830));
+        assert_eq!(windows_vm_held_mb("wsl", &processes), None);
+        let peers = [
+            json!({"instance":"wsl-LAPTOP-1","mem_available_mb":6648,"memory_capacity_mb":9945}),
+            json!({"instance":"windows-LAPTOP-1","mem_available_mb":1551,"memory_capacity_mb":16108}),
+        ];
+        assert_eq!(co_resident_wsl_used_mb(&peers), Some(3297));
     }
 
     #[test]

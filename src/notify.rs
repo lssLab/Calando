@@ -13,7 +13,7 @@ use std::time::{Duration, Instant};
 use crate::config::{
     load_notification_config, notification_channels, notification_config_path, state_dir,
 };
-use crate::events::{acknowledge_event, event_should_notify, user_message};
+use crate::events::{acknowledge_event, concise_message, event_should_notify};
 use crate::storage::{ensure_private_dir, write_atomic_json, write_atomic_text};
 
 const USER_AGENT: &str = "claude-codex-memory-supervisor";
@@ -458,7 +458,7 @@ pub fn dispatch_event(
 ) -> (BTreeMap<String, String>, Map<String, Value>) {
     let selected = notification_channels(config);
     let should_notify = event_should_notify(event);
-    let message = user_message(event);
+    let message = concise_message(event);
     let desktop = if !should_notify {
         DesktopResult {
             status: "skipped".to_owned(),
