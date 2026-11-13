@@ -13,6 +13,7 @@ pub mod notify;
 pub mod picker;
 pub mod platform;
 pub mod policy;
+pub mod release;
 pub mod runtime;
 pub mod session;
 pub mod status;

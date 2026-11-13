@@ -342,34 +342,47 @@ fn refresh_release_installation(root: &Path) -> io::Result<std::process::ExitSta
         };
     }
 
-    let url = env::var("MEMORY_SUPERVISOR_BOOTSTRAP_URL").unwrap_or_else(|_| {
-        "https://raw.githubusercontent.com/lssLab/Calando/main/bootstrap.sh".to_owned()
+    // Only files named in the signed release list are installed; the bootstrap script comes from
+    // this installation, not from the network.
+    let base = env::var("MEMORY_SUPERVISOR_RELEASE_BASE_URL").unwrap_or_else(|_| {
+        "https://github.com/lssLab/Calando/releases/latest/download".to_owned()
     });
-    if cfg!(windows) {
-        let windows_url = env::var("MEMORY_SUPERVISOR_BOOTSTRAP_URL").unwrap_or_else(|_| {
-            "https://raw.githubusercontent.com/lssLab/Calando/main/bootstrap.ps1".to_owned()
-        });
-        Command::new("powershell.exe")
-            .args([
-                "-NoProfile",
-                "-ExecutionPolicy",
-                "Bypass",
-                "-Command",
-                "$ErrorActionPreference='Stop'; Invoke-Expression (Invoke-RestMethod -Uri $env:MEMORY_SUPERVISOR_BOOTSTRAP_URL)",
-            ])
-            .env("MEMORY_SUPERVISOR_BOOTSTRAP_URL", windows_url)
+    let work = env::temp_dir().join(format!("calando-update-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&work);
+    fs::create_dir_all(&work)?;
+    let result = (|| {
+        let verified =
+            crate::release::fetch(base.trim_end_matches('/'), &work).map_err(io::Error::other)?;
+        println!("Verified signed release {}.", verified.version);
+        let script_name = if cfg!(windows) {
+            "bootstrap.ps1"
+        } else {
+            "bootstrap.sh"
+        };
+        let script = work.join(script_name);
+        fs::copy(root.join(script_name), &script)?;
+        let mut command = if cfg!(windows) {
+            let mut command = Command::new("powershell.exe");
+            command.args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-File"]);
+            command
+        } else {
+            Command::new("/bin/sh")
+        };
+        command
+            .arg(&script)
             .env("MEMORY_SUPERVISOR_INSTALL_ROOT", root)
-            .status()
-    } else {
-        Command::new("/bin/sh")
-            .args([
-                "-c",
-                "set -eu; source=$(curl --proto '=https' --tlsv1.2 -fsSL \"$MEMORY_SUPERVISOR_BOOTSTRAP_URL\"); [ -n \"$source\" ]; printf '%s\\n' \"$source\" | /bin/sh",
-            ])
-            .env("MEMORY_SUPERVISOR_BOOTSTRAP_URL", url)
-            .env("MEMORY_SUPERVISOR_INSTALL_ROOT", root)
-            .status()
-    }
+            .env("MEMORY_SUPERVISOR_SOURCE_ARCHIVE_FILE", &verified.source)
+            .env(
+                "MEMORY_SUPERVISOR_SOURCE_ARCHIVE_SHA256_FILE",
+                &verified.source_checksum,
+            );
+        if let Some(binary) = &verified.binary {
+            command.env("MEMORY_SUPERVISOR_BINARY_SOURCE", binary);
+        }
+        command.status()
+    })();
+    let _ = fs::remove_dir_all(&work);
+    result
 }
 
 fn maintain_installation(action: &str) -> i32 {

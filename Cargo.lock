@@ -15,6 +15,7 @@ dependencies = [
 name = "calando"
 version = "0.3.0"
 dependencies = [
+ "ed25519-compact",
  "libc",
  "serde",
  "serde_json",
@@ -57,6 +58,12 @@ dependencies = [
  "block-buffer",
  "crypto-common",
 ]
+
+[[package]]
+name = "ed25519-compact"
+version = "2.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9547879431a90e352a35863a54416d92898a787b9af09e6ae2e09a96bd78be80"
 
 [[package]]
 name = "equivalent"

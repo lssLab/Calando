@@ -318,6 +318,25 @@ jobs:
           find downloaded -type f ! -name 'footprint-*' -exec cp {} dist/ \;
           packaging/release/verify-release-assets.sh dist
 
+      - name: Sign the release list
+        shell: bash
+        env:
+          SIGNING_KEY: ${{ secrets.CALANDO_RELEASE_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          [ -n "$SIGNING_KEY" ] || { echo "CALANDO_RELEASE_SIGNING_KEY is not set" >&2; exit 1; }
+          version=${GITHUB_REF_NAME#v}
+          cd dist
+          { echo "calando $version"; sha256sum calando-source.* calando-x86_64-* calando-aarch64-* | grep -v '\.sha256$'; } > SHA256SUMS
+          key=$(mktemp); trap 'rm -f "$key"' EXIT
+          printf '%s\n' "$SIGNING_KEY" > "$key"
+          openssl pkeyutl -sign -rawin -inkey "$key" -in SHA256SUMS -out SHA256SUMS.sig
+          # The key must be the one built into Calando (src/release.rs).
+          embedded=$(grep -A3 'const PUBLIC_KEY' ../src/release.rs | grep -o '0x[0-9a-f][0-9a-f]' | tr -d '\n' | sed 's/0x//g')
+          actual=$(openssl pkey -in "$key" -pubout -outform DER | tail -c 32 | od -An -tx1 | tr -d ' \n')
+          [ "$embedded" = "$actual" ] || { echo "signing key does not match src/release.rs" >&2; exit 1; }
+          cat SHA256SUMS
+
       - name: Attest build provenance
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
