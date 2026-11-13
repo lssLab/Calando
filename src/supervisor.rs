@@ -427,6 +427,9 @@ fn incident_notice(incident: &Value, phase: &str, transition_source: &str) -> St
                 value_f64(incident, "cli_hard_cap_mb")
             )
         }
+        "session-cap-pause" => {
+            "this session reached the memory cap the user set with `/calando cap`".to_owned()
+        }
         _ => format!("recorded reason: {reason}"),
     };
     let recovery = incident
@@ -3176,6 +3179,7 @@ impl Supervisor {
                 | "pressure-lead-last-resort"
                 | "hard-cap-pause"
                 | "hard-cap-lead-last-resort"
+                | "session-cap-pause"
                 | "app-blind-child-last-resort"
                 | "app-shared-host-last-resort"
         ) {
@@ -3189,6 +3193,7 @@ impl Supervisor {
             "source": self.instance,
             "platform": self.platform,
             "pid": candidate.pid,
+            "root_pid": candidate.root_pid,
             "identity": candidate.identity,
             "start_token": candidate.start_token,
             "name": candidate.name,
@@ -3291,6 +3296,123 @@ impl Supervisor {
         let current = process_by_pid(&self.platform, candidate.pid)?;
         (!current.start_token.is_empty() && process_identity(&current) == candidate.identity)
             .then_some(current)
+    }
+
+    /// Lead PIDs of sessions the user turned off with `/calando off`, and per-session caps.
+    fn session_controls(&self) -> (BTreeSet<u32>, Vec<(u32, f64)>) {
+        let locked = crate::config::locked();
+        let mut off = BTreeSet::new();
+        let mut caps = Vec::new();
+        for (provider, session, control) in crate::session::all_controls(&self.directory) {
+            let Some(pid) = self
+                .ledger
+                .logical_agents
+                .values()
+                .find(|agent| {
+                    agent.provider == provider
+                        && agent.session_id == session
+                        && agent.role == "lead"
+                })
+                .and_then(|agent| agent.process_pid)
+            else {
+                continue;
+            };
+            if control.off && !locked {
+                off.insert(pid);
+            }
+            if let Some(cap) = control.cap_mb {
+                caps.push((pid, cap));
+            }
+        }
+        (off, caps)
+    }
+
+    /// A session over its own cap gets one growing subagent paused; it resumes once the
+    /// session is back under 90% of the cap or the cap is removed.
+    fn apply_session_caps(
+        &mut self,
+        caps: &[(u32, f64)],
+        tracked: &[TrackedProcess],
+        assessment: &Assessment,
+        now: f64,
+    ) -> bool {
+        let used = |root: u32| {
+            tracked
+                .iter()
+                .find(|process| process.pid == root)
+                .map(|process| process.tree_rss_mb as f64)
+        };
+        let paused: Vec<Value> = self
+            .ledger
+            .incidents
+            .iter()
+            .filter(|incident| {
+                incident.get("status").and_then(Value::as_str) == Some("suspended")
+                    && incident.get("reason").and_then(Value::as_str) == Some("session-cap-pause")
+            })
+            .cloned()
+            .collect();
+        for incident in paused {
+            let root = value_u32(&incident, "root_pid");
+            let cap = caps
+                .iter()
+                .find(|(pid, _)| *pid == root)
+                .map(|(_, cap)| *cap);
+            if cap.is_some_and(|cap| used(root).is_none_or(|mb| mb >= cap * 0.9)) {
+                continue;
+            }
+            let pid = value_u32(&incident, "pid");
+            let identity = value_string(&incident, "identity");
+            if process_by_pid(&self.platform, pid)
+                .is_some_and(|process| process_identity(&process) == identity)
+                && resume_process(&self.platform, pid).is_ok()
+            {
+                self.ledger.clear_stopped(pid);
+                self.ledger.transition_incident(
+                    &identity,
+                    "resumed",
+                    now,
+                    "session-cap-recovery",
+                    Map::new(),
+                );
+                let _ = self.persist_runtime(now);
+                self.emit_event(
+                    "process-pause",
+                    "resumed",
+                    "[Memory Supervisor] PROCESS RESUMED",
+                    &format!("session-cap-resume:{identity}"),
+                    Map::from_iter([("pid".to_owned(), json!(pid))]),
+                );
+                return true;
+            }
+        }
+        for (root, cap) in caps {
+            if used(*root).is_none_or(|mb| mb < *cap)
+                || self.ledger.incidents.iter().any(|incident| {
+                    incident.get("status").and_then(Value::as_str) == Some("suspended")
+                        && value_u32(incident, "root_pid") == *root
+                })
+            {
+                continue;
+            }
+            let candidate = tracked
+                .iter()
+                .filter(|process| {
+                    process.root_pid == *root
+                        && process.pid != *root
+                        && matches!(process.role.as_str(), "worker" | "support")
+                        && process.slope_mb_s > 0.0
+                        && process.identity_reliable
+                        && self.ledger.stopped_identity(process.pid).is_none()
+                })
+                .max_by_key(|process| process.anon_mb);
+            if let Some(candidate) = candidate
+                && self.suspend_candidate(candidate, assessment, now, "session-cap-pause")
+            {
+                return true;
+            }
+        }
+        false
     }
 
     fn suspend_candidate(
@@ -5893,18 +6015,34 @@ impl Supervisor {
         self.reconcile_stopped(now, &process_map);
         self.process_control_requests(now, &process_map);
         let (tracked, leaks) = self.analyze_processes(now, initial_tracked, &assessment);
-        let app_logical_action = self.manage_codex_app_containment(&assessment, &tracked, now);
-        let cli_logical_action =
-            !app_logical_action && self.manage_cli_logical_containment(&assessment, &tracked, now);
+        // Sessions turned off with `/calando off` stay measured but are never acted on.
+        let (off_roots, session_caps) = self.session_controls();
+        let actionable: Vec<_> = tracked
+            .iter()
+            .filter(|process| !off_roots.contains(&process.root_pid))
+            .cloned()
+            .collect();
+        let actionable_leaks: Vec<_> = leaks
+            .iter()
+            .filter(|process| !off_roots.contains(&process.root_pid))
+            .cloned()
+            .collect();
+        let app_logical_action = self.manage_codex_app_containment(&assessment, &actionable, now);
+        let cli_logical_action = !app_logical_action
+            && self.manage_cli_logical_containment(&assessment, &actionable, now);
         let logical_action = app_logical_action || cli_logical_action;
-        let leak_action =
-            !logical_action && self.alert_and_suspend(&leaks, &assessment, &tracked, now);
+        let leak_action = !logical_action
+            && self.alert_and_suspend(&actionable_leaks, &assessment, &actionable, now);
         self.manage_lead_probation(&assessment, now);
         let pressure_action = !logical_action
             && !leak_action
-            && self.apply_pressure_actions(&assessment, &tracked, now);
-        if !logical_action && !leak_action && !pressure_action {
-            self.apply_codex_app_blind_backstop(&assessment, &tracked, now);
+            && self.apply_pressure_actions(&assessment, &actionable, now);
+        let session_cap_action = !logical_action
+            && !leak_action
+            && !pressure_action
+            && self.apply_session_caps(&session_caps, &actionable, &assessment, now);
+        if !logical_action && !leak_action && !pressure_action && !session_cap_action {
+            self.apply_codex_app_blind_backstop(&assessment, &actionable, now);
         }
         self.update_pressure_episode(&assessment, now);
         self.track_peer_freshness(now);

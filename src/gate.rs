@@ -1114,6 +1114,51 @@ fn decide_with_session_health(
             5 * 1024 * 1024,
         );
     }
+    let session = session_key(payload);
+    if matches!(event, "UserPromptSubmit" | "BeforeAgent")
+        && let Some(words) = payload
+            .get("prompt")
+            .and_then(Value::as_str)
+            .and_then(crate::session::parse_command)
+    {
+        // Handled here and never sent to the model, so it costs no tokens or context.
+        let status_lines = format!(
+            "Memory: {}\n{}",
+            pressure_summary(state),
+            agents_summary(state, &session)
+        );
+        let reply = crate::session::handle(
+            directory,
+            provider,
+            &session,
+            &words,
+            &status_lines,
+            state,
+            crate::config::locked(),
+        );
+        return Some(json!({"decision":"block","reason":reply}));
+    }
+    let control = crate::session::control(directory, provider, &session);
+    if control.off && !crate::config::locked() {
+        return None;
+    }
+    if event == "PreToolUse"
+        && matches!(
+            classify_tool(payload),
+            ToolClass::Expansion | ToolClass::HighMemoryStart
+        )
+        && crate::session::near_cap(state, &control, provider, &session)
+    {
+        let message = "[calando] Session memory cap reached\nNew heavy work in this session is held; running work continues.";
+        return Some(json!({
+            "systemMessage":message,
+            "hookSpecificOutput":{
+                "hookEventName":"PreToolUse",
+                "permissionDecision":"deny",
+                "permissionDecisionReason":"SESSION_CAP: this session is at its memory cap set by the user; finish or stop existing work before starting more.",
+            }
+        }));
+    }
     match event {
         "SessionStart" => {
             let notice = consume_memory_notice(directory, provider, payload, state, true);

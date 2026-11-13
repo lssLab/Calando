@@ -14,6 +14,22 @@ pub const NOTIFICATION_CONFIG_KEYS: [&str; 2] = [
     "MEMORY_SUPERVISOR_TELEGRAM_CHAT_ID",
 ];
 
+/// The administrator lock: a file only an administrator can create or remove. While it
+/// exists, Calando cannot be turned off from a terminal or a session.
+pub fn lock_path() -> PathBuf {
+    if cfg!(windows) {
+        PathBuf::from(env::var_os("ProgramData").unwrap_or_else(|| "C:\\ProgramData".into()))
+            .join("Calando")
+            .join("lock")
+    } else {
+        PathBuf::from("/etc/calando/lock")
+    }
+}
+
+pub fn locked() -> bool {
+    lock_path().is_file()
+}
+
 fn home_dir() -> PathBuf {
     env::var_os("HOME")
         .or_else(|| env::var_os("USERPROFILE"))

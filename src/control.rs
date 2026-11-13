@@ -550,7 +550,68 @@ fn release_paused_processes() {
     }
 }
 
+fn lock(arguments: &[String]) -> i32 {
+    let path = crate::config::lock_path();
+    let result = match arguments.first().map(String::as_str) {
+        Some("on") => path
+            .parent()
+            .map_or(Ok(()), fs::create_dir_all)
+            .and_then(|_| {
+                fs::write(
+                    &path,
+                    "Calando cannot be turned off while this file exists.\n",
+                )
+            }),
+        Some("off") => match fs::remove_file(&path) {
+            Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+            other => other,
+        },
+        _ => {
+            println!(
+                "Lock: {}\nUsage: calando lock on | off (administrator)",
+                if crate::config::locked() { "on" } else { "off" }
+            );
+            return 0;
+        }
+    };
+    match result {
+        Ok(()) => {
+            println!(
+                "Lock {}. {}",
+                arguments[0],
+                if arguments[0] == "on" {
+                    "Calando cannot be turned off from a terminal or a session until an administrator runs `calando lock off`."
+                } else {
+                    "Calando can be turned off again."
+                }
+            );
+            0
+        }
+        Err(error) if error.kind() == io::ErrorKind::PermissionDenied => {
+            eprintln!(
+                "The lock needs administrator rights: {}",
+                if cfg!(windows) {
+                    "run this in an Administrator terminal"
+                } else {
+                    "run `sudo calando lock ...`"
+                }
+            );
+            1
+        }
+        Err(error) => {
+            eprintln!("lock was not changed: {error}");
+            1
+        }
+    }
+}
+
 fn maintain_power(action: &str) -> i32 {
+    if matches!(action, "off" | "uninstall") && crate::config::locked() {
+        eprintln!(
+            "Calando is locked on by an administrator; `calando lock off` (as administrator) first."
+        );
+        return 1;
+    }
     if action == "off" {
         release_paused_processes();
     }
@@ -709,6 +770,7 @@ Usage: calando <command>
   cap [<GB> | off]       Advanced: hard memory cap for all agents here (asks to confirm)
   update                 Update now
   uninstall              Remove Calando, keeping its settings
+  lock on | off          Administrator: stop anyone, including agents, from turning Calando off
   help                   Show this help
 
 Inside a Claude Code or Codex session, /calando (Codex: $calando) affects only that session."
@@ -1085,6 +1147,8 @@ pub fn run_control(arguments: &[OsString]) -> i32 {
         "telegram" => telegram(&arguments[1..]),
         "cap" => cap(&arguments[1..]),
         "on" | "off" if arguments.len() == 1 => maintain_power(action),
+        "lock" => lock(&arguments[1..]),
+        "uninstall" if arguments.len() == 1 && crate::config::locked() => maintain_power(action),
         "update" | "uninstall" if arguments.len() == 1 => maintain_installation(action),
         _ => {
             eprintln!("unknown command: {}\n\n{}", arguments.join(" "), usage());

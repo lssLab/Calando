@@ -13,6 +13,7 @@ pub mod notify;
 pub mod platform;
 pub mod policy;
 pub mod runtime;
+pub mod session;
 pub mod status;
 pub mod storage;
 pub mod supervisor;
@@ -57,7 +58,7 @@ where
         Some("gate") => Ok(Command::Gate(rest)),
         Some("status") => Ok(Command::Status(rest)),
         Some("control") => Ok(Command::Control(rest)),
-        Some("on" | "off" | "telegram" | "cap" | "update" | "uninstall") => {
+        Some("on" | "off" | "telegram" | "cap" | "lock" | "update" | "uninstall") => {
             Ok(Command::Control(remaining))
         }
         Some("notify") => Ok(Command::Notify(rest)),
