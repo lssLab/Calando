@@ -8,7 +8,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::storage::write_atomic_json;
 
-const ALLOWED_FIELDS: [&str; 36] = [
+const ALLOWED_FIELDS: [&str; 32] = [
     "source",
     "platform",
     "severity",
@@ -37,11 +37,7 @@ const ALLOWED_FIELDS: [&str; 36] = [
     "restricted",
     "paused",
     "duration_s",
-    "vm_held_mb",
-    "guest_used_mb",
-    "host_free_mb",
-    "machine_mb",
-    "guest_limit_mb",
+    "memory_lines",
     // Routing: which provider/session may see this event. Dropping these broadcast
     // session-scoped notices to every lead.
     "audience_provider",
@@ -191,40 +187,19 @@ fn gb(mb: f64) -> String {
 
 /// Name the environment a notice is about, e.g. `Windows (LAPTOP-1)`, so a federated
 /// Windows/WSL pair never reads as one pooled memory figure.
-/// Free memory per OS, split so the parts add up to the machine's RAM: Windows owns what the WSL
-/// VM does not hold right now, and WSL owns what its VM holds. The split moves as the VM grows or
-/// gives memory back, so each line also says where its share comes from.
+/// Free memory per environment, as the supervisor split it (see `memory_split_lines`), or this
+/// environment alone when no split is known.
 pub fn memory_lines(source: &Value, os: &str, free_key: &str, capacity_key: &str) -> Vec<String> {
-    let number = |key: &str| number(source, key);
-    if let (Some(host_free), Some(machine), Some(held), Some(used)) = (
-        number("host_free_mb"),
-        number("machine_mb"),
-        number("vm_held_mb"),
-        number("guest_used_mb"),
-    ) {
-        let guest_free = (held - used).max(0.0);
-        let mut wsl = format!("WSL free: {} of {} GB", gb(guest_free), gb(held));
-        if let Some(limit) = number("guest_limit_mb").filter(|limit| *limit > held) {
-            wsl.push_str(&format!(
-                " (grows up to {} GB, taking from Windows)",
-                gb(limit)
-            ));
-        }
-        return vec![
-            format!(
-                "Total free: {} of {} GB",
-                gb(host_free + guest_free),
-                gb(machine)
-            ),
-            format!(
-                "Windows free: {} of {} GB",
-                gb(host_free),
-                gb((machine - held).max(0.0))
-            ),
-            wsl,
-        ];
+    if let Some(lines) = source.get("memory_lines").and_then(Value::as_array)
+        && !lines.is_empty()
+    {
+        return lines
+            .iter()
+            .filter_map(Value::as_str)
+            .map(str::to_owned)
+            .collect();
     }
-    match (number(free_key), number(capacity_key)) {
+    match (number(source, free_key), number(source, capacity_key)) {
         (Some(free), Some(capacity)) => {
             vec![format!("{os} free: {} of {} GB", gb(free), gb(capacity))]
         }
@@ -623,8 +598,8 @@ mod tests {
         let event = json!({
             "type":"pressure-episode", "status":"active", "source":"windows-LAPTOP-1",
             "platform":"windows", "headroom_mb":1551, "capacity_mb":16108,
-            "vm_held_mb":9830, "guest_used_mb":3297, "host_free_mb":1551, "machine_mb":16108,
-            "restricted":0, "paused":0,
+            "memory_lines":["Total free: 7.9 of 15.7 GB", "Windows free: 1.5 of 6.1 GB",
+            "WSL free: 6.4 of 9.6 GB"], "restricted":0, "paused":0,
             "message":"[Calando] MEMORY PROTECTION ACTIVE\nWhy: long prose"
         });
         assert_eq!(

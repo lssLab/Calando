@@ -605,6 +605,7 @@ pub struct Supervisor {
     logical_recovery_since: Option<f64>,
     pressure_episode_clear_since: Option<f64>,
     vm_held_mb: Option<u64>,
+    topology: &'static str,
     codex_app_snapshot: CodexAppSnapshot,
     last_codex_app_hook_sync_at: f64,
 }
@@ -700,6 +701,7 @@ impl Supervisor {
             logical_recovery_since: None,
             pressure_episode_clear_since: None,
             vm_held_mb: None,
+            topology: crate::topology::detect().name(),
             codex_app_snapshot: CodexAppSnapshot::default(),
             last_codex_app_hook_sync_at: 0.0,
         }
@@ -1188,15 +1190,14 @@ impl Supervisor {
             // The split needs this environment's own figures; the event carries them as headroom.
             let local = json!({
                 "instance": self.instance,
+                "topology": self.topology,
                 "mem_available_mb": free,
                 "memory_capacity_mb": fields.get("capacity_mb").cloned().unwrap_or(Value::Null),
             });
-            fields.extend(memory_partition(
-                &self.platform,
-                &local,
-                self.vm_held_mb,
-                &fresh_federated_states(30.0),
-            ));
+            let lines = memory_split_lines(&local, self.vm_held_mb, &fresh_federated_states(30.0));
+            if !lines.is_empty() {
+                fields.insert("memory_lines".to_owned(), json!(lines));
+            }
         }
         make_event(
             event_type,
@@ -6318,6 +6319,7 @@ impl Supervisor {
             ("psi_full_avg10".to_owned(), json!(pressure.full_avg10)),
             ("platform".to_owned(), Value::String(self.platform.clone())),
             ("vm_held_mb".to_owned(), json!(self.vm_held_mb)),
+            ("topology".to_owned(), json!(self.topology)),
             ("instance".to_owned(), Value::String(self.instance.clone())),
             ("targets".to_owned(), json!(TARGETS)),
             (
@@ -6460,13 +6462,12 @@ impl Supervisor {
         if let Some(error) = self.config.configuration_error() {
             state.insert("configuration_error".to_owned(), Value::String(error));
         }
-        let partition = memory_partition(
-            &self.platform,
+        let lines = memory_split_lines(
             &Value::Object(state.clone()),
             self.vm_held_mb,
             &fresh_federated_states(30.0),
         );
-        state.extend(partition);
+        state.insert("memory_lines".to_owned(), json!(lines));
         Value::Object(state)
     }
 }
@@ -6509,67 +6510,164 @@ fn windows_vm_held_mb(platform: &str, processes: &BTreeMap<u32, ProcessInfo>) ->
     (held > 0).then_some(held)
 }
 
-/// How the machine's RAM splits between Windows and the WSL VM, as notice/state fields. Windows
-/// knows the VM size and its own free memory; WSL knows its own use and limit; each side reads the
-/// other's half from the federation, so both report the same split.
-fn memory_partition(
-    platform: &str,
-    local: &Value,
-    vm_held_mb: Option<u64>,
-    peers: &[Value],
-) -> Map<String, Value> {
+/// How the machine's RAM splits between this machine's environments, as lines for a person.
+/// The parts add up to the machine: a fixed or ballooned VM owns the memory it reports, the WSL
+/// VM owns what the Windows host measures it holding right now, and the host owns the rest. A
+/// container lives inside its host's share and is shown, not added. An environment that cannot
+/// be placed (older Calando, VM size unknown) gets its own line outside the total, never a guess.
+fn memory_split_lines(local: &Value, vm_held_mb: Option<u64>, peers: &[Value]) -> Vec<String> {
+    let gb = |mb: u64| format!("{:.1}", mb as f64 / 1024.0);
     let field = |state: &Value, key: &str| state.get(key).and_then(Value::as_u64);
-    let is = |state: &Value, prefix: &str| {
+    let text = |state: &Value, key: &str| {
         state
-            .get("instance")
+            .get(key)
             .and_then(Value::as_str)
-            .is_some_and(|instance| instance.starts_with(prefix))
+            .unwrap_or_default()
+            .to_owned()
     };
-    let wsl_states: Vec<&Value> = match platform {
-        "wsl" => vec![local],
-        _ => peers.iter().filter(|peer| is(peer, "wsl-")).collect(),
+    let instance = text(local, "instance");
+    let mut all = vec![local.clone()];
+    all.extend(
+        peers
+            .iter()
+            .filter(|peer| text(peer, "instance") != instance)
+            .cloned(),
+    );
+    let kind = |state: &Value| match text(state, "topology").as_str() {
+        "" if text(state, "instance").starts_with("wsl-") => "wsl2".to_owned(),
+        "" if text(state, "instance").starts_with("windows-") => "native".to_owned(),
+        other => other.to_owned(),
     };
-    let windows = match platform {
-        "windows" => Some(local),
-        "wsl" => peers.iter().find(|peer| is(peer, "windows-")),
-        _ => None,
+    let label = |state: &Value| {
+        let source = text(state, "instance");
+        let (prefix, host) = source.split_once('-').unwrap_or((source.as_str(), ""));
+        let os = match prefix {
+            "windows" => "Windows",
+            "wsl" => "WSL",
+            "darwin" | "macos" => "macOS",
+            "linux" => "Linux",
+            other => other,
+        };
+        match kind(state).as_str() {
+            "vm-fixed" | "vm-dynamic" => format!("VM {os} ({host})"),
+            "container" => format!("Container ({host})"),
+            _ => os.to_owned(),
+        }
     };
-    let Some(windows) = windows else {
-        return Map::new();
+    let Some(host) = all
+        .iter()
+        .filter(|state| matches!(kind(state).as_str(), "native" | "cloud"))
+        .max_by_key(|state| field(state, "memory_capacity_mb").unwrap_or_default())
+    else {
+        return Vec::new();
     };
-    let held = if platform == "windows" {
+    let (Some(host_free), Some(machine)) = (
+        field(host, "mem_available_mb"),
+        field(host, "memory_capacity_mb"),
+    ) else {
+        return Vec::new();
+    };
+    let held = if text(host, "instance") == instance {
         vm_held_mb
     } else {
-        field(windows, "vm_held_mb")
+        field(host, "vm_held_mb")
     };
-    let used: Option<u64> = wsl_states
-        .iter()
-        .map(|state| {
-            Some(
-                field(state, "memory_capacity_mb")?
-                    .saturating_sub(field(state, "mem_available_mb")?),
-            )
-        })
-        .sum();
-    let limit = wsl_states
-        .iter()
-        .filter_map(|state| field(state, "memory_capacity_mb"))
-        .max();
-    let (Some(held), Some(used), Some(host_free), Some(machine)) = (
-        held,
-        used.filter(|_| !wsl_states.is_empty()),
-        field(windows, "mem_available_mb"),
-        field(windows, "memory_capacity_mb"),
-    ) else {
-        return Map::new();
+    let used_of = |state: &Value| {
+        Some(field(state, "memory_capacity_mb")?.saturating_sub(field(state, "mem_available_mb")?))
     };
-    Map::from_iter([
-        ("host_free_mb".to_owned(), json!(host_free)),
-        ("machine_mb".to_owned(), json!(machine)),
-        ("vm_held_mb".to_owned(), json!(held)),
-        ("guest_used_mb".to_owned(), json!(used.min(held))),
-        ("guest_limit_mb".to_owned(), json!(limit)),
-    ])
+    let mut parts = Vec::new();
+    let mut outside = Vec::new();
+    let mut shares = 0;
+    let mut free_total = host_free;
+    let wsl: Vec<&Value> = all.iter().filter(|state| kind(state) == "wsl2").collect();
+    if !wsl.is_empty() {
+        let used: Option<u64> = wsl.iter().map(|state| used_of(state)).sum();
+        let limit = wsl
+            .iter()
+            .filter_map(|state| field(state, "memory_capacity_mb"))
+            .max();
+        match (held, used) {
+            (Some(held), Some(used)) => {
+                let free = held.saturating_sub(used);
+                let mut line = format!("WSL free: {} of {} GB", gb(free), gb(held));
+                if let Some(limit) = limit.filter(|limit| *limit > held) {
+                    line.push_str(&format!(
+                        " (grows up to {} GB, taking from Windows)",
+                        gb(limit)
+                    ));
+                }
+                parts.push(line);
+                shares += held;
+                free_total += free;
+            }
+            _ => outside.extend(wsl.iter().filter_map(|state| {
+                Some(format!(
+                    "WSL free: {} of {} GB (not in total: its VM size is not measured)",
+                    gb(field(state, "mem_available_mb")?),
+                    gb(field(state, "memory_capacity_mb")?)
+                ))
+            })),
+        }
+    }
+    for state in &all {
+        let (Some(free), Some(capacity)) = (
+            field(state, "mem_available_mb"),
+            field(state, "memory_capacity_mb"),
+        ) else {
+            continue;
+        };
+        match kind(state).as_str() {
+            "vm-fixed" | "vm-dynamic" => {
+                parts.push(format!(
+                    "{} free: {} of {} GB",
+                    label(state),
+                    gb(free),
+                    gb(capacity)
+                ));
+                shares += capacity;
+                free_total += free;
+            }
+            "container" => outside.push(format!(
+                "{} free: {} of {} GB (inside {})",
+                label(state),
+                gb(free),
+                gb(capacity),
+                label(host)
+            )),
+            "native" | "cloud" | "wsl2" => {}
+            _ => outside.push(format!(
+                "{} free: {} of {} GB (not in total: update Calando there)",
+                label(state),
+                gb(free),
+                gb(capacity)
+            )),
+        }
+    }
+    if shares == 0 {
+        // Only the host is known: nothing to split.
+        return [
+            vec![format!(
+                "{} free: {} of {} GB",
+                label(host),
+                gb(host_free),
+                gb(machine)
+            )],
+            outside,
+        ]
+        .concat();
+    }
+    let mut lines = vec![
+        format!("Total free: {} of {} GB", gb(free_total), gb(machine)),
+        format!(
+            "{} free: {} of {} GB",
+            label(host),
+            gb(host_free),
+            gb(machine.saturating_sub(shares))
+        ),
+    ];
+    lines.extend(parts);
+    lines.extend(outside);
+    lines
 }
 
 pub fn admission_snapshot(local: &Value, peers: Option<Vec<Value>>, tick_s: f64) -> Value {
@@ -6579,9 +6677,21 @@ pub fn admission_snapshot(local: &Value, peers: Option<Vec<Value>>, tick_s: f64)
     // New work in WSL that fits in memory its VM already holds takes nothing more from Windows,
     // so Windows pressure holds WSL work only when the VM would have to grow.
     let number = |key: &str| local.get(key).and_then(Value::as_f64);
+    let windows_vm_held = peers
+        .iter()
+        .find(|peer| {
+            peer.get("instance")
+                .and_then(Value::as_str)
+                .is_some_and(|instance| instance.starts_with("windows-"))
+        })
+        .and_then(|peer| peer.get("vm_held_mb")?.as_f64());
     if local.get("platform").and_then(Value::as_str) == Some("wsl")
-        && let (Some(held), Some(used)) = (number("vm_held_mb"), number("guest_used_mb"))
-        && held - used
+        && let (Some(held), Some(capacity), Some(available)) = (
+            windows_vm_held,
+            number("memory_capacity_mb"),
+            number("mem_available_mb"),
+        )
+        && held - (capacity - available)
             >= number("new_fanout_floor_mb").unwrap_or(512.0)
                 + number("expected_burst_mb").unwrap_or(0.0)
     {
@@ -7357,15 +7467,15 @@ mod tests {
         // once the VM would have to grow, it is.
         let mut wsl = local.clone();
         wsl["platform"] = json!("wsl");
-        wsl["vm_held_mb"] = json!(7000);
-        wsl["guest_used_mb"] = json!(1500);
+        wsl["memory_capacity_mb"] = json!(9000);
+        wsl["mem_available_mb"] = json!(7500);
         let windows_red = json!({
-            "level":"RED", "action":"hold", "instance":"windows-host",
+            "level":"RED", "action":"hold", "instance":"windows-host", "vm_held_mb":7000,
             "mem_available_mb":500, "memory_capacity_mb":16000, "recent_incidents":[]
         });
         let roomy = admission_snapshot(&wsl, Some(vec![windows_red.clone()]), 1.0);
         assert_eq!(roomy["admission_level"], "GREEN");
-        wsl["guest_used_mb"] = json!(6800);
+        wsl["mem_available_mb"] = json!(2200);
         let full = admission_snapshot(&wsl, Some(vec![windows_red]), 1.0);
         assert_eq!(full["admission_level"], "RED");
     }
@@ -7693,19 +7803,31 @@ mod tests {
         ]);
         assert_eq!(windows_vm_held_mb("windows", &processes), Some(9830));
         assert_eq!(windows_vm_held_mb("wsl", &processes), None);
-        let peers = [
-            json!({"instance":"wsl-LAPTOP-1","mem_available_mb":6648,"memory_capacity_mb":9945}),
-            json!({"instance":"windows-LAPTOP-1","mem_available_mb":1551,"memory_capacity_mb":16108}),
-        ];
         // Both sides report the same split of the 15.7 GB machine.
-        let from_windows = memory_partition("windows", &peers[1], Some(9830), &peers[..1]);
-        let wsl_peer = json!({"instance":"windows-LAPTOP-1","mem_available_mb":1551,
-            "memory_capacity_mb":16108,"vm_held_mb":9830});
-        let from_wsl = memory_partition("wsl", &peers[0], None, &[wsl_peer]);
+        let windows = json!({"instance":"windows-LAPTOP-1","topology":"native",
+            "mem_available_mb":1551,"memory_capacity_mb":16108,"vm_held_mb":9830});
+        let wsl = json!({"instance":"wsl-LAPTOP-1","topology":"wsl2",
+            "mem_available_mb":6648,"memory_capacity_mb":9945});
+        let vm = json!({"instance":"linux-vm1","topology":"vm-fixed",
+            "mem_available_mb":1024,"memory_capacity_mb":2048});
+        let old = json!({"instance":"linux-box","mem_available_mb":512,"memory_capacity_mb":1024});
+        let from_windows = memory_split_lines(
+            &windows,
+            Some(9830),
+            &[wsl.clone(), vm.clone(), old.clone()],
+        );
+        let from_wsl = memory_split_lines(&wsl, None, &[windows, vm, old]);
         assert_eq!(from_windows, from_wsl);
-        assert_eq!(from_windows["guest_used_mb"], 3297);
-        assert_eq!(from_windows["machine_mb"], 16108);
-        assert_eq!(from_windows["guest_limit_mb"], 9945);
+        assert_eq!(
+            from_windows,
+            [
+                "Total free: 8.9 of 15.7 GB",
+                "Windows free: 1.5 of 4.1 GB",
+                "WSL free: 6.4 of 9.6 GB (grows up to 9.7 GB, taking from Windows)",
+                "VM Linux (vm1) free: 1.0 of 2.0 GB",
+                "Linux free: 0.5 of 1.0 GB (not in total: update Calando there)",
+            ]
+        );
     }
 
     #[test]
