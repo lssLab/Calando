@@ -211,10 +211,28 @@ pub fn federation_dir() -> PathBuf {
     if let Some(path) = env::var_os("MEMORY_SUPERVISOR_FEDERATION_DIR") {
         return expand_user(PathBuf::from(path));
     }
-    if let Ok(value) = fs::read_to_string(crate::config::pointer_dir().join("federation-dir")) {
+    let pointer = crate::config::pointer_dir().join("federation-dir");
+    if let Ok(value) = fs::read_to_string(&pointer) {
         let value = value.trim();
         if !value.is_empty() {
-            return expand_user(value);
+            let configured = expand_user(value);
+            // Another environment (e.g. Windows under this WSL) may since have moved the shared
+            // `.memory-supervisor` folder to `.calando`; follow it so both keep meeting.
+            let moved = configured
+                .parent()
+                .filter(|base| {
+                    base.file_name()
+                        .is_some_and(|name| name == ".memory-supervisor")
+                })
+                .and_then(Path::parent)
+                .map(|home| home.join(".calando"))
+                .filter(|renamed| renamed.is_dir())
+                .map(|renamed| renamed.join("instances"));
+            if let Some(moved) = moved {
+                let _ = fs::write(&pointer, format!("{}\n", moved.display()));
+                return moved;
+            }
+            return configured;
         }
     }
     let base = if let Some(home) = wsl_windows_home() {

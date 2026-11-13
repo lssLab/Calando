@@ -591,6 +591,39 @@ fn codex_app_command_hook(
     Ok(Value::Object(hook))
 }
 
+fn other_platform_routes(
+    config: &Map<String, Value>,
+    platform: &str,
+) -> Option<Map<String, Value>> {
+    let mut kept = Map::new();
+    for (event, _, timeout, matcher) in CODEX_HOOK_SPECS {
+        let (command, command_windows) = existing_app_route(config, event);
+        let (command, command_windows) = if platform == "windows" {
+            (
+                command.filter(|route| route != "true")?,
+                "exit 0".to_owned(),
+            )
+        } else {
+            (
+                "true".to_owned(),
+                command_windows.filter(|route| route != "exit 0")?,
+            )
+        };
+        let hook = json!({
+            "type": "command",
+            "command": command,
+            "commandWindows": command_windows,
+            "timeout": timeout,
+        });
+        let mut group = Map::from_iter([("hooks".to_owned(), Value::Array(vec![hook]))]);
+        if let Some(matcher) = matcher {
+            group.insert("matcher".to_owned(), Value::String(matcher.to_owned()));
+        }
+        kept.insert(event.to_owned(), Value::Array(vec![Value::Object(group)]));
+    }
+    Some(kept)
+}
+
 fn desired_codex_app_hooks(
     binary: &Path,
     target: &Path,
@@ -848,7 +881,13 @@ pub fn update_codex_app_hooks(
     let _lock = AppHookLock::acquire(&lock_target)?;
     let mut config = load_object(path)?;
     let original = config.clone();
-    let desired = (!remove).then(|| desired_codex_app_hooks(binary, path, platform, &config));
+    let desired = if remove {
+        // One CODEX_HOME can serve both Windows and WSL; removing one platform's route must keep
+        // the other's (e.g. the WSL route Codex App uses when Windows Codex is unsupported).
+        other_platform_routes(&config, platform).map(Ok)
+    } else {
+        Some(desired_codex_app_hooks(binary, path, platform, &config))
+    };
     if let Some(hooks) = config.get_mut("hooks") {
         let Some(hooks) = hooks.as_object_mut() else {
             return Err(format!(
@@ -2985,5 +3024,28 @@ trusted_hash = 'sha256:windows'
             0o750
         );
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn removing_the_windows_codex_route_keeps_the_wsl_route() {
+        let directory = temp_directory();
+        let hooks = directory.join("hooks.json");
+        let binary = Path::new("/home/owner/.local/lib/calando/calando");
+        assert!(update_codex_app_hooks(&hooks, binary, "wsl", false).unwrap());
+        let before = fs::read_to_string(&hooks).unwrap();
+        update_codex_app_hooks(
+            &hooks,
+            Path::new(r"C:\Users\owner\calando.exe"),
+            "windows",
+            true,
+        )
+        .unwrap();
+        assert_eq!(
+            serde_json::from_str::<Value>(&fs::read_to_string(&hooks).unwrap()).unwrap(),
+            serde_json::from_str::<Value>(&before).unwrap()
+        );
+        update_codex_app_hooks(&hooks, binary, "wsl", true).unwrap();
+        assert!(!fs::read_to_string(&hooks).unwrap().contains("calando"));
+        fs::remove_dir_all(directory).unwrap();
     }
 }
