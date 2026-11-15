@@ -77,6 +77,15 @@ clean_install() (
   "$ROOT/install.sh"
   first_pid=$(sed -n '1p' "$state/daemon.pid")
   kill -0 "$first_pid"
+  if [ "$(uname -s)" = Darwin ]; then
+    # Activity Monitor shows the service as Calando with the logo.
+    case "$(ps -p "$first_pid" -o comm=)" in
+      *"/Calando.app/Contents/MacOS/Calando") ;;
+      *) echo "macOS service does not run from Calando.app" >&2; exit 1 ;;
+    esac
+    plutil -lint "$home/.local/lib/calando/Calando.app/Contents/Info.plist"
+    [ -s "$home/.local/lib/calando/Calando.app/Contents/Resources/Calando.icns" ]
+  fi
   [ ! -e "$home/.codex/hooks.json" ]
   printf '%s\n' '{"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"memory-supervisor gate codex SessionStart","timeout":5}]}]}}' \
     > "$home/.codex/hooks.json"
@@ -135,6 +144,7 @@ clean_install() (
   mkdir -p "$home/.claude/commands"
   printf '%s\n' 'user customization' > "$home/.claude/commands/memory-status.md"
   "$ROOT/uninstall.sh"
+  [ ! -e "$home/.local/lib/calando/Calando.app" ]
   [ ! -e "$home/.local/bin/memory-supervisor" ]
   [ ! -e "$home/.local/bin/memory-status" ]
   [ "$(sed -n '1p' "$home/.claude/commands/memory-status.md")" = 'user customization' ]

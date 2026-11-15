@@ -117,6 +117,7 @@ rm -f "$HOME/.local/lib/memory-supervisor/memory-supervisor"
 rmdir "$HOME/.local/lib/memory-supervisor" 2>/dev/null || true
 
 if [ "$BINARY" = "$OWNED_BINARY" ]; then
+  rm -rf "$RUNTIME_DIR/Calando.app"
   rm -f "$BINARY" "$BINARY.previous"
   rmdir "$(dirname "$BINARY")" 2>/dev/null || true
 fi

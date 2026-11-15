@@ -15,6 +15,10 @@ if [ -z "$BINARY" ] && [ -r "$POINTER_DIR/binary" ]; then
   IFS= read -r BINARY < "$POINTER_DIR/binary" 2>/dev/null || true
 fi
 [ -x "$BINARY" ] || { echo "installed Calando binary is missing; run calando update" >&2; exit 1; }
+# macOS runs the service from the app bundle next to the binary.
+DAEMON_BINARY=$BINARY
+[ ! -x "$(dirname "$BINARY")/Calando.app/Contents/MacOS/Calando" ] || \
+  DAEMON_BINARY="$(dirname "$BINARY")/Calando.app/Contents/MacOS/Calando"
 
 if [ -n "${MEMORY_SUPERVISOR_DIR:-}" ]; then
   STATE_DIR=$MEMORY_SUPERVISOR_DIR
@@ -85,7 +89,7 @@ stop_fallback() {
   if kill -0 "$pid" 2>/dev/null; then
     args=$(ps -p "$pid" -o args= 2>/dev/null || true)
     case "$args" in
-      *"$BINARY"*" daemon"*) kill "$pid" 2>/dev/null || true ;;
+      *"$BINARY"*" daemon"*|*"$DAEMON_BINARY"*" daemon"*) kill "$pid" 2>/dev/null || true ;;
       *) echo "refusing to stop reused/non-supervisor pid $pid" >&2; return 1 ;;
     esac
     count=0
@@ -104,7 +108,7 @@ start_fallback() {
     IFS= read -r pid < "$STATE_DIR/daemon.pid" 2>/dev/null || true
     if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
       args=$(ps -p "$pid" -o args= 2>/dev/null || true)
-      case "$args" in *"$BINARY"*" daemon"*) return 0 ;; esac
+      case "$args" in *"$BINARY"*" daemon"*|*"$DAEMON_BINARY"*" daemon"*) return 0 ;; esac
       echo "refusing to replace reused/non-supervisor pid $pid" >&2
       return 1
     fi
@@ -112,7 +116,7 @@ start_fallback() {
   mkdir -p "$STATE_DIR"
   MEMORY_SUPERVISOR_DIR="$STATE_DIR" \
   MEMORY_SUPERVISOR_FEDERATION_DIR="$FEDERATION_DIR" \
-    nohup "$BINARY" daemon --foreground \
+    nohup "$DAEMON_BINARY" daemon --foreground \
       >"$STATE_DIR/daemon.out.log" 2>"$STATE_DIR/daemon.err.log" &
   printf '%s\n' "$!" > "$STATE_DIR/daemon.pid"
 }

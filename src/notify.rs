@@ -1,6 +1,5 @@
 use serde_json::{Map, Value, json};
 use std::collections::BTreeMap;
-use std::env;
 use std::ffi::OsString;
 use std::fs;
 use std::io::{self, Write};
@@ -270,7 +269,7 @@ fn spawn_reaped(command: &mut Command) -> io::Result<u32> {
 }
 
 pub fn spawn_dispatcher(event: &Value, result_path: &Path) -> io::Result<()> {
-    let executable = env::current_exe()?;
+    let executable = crate::config::installed_exe()?;
     let serialized = serde_json::to_string(event).map_err(io::Error::other)?;
     let mut command = Command::new(executable);
     command

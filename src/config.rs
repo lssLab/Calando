@@ -53,6 +53,22 @@ pub fn pointer_dir_in(home: &Path) -> PathBuf {
     renamed(home, ".calando", ".memory-supervisor")
 }
 
+/// On macOS the service runs from `Calando.app/Contents/MacOS/Calando`, a link to the installed
+/// binary next to the bundle, so Activity Monitor shows its name and icon. Hooks, updates, and
+/// helpers always use the installed binary's path.
+pub fn installed_exe() -> io::Result<PathBuf> {
+    let exe = env::current_exe()?;
+    Ok(bundle_owner(&exe).unwrap_or(exe))
+}
+
+fn bundle_owner(exe: &Path) -> Option<PathBuf> {
+    let bundle = exe.parent()?.parent()?.parent()?;
+    (exe.ends_with("Calando.app/Contents/MacOS/Calando"))
+        .then(|| bundle.parent().map(|runtime| runtime.join("calando")))
+        .flatten()
+        .filter(|binary| binary.is_file())
+}
+
 pub fn pointer_dir() -> PathBuf {
     pointer_dir_in(&home_dir())
 }
@@ -327,6 +343,20 @@ mod tests {
 
     static ENV_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
     static NEXT_DIRECTORY: AtomicU64 = AtomicU64::new(0);
+
+    #[test]
+    fn the_macos_bundle_executable_stands_for_the_installed_binary() {
+        let runtime = env::temp_dir().join(format!("calando-bundle-{}", std::process::id()));
+        let inner = runtime.join("Calando.app/Contents/MacOS");
+        fs::create_dir_all(&inner).unwrap();
+        fs::write(runtime.join("calando"), "").unwrap();
+        assert_eq!(
+            bundle_owner(&inner.join("Calando")),
+            Some(runtime.join("calando"))
+        );
+        assert_eq!(bundle_owner(&runtime.join("calando")), None);
+        fs::remove_dir_all(&runtime).unwrap();
+    }
 
     fn temporary_directory() -> PathBuf {
         let path = env::temp_dir().join(format!(

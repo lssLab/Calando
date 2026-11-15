@@ -11,6 +11,11 @@ renamed() {
 }
 RUNTIME_DIR=${MEMORY_SUPERVISOR_RUNTIME_DIR:-"$HOME/.local/lib/calando"}
 INSTALLED_BINARY="$RUNTIME_DIR/calando"
+# macOS runs the service from an app bundle (a hard link to the binary) so Activity Monitor
+# shows Calando with its icon; elsewhere the service runs the binary itself.
+APP_BUNDLE="$RUNTIME_DIR/Calando.app"
+BUNDLE_BINARY="$APP_BUNDLE/Contents/MacOS/Calando"
+DAEMON_BINARY=$INSTALLED_BINARY
 OLD_BINARY="$HOME/.local/lib/memory-supervisor/memory-supervisor"
 POINTER_DIR=$(renamed "$HOME" .calando .memory-supervisor)
 POWERED_OFF=0
@@ -175,7 +180,8 @@ rollback() {
         if [ -n "$OLD_PID" ]; then
           OLD_ARGS=$(ps -p "$OLD_PID" -o args= 2>/dev/null || true)
           case "$OLD_ARGS" in
-            *"$INSTALLED_BINARY"*" daemon"*) kill "$OLD_PID" 2>/dev/null || true ;;
+            *"$INSTALLED_BINARY"*" daemon"*|*"$BUNDLE_BINARY"*" daemon"*)
+              kill "$OLD_PID" 2>/dev/null || true ;;
           esac
         fi
       fi
@@ -233,7 +239,7 @@ rollback() {
       elif [ "$POWERED_OFF" -eq 0 ] && [ "$HAD_FALLBACK" -eq 1 ] && [ "$HAD_BINARY" -eq 1 ]; then
         MEMORY_SUPERVISOR_DIR="$STATE_DIR" \
         MEMORY_SUPERVISOR_FEDERATION_DIR="$FEDERATION_DIR" \
-          nohup "$INSTALLED_BINARY" daemon --foreground \
+          nohup "$DAEMON_BINARY" daemon --foreground \
             >"$STATE_DIR/daemon.out.log" 2>"$STATE_DIR/daemon.err.log" &
         printf '%s\n' "$!" > "$STATE_DIR/daemon.pid"
       fi
@@ -330,7 +336,7 @@ stop_fallback() {
       prepare_python_rollback
       OLD_FALLBACK_PYTHON=1
       ;;
-    *"$INSTALLED_BINARY"*" daemon"*) ;;
+    *"$INSTALLED_BINARY"*" daemon"*|*"$BUNDLE_BINARY"*" daemon"*) ;;
     *) echo "refusing to signal reused/non-supervisor fallback pid $pid" >&2; return 1 ;;
   esac
   HAD_FALLBACK=1
@@ -346,6 +352,34 @@ stop_fallback() {
     return 1
   fi
   rm -f "$STATE_DIR/daemon.pid"
+}
+
+make_app_bundle() {
+  staging="$APP_BUNDLE.new.$$"
+  rm -rf "$staging"
+  mkdir -p "$staging/Contents/MacOS" "$staging/Contents/Resources"
+  # A hard link keeps one binary on disk; it is rebuilt whenever the binary is replaced.
+  ln "$INSTALLED_BINARY" "$staging/Contents/MacOS/Calando" 2>/dev/null || \
+    cp "$INSTALLED_BINARY" "$staging/Contents/MacOS/Calando"
+  cp "$DIR/packaging/macos/Calando.icns" "$staging/Contents/Resources/Calando.icns"
+  version=$("$INSTALLED_BINARY" --version | awk '{ print $2 }')
+  cat > "$staging/Contents/Info.plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>CFBundleName</key><string>Calando</string>
+<key>CFBundleDisplayName</key><string>Calando</string>
+<key>CFBundleIdentifier</key><string>io.github.lsslab.calando</string>
+<key>CFBundleExecutable</key><string>Calando</string>
+<key>CFBundleIconFile</key><string>Calando</string>
+<key>CFBundlePackageType</key><string>APPL</string>
+<key>CFBundleShortVersionString</key><string>$version</string>
+<key>CFBundleVersion</key><string>$version</string>
+<key>LSBackgroundOnly</key><true/>
+</dict></plist>
+PLIST
+  rm -rf "$APP_BUNDLE"
+  mv "$staging" "$APP_BUNDLE"
 }
 
 echo "[1/7] acquire and verify Rust runtime"
@@ -452,6 +486,10 @@ rm -f "$STATE_DIR/state.json" "$STATE_DIR/admission-green.lease"
 cp "$CANDIDATE" "$RUNTIME_DIR/.calando.new.$$"
 chmod 755 "$RUNTIME_DIR/.calando.new.$$"
 mv "$RUNTIME_DIR/.calando.new.$$" "$INSTALLED_BINARY"
+if [ "$(uname -s)" = Darwin ]; then
+  make_app_bundle
+  DAEMON_BINARY=$BUNDLE_BINARY
+fi
 
 retire_previous_service
 "$INSTALLED_BINARY" integration migrate-names
@@ -524,7 +562,7 @@ EOF
     ;;
   launchd)
     mkdir -p "$(dirname "$SERVICE_FILE")"
-    BIN_XML=$(xml_escape "$INSTALLED_BINARY")
+    BIN_XML=$(xml_escape "$DAEMON_BINARY")
     STATE_XML=$(xml_escape "$STATE_DIR")
     FED_XML=$(xml_escape "$FEDERATION_DIR")
     OUT_XML=$(xml_escape "$STATE_DIR/daemon.out.log")
@@ -561,7 +599,7 @@ EOF
     if [ "$POWERED_OFF" -eq 0 ]; then
       MEMORY_SUPERVISOR_DIR="$STATE_DIR" \
       MEMORY_SUPERVISOR_FEDERATION_DIR="$FEDERATION_DIR" \
-        nohup "$INSTALLED_BINARY" daemon --foreground \
+        nohup "$DAEMON_BINARY" daemon --foreground \
           >"$STATE_DIR/daemon.out.log" 2>"$STATE_DIR/daemon.err.log" &
       printf '%s\n' "$!" > "$STATE_DIR/daemon.pid"
     else

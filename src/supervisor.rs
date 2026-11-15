@@ -749,7 +749,7 @@ impl Supervisor {
         }
         let targets = hook_targets(&self.platform, processes);
         if !targets.is_empty() {
-            let binary = env::current_exe().unwrap_or_else(|_| {
+            let binary = crate::config::installed_exe().unwrap_or_else(|_| {
                 PathBuf::from(if cfg!(windows) {
                     "calando.exe"
                 } else {
@@ -3600,7 +3600,7 @@ impl Supervisor {
         app_server_pid: u32,
         control_base: &Path,
     ) -> Result<(), String> {
-        let binary = env::current_exe().map_err(|error| error.to_string())?;
+        let binary = crate::config::installed_exe().map_err(|error| error.to_string())?;
         let control_directory = control_base
             .parent()
             .ok_or_else(|| "guard control directory is missing".to_owned())?;

@@ -116,7 +116,7 @@ fn telegram_once(record: &mut Value, version: &str, message: &str) {
 
 /// Runs `calando update` where stopping the Calando service cannot kill it.
 fn spawn_detached_update() -> bool {
-    let Ok(binary) = env::current_exe() else {
+    let Ok(binary) = crate::config::installed_exe() else {
         return false;
     };
     let mut command = if cfg!(target_os = "linux")
@@ -172,7 +172,7 @@ pub(crate) fn running_installed_binary() -> bool {
         .and_then(|path| fs::canonicalize(path.trim()).ok());
     installed.is_some()
         && installed
-            == env::current_exe()
+            == crate::config::installed_exe()
                 .ok()
                 .and_then(|exe| fs::canonicalize(exe).ok())
 }
@@ -208,7 +208,7 @@ fn repair_claude_hooks() {
         return;
     };
     let settings = PathBuf::from(home).join(".claude").join("settings.json");
-    let Ok(binary) = env::current_exe() else {
+    let Ok(binary) = crate::config::installed_exe() else {
         return;
     };
     if settings.is_file()
