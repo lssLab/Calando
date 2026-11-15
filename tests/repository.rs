@@ -198,6 +198,7 @@ fn repository_root_stays_small_and_support_files_stay_grouped() {
         ".gitignore",
         "Cargo.lock",
         "Cargo.toml",
+        "build.rs",
         "LICENSE",
         "README.ko.md",
         "README.md",

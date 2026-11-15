@@ -6976,6 +6976,11 @@ impl Drop for InstanceLock {
 }
 
 pub fn run_daemon(arguments: &[std::ffi::OsString]) -> i32 {
+    // Process lists (top, System Monitor) show the service as Calando.
+    #[cfg(target_os = "linux")]
+    unsafe {
+        libc::prctl(libc::PR_SET_NAME, c"Calando".as_ptr());
+    }
     let once = arguments.iter().any(|argument| argument == "--once");
     if arguments.iter().any(|argument| {
         argument != "--once" && argument != "--foreground" && argument != "--detach-console"

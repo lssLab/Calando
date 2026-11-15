@@ -28,3 +28,6 @@ lto = "thin"
 opt-level = "s"
 panic = "abort"
 strip = "symbols"
+
+[build-dependencies]
+winresource = "0.1.34"
