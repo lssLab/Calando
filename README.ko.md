@@ -29,7 +29,7 @@
   <a href="docs/guides/setup.ko.md"><img src="https://img.shields.io/badge/platforms-Linux%20%C2%B7%20WSL2%20%C2%B7%20macOS%20%C2%B7%20Windows-4C566A?style=flat-square" alt="Linux, WSL2, macOS, Windows"></a>
   <a href="docs/guides/performance.ko.md"><img src="https://img.shields.io/badge/daemon-%3C%2010%20MiB-0EA5E9?style=flat-square" alt="감시 프로그램 계획값 10 MiB 미만"></a>
   <a href="docs/guides/security.ko.md"><img src="https://img.shields.io/badge/telemetry-none-10B981?style=flat-square" alt="사용 통계 전송 없음"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-2563EB?style=flat-square" alt="MIT 라이선스"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-2563EB?style=flat-square" alt="Apache 2.0 라이선스"></a>
 </p>
 
 <p align="center">
@@ -294,4 +294,4 @@ gh attestation verify memory-supervisor-x86_64-unknown-linux-gnu --repo lssLab/C
 
 ## 라이선스
 
-[MIT](LICENSE)
+[Apache 2.0](LICENSE)

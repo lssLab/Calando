@@ -29,7 +29,7 @@
   <a href="guides/setup.md"><img src="https://img.shields.io/badge/platforms-Linux%20%C2%B7%20WSL2%20%C2%B7%20macOS%20%C2%B7%20Windows-4C566A?style=flat-square" alt="Linux, WSL2, macOS, and Windows"></a>
   <a href="guides/performance.md"><img src="https://img.shields.io/badge/daemon-%3C%2010%20MiB-0EA5E9?style=flat-square" alt="Supervisor planning value below 10 MiB"></a>
   <a href="guides/security.md"><img src="https://img.shields.io/badge/telemetry-none-10B981?style=flat-square" alt="No usage telemetry"></a>
-  <a href="../LICENSE"><img src="https://img.shields.io/badge/license-MIT-2563EB?style=flat-square" alt="MIT license"></a>
+  <a href="../LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-2563EB?style=flat-square" alt="Apache 2.0 license"></a>
 </p>
 
 ## What problem does Calando solve?
@@ -859,4 +859,4 @@ plus deterministic simulation. See [Test coverage](testing/test-matrix.md).
 
 ## License
 
-[MIT](../LICENSE)
+[Apache 2.0](../LICENSE)
