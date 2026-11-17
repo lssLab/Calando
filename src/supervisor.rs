@@ -5957,10 +5957,15 @@ impl Supervisor {
 
     pub fn tick(&mut self) -> Value {
         let now = now_epoch();
+        phase("cleanup-artifacts");
         self.cleanup_artifacts(now);
+        phase("daily-update-check");
         crate::update::daily_check(&self.directory, now);
+        phase("drain-notifications");
         self.drain_notification_events(now);
+        phase("drain-hook-observations");
         self.drain_hook_observations(now);
+        phase("memory-snapshot");
         let snapshot = memory_snapshot(&self.platform, &mut self.config);
         self.policy = resolve_policy(&mut self.config, snapshot.capacity_mb);
         self.cli_hard_cap_mb = hard_cap(&mut self.config);
@@ -5968,10 +5973,14 @@ impl Supervisor {
         let raw_level = level_from(snapshot.available_mb, pressure.some_avg10, &self.policy);
         let utilization_transition =
             self.update_level(raw_level, now, snapshot.available_mb, pressure.some_avg10);
+        phase("list-processes");
         let process_map = list_processes(&self.platform);
         self.vm_held_mb = windows_vm_held_mb(&self.platform, &process_map);
+        phase("codex-app-adapter");
         self.refresh_codex_app_adapter(now, &process_map);
+        phase("assess-tracked");
         let initial_tracked = tracked_processes(&process_map);
+        phase("assess-history");
         self.system_history.push(HistorySample {
             ts: now,
             available: Some(snapshot.available_mb as f64),
@@ -5991,7 +6000,9 @@ impl Supervisor {
         let long_window = 120.0_f64.max(self.leak_window_s * 3.0);
         self.system_history
             .retain(|sample| now - sample.ts <= long_window);
+        phase("assess-sensor-health");
         let health = sensor_health();
+        phase("assess-pressure");
         let runtime_degraded = self.runtime_error.is_some()
             || self.ledger.pending_control.is_some()
             || !health.sensor_ok();
@@ -6004,6 +6015,7 @@ impl Supervisor {
             self.leak_window_s,
             runtime_degraded,
         );
+        phase("assess-hard-cap");
         apply_cli_hard_cap(
             &mut assessment,
             &initial_tracked,
@@ -6011,7 +6023,9 @@ impl Supervisor {
             !health.errors.contains_key("processes"),
         );
         let previous_action = self.ledger.last_assessment_action;
+        phase("assess-stabilize");
         let action_changed = self.stabilize_assessment(&mut assessment, now);
+        phase("assess-transition");
         if let Some((previous, current)) = utilization_transition {
             self.record_transition(
                 previous,
@@ -6021,6 +6035,7 @@ impl Supervisor {
                 &assessment,
             );
         }
+        phase("assess-action-event");
         if action_changed && (previous_action.is_some() || assessment.action != Action::Allow) {
             let message = pressure_action_notice(&assessment, previous_action, pressure.full_avg10);
             self.emit_event(
@@ -6084,6 +6099,7 @@ impl Supervisor {
             );
         }
         if health.errors.contains_key("processes") {
+            phase("assess-degraded-state");
             let tracked = initial_tracked;
             self.update_pressure_episode(&assessment, now);
             return self.build_state(
@@ -6097,9 +6113,13 @@ impl Supervisor {
                 &health,
             );
         }
+        phase("reconcile-stopped");
         self.reconcile_stopped(now, &process_map);
+        phase("control-requests");
         self.process_control_requests(now, &process_map);
+        phase("analyze-processes");
         let (tracked, leaks) = self.analyze_processes(now, initial_tracked, &assessment);
+        phase("containment");
         // Sessions turned off with `/calando off` stay measured but are never acted on.
         let (off_roots, session_caps) = self.session_controls();
         let actionable: Vec<_> = tracked
@@ -6130,7 +6150,9 @@ impl Supervisor {
             self.apply_codex_app_blind_backstop(&assessment, &actionable, now);
         }
         self.update_pressure_episode(&assessment, now);
+        phase("peer-freshness");
         self.track_peer_freshness(now);
+        phase("build-state");
         self.build_state(
             now,
             raw_level,
@@ -6975,6 +6997,76 @@ impl Drop for InstanceLock {
     }
 }
 
+/// The daemon loop marks where it is; a watchdog thread notices when one tick stops finishing
+/// (an infinite loop or a blocked call), records the phase, and exits so the service manager
+/// starts a fresh daemon instead of leaving protection and peers silently stale.
+static TICK_PHASE: std::sync::Mutex<&'static str> = std::sync::Mutex::new("start");
+static TICK_BEATS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+const TICK_STALL_S: u64 = 60;
+
+fn phase(name: &'static str) {
+    if let Ok(mut current) = TICK_PHASE.lock() {
+        *current = name;
+    }
+}
+
+fn start_tick_watchdog(directory: PathBuf) {
+    use std::sync::atomic::Ordering;
+    let _ = std::thread::Builder::new()
+        .name("calando-watchdog".to_owned())
+        .spawn(move || {
+            let mut last = TICK_BEATS.load(Ordering::Relaxed);
+            let mut since = std::time::Instant::now();
+            loop {
+                std::thread::sleep(std::time::Duration::from_secs(5));
+                let beats = TICK_BEATS.load(Ordering::Relaxed);
+                if beats != last {
+                    last = beats;
+                    since = std::time::Instant::now();
+                    continue;
+                }
+                if since.elapsed().as_secs() >= TICK_STALL_S {
+                    let at = TICK_PHASE.lock().map(|name| *name).unwrap_or("unknown");
+                    log_event(
+                        &directory,
+                        &format!(
+                            "TICK_STALL phase={at} stalled_s={}",
+                            since.elapsed().as_secs()
+                        ),
+                    );
+                    restart_after_exit();
+                    // Non-zero, so systemd and launchd restart the daemon.
+                    std::process::exit(70);
+                }
+            }
+        });
+}
+
+/// systemd and launchd restart a daemon that exits with an error; the Windows scheduled task
+/// does not, so ask Task Scheduler to start it again once this process is gone.
+fn restart_after_exit() {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        let task = env::var("MEMORY_SUPERVISOR_TASK_NAME").unwrap_or_else(|_| "Calando".to_owned());
+        use std::process::{Command as ProcessCommand, Stdio};
+        let mut command = ProcessCommand::new("cmd.exe");
+        command
+            .args(["/d", "/c", "ping -n 6 127.0.0.1 >nul & schtasks /Run /TN"])
+            .arg(&task)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+        // Leave the task's job so ending this process does not end the helper; fall back when
+        // the job forbids breakaway.
+        command.creation_flags(0x0000_0008 | 0x0000_0200 | 0x0100_0000);
+        if command.spawn().is_err() {
+            command.creation_flags(0x0000_0008 | 0x0000_0200);
+            let _ = command.spawn();
+        }
+    }
+}
+
 pub fn run_daemon(arguments: &[std::ffi::OsString]) -> i32 {
     // Process lists (top, System Monitor) show the service as Calando.
     #[cfg(target_os = "linux")]
@@ -7012,7 +7104,12 @@ pub fn run_daemon(arguments: &[std::ffi::OsString]) -> i32 {
         clear_power_publication(&directory, &supervisor.instance);
         return 0;
     }
+    if !once {
+        start_tick_watchdog(directory.clone());
+    }
     loop {
+        TICK_BEATS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        phase("tick");
         if power_is_off() {
             clear_power_publication(&directory, &supervisor.instance);
             break;
@@ -7040,11 +7137,14 @@ pub fn run_daemon(arguments: &[std::ffi::OsString]) -> i32 {
         // filesystem (WSL writes to /mnt/c), and a stall there must not stale the local
         // state/lease that every hook reads.
         let snapshot = admission_snapshot(&state, None, supervisor.tick_interval());
+        phase("write-state");
         if let Err(error) = write_state(&directory, &snapshot) {
             log_event(&directory, &format!("STATE_WRITE_ERROR error={error}"));
         }
         update_fast_path_lease(&directory, &snapshot);
+        phase("publish-federation");
         publish_federation(&state);
+        phase("sleep");
         if once {
             break;
         }

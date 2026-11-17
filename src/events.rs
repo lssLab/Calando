@@ -210,6 +210,13 @@ pub fn memory_lines(source: &Value, os: &str, free_key: &str, capacity_key: &str
     }
 }
 
+fn peer_environment(event: &Value) -> String {
+    text(event, "peer").map_or_else(
+        || "A peer environment".to_owned(),
+        |peer| environment(&serde_json::json!({ "source": peer })),
+    )
+}
+
 fn environment(event: &Value) -> String {
     let platform = text(event, "platform").unwrap_or_default();
     let source = text(event, "source").unwrap_or_default();
@@ -322,12 +329,13 @@ pub fn concise_message(event: &Value) -> String {
             "Recovery complete".to_owned(),
             format!("None. {process} is stable."),
         ),
+        // Name the environment that stopped reporting; the line below the title is the sender.
         ("federation-peer", "stale") => (
-            "Peer environment not reporting".to_owned(),
+            format!("{} is not reporting", peer_environment(event)),
             "Its memory is not counted until it reports again.".to_owned(),
         ),
         ("federation-peer", "recovered") => (
-            "Peer environment reporting again".to_owned(),
+            format!("{} is reporting again", peer_environment(event)),
             "None.".to_owned(),
         ),
         ("protection-degraded", _) | (_, "critical" | "failed") => (
@@ -613,6 +621,19 @@ mod tests {
         ));
         fs::create_dir(&path).unwrap();
         path
+    }
+
+    #[test]
+    fn peer_notice_names_the_silent_environment_first() {
+        let event = json!({
+            "type":"federation-peer", "status":"stale", "source":"wsl-LAPTOP-1",
+            "platform":"wsl", "peer":"windows-LAPTOP-1"
+        });
+        let message = concise_message(&event);
+        assert!(
+            message.starts_with("Windows (LAPTOP-1) is not reporting\nWSL (LAPTOP-1)\n"),
+            "{message}"
+        );
     }
 
     #[test]
