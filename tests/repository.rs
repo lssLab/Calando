@@ -200,6 +200,7 @@ fn repository_root_stays_small_and_support_files_stay_grouped() {
         "Cargo.toml",
         "build.rs",
         "LICENSE",
+        "NOTICE",
         "README.ko.md",
         "README.md",
         "SKILL.md",
