@@ -968,6 +968,42 @@ impl Supervisor {
         }
     }
 
+    /// Codex has no SessionEnd hook, so an exited Codex CLI session stayed counted as another
+    /// live session for up to an hour. A session whose provider process has exited, or whose PID
+    /// now belongs to a different process, has ended.
+    fn end_exited_sessions(&mut self, now: f64, processes: &BTreeMap<u32, ProcessInfo>) {
+        let mut changed = false;
+        for agent in self.ledger.logical_agents.values_mut() {
+            let Some(pid) = agent.process_pid.filter(|_| agent.active) else {
+                continue;
+            };
+            let live = processes.get(&pid).filter(|process| {
+                agent
+                    .process_start_token
+                    .as_deref()
+                    .is_none_or(|token| token == process.start_token)
+            });
+            match live {
+                Some(process) => {
+                    if agent.process_start_token.is_none() && !process.start_token.is_empty() {
+                        agent.process_start_token = Some(process.start_token.clone());
+                        changed = true;
+                    }
+                }
+                None => {
+                    agent.active = false;
+                    agent.reason = "provider process exited".to_owned();
+                    agent.idle_since = Some(now);
+                    agent.in_flight_tool_class = None;
+                    changed = true;
+                }
+            }
+        }
+        if changed {
+            let _ = self.persist_runtime(now);
+        }
+    }
+
     fn bump_logical_epoch(&mut self) -> u64 {
         self.ledger.logical_epoch = self.ledger.logical_epoch.saturating_add(1).max(1);
         self.ledger.logical_epoch
@@ -1027,6 +1063,7 @@ impl Supervisor {
             // One app-server PID hosts many independent App leads. It is host inventory, never
             // the process identity of a logical lead or subagent.
             agent.process_pid = None;
+            agent.process_start_token = None;
             if let (Some(epoch), Some(state)) = (
                 observation.observed_control_epoch,
                 observation.observed_logical_state,
@@ -1036,6 +1073,9 @@ impl Supervisor {
                 agent.last_hook_receipt_state = Some(state);
             }
         } else if let Some(pid) = observation.process_pid {
+            if agent.process_pid != Some(pid) {
+                agent.process_start_token = None;
+            }
             agent.process_pid = Some(pid);
         }
         if !observation.surface.is_empty() {
@@ -5982,6 +6022,8 @@ impl Supervisor {
         self.vm_held_mb = windows_vm_held_mb(&self.platform, &process_map);
         phase("codex-app-adapter");
         self.refresh_codex_app_adapter(now, &process_map);
+        phase("end-exited-sessions");
+        self.end_exited_sessions(now, &process_map);
         phase("assess-tracked");
         let initial_tracked = tracked_processes(&process_map);
         phase("assess-history");
@@ -8409,6 +8451,65 @@ mod tests {
         resume_process(&supervisor.platform, canary.pid()).unwrap();
         wait_for_process_state(&supervisor.platform, canary.pid(), false);
         drop(canary);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn a_session_ends_when_its_provider_process_exits() {
+        // 2026-11-18: finished `codex exec` runs (Codex has no SessionEnd hook) stayed counted
+        // as other live sessions for up to an hour.
+        let root = temp_directory("session-process-exit");
+        let mut supervisor = Supervisor::new(Some(root.join("runtime.json")));
+        for (session, pid) in [("alive", 4001), ("reused", 4002), ("gone", 4003)] {
+            let prompt = HookObservation::from_payload(
+                format!("prompt-{session}"),
+                1.0,
+                "codex",
+                "UserPromptSubmit",
+                &json!({"session_id":session}),
+                Some(pid),
+                false,
+            );
+            assert!(supervisor.apply_hook_observation(prompt));
+        }
+        let process = |pid, token: &str| {
+            (
+                pid,
+                ProcessInfo {
+                    pid,
+                    ppid: 1,
+                    name: "codex".to_owned(),
+                    rss_mb: 50,
+                    anon_mb: 50,
+                    args: Vec::new(),
+                    start_token: token.to_owned(),
+                    terminal: String::new(),
+                    terminal_identity: String::new(),
+                },
+            )
+        };
+        let active = |supervisor: &Supervisor, session: &str| {
+            supervisor
+                .ledger
+                .logical_agents
+                .values()
+                .find(|agent| agent.session_id == session)
+                .unwrap()
+                .active
+        };
+        let all = BTreeMap::from([process(4001, "a"), process(4002, "b"), process(4003, "c")]);
+        supervisor.end_exited_sessions(2.0, &all);
+        assert!(
+            ["alive", "reused", "gone"]
+                .iter()
+                .all(|session| active(&supervisor, session))
+        );
+
+        let later = BTreeMap::from([process(4001, "a"), process(4002, "other")]);
+        supervisor.end_exited_sessions(3.0, &later);
+        assert!(active(&supervisor, "alive"));
+        assert!(!active(&supervisor, "reused"));
+        assert!(!active(&supervisor, "gone"));
         fs::remove_dir_all(root).unwrap();
     }
 

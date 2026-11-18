@@ -479,6 +479,10 @@ pub struct LogicalAgent {
     pub agent_type: String,
     pub role: String,
     pub process_pid: Option<u32>,
+    /// Start token of `process_pid` when the daemon first saw it alive, so a reused PID is not
+    /// taken for the same session.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub process_start_token: Option<String>,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub surface: String,
     pub state: LogicalState,
@@ -518,6 +522,7 @@ impl Default for LogicalAgent {
             agent_type: String::new(),
             role: "lead".to_owned(),
             process_pid: None,
+            process_start_token: None,
             surface: String::new(),
             state: LogicalState::Active,
             epoch: 0,
