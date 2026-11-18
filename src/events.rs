@@ -8,8 +8,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::storage::write_atomic_json;
 
-const ALLOWED_FIELDS: [&str; 35] = [
+const ALLOWED_FIELDS: [&str; 36] = [
     "source",
+    "peer",
     "platform",
     "severity",
     "type",

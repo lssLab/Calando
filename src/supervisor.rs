@@ -612,6 +612,9 @@ pub struct Supervisor {
     logical_recovery_since: Option<f64>,
     pressure_episode_clear_since: Option<f64>,
     vm_held_mb: Option<u64>,
+    /// Peers seen fresh since this daemon started. Only these can go stale: a peer that has
+    /// not come up yet (Windows boots before WSL starts) is not a failure.
+    peers_fresh_this_run: BTreeSet<String>,
     topology: &'static str,
     codex_app_snapshot: CodexAppSnapshot,
     last_codex_app_hook_sync_at: f64,
@@ -708,6 +711,7 @@ impl Supervisor {
             logical_recovery_since: None,
             pressure_episode_clear_since: None,
             vm_held_mb: None,
+            peers_fresh_this_run: BTreeSet::new(),
             topology: crate::topology::detect().name(),
             codex_app_snapshot: CodexAppSnapshot::default(),
             last_codex_app_hook_sync_at: 0.0,
@@ -6194,6 +6198,7 @@ impl Supervisor {
         let mut changed = false;
         for (instance, age) in &current {
             if *age <= 10.0 {
+                self.peers_fresh_this_run.insert(instance.clone());
                 if let Some(episode) = self.ledger.federation_peer_stale_since.remove(instance) {
                     changed = true;
                     let message = format!(
@@ -6226,6 +6231,7 @@ impl Supervisor {
                     changed = true;
                 }
             } else if *age > 60.0
+                && self.peers_fresh_this_run.contains(instance)
                 && let Some(last_fresh) = self
                     .ledger
                     .federation_peer_last_fresh
@@ -6239,7 +6245,9 @@ impl Supervisor {
             .ledger
             .federation_peer_last_fresh
             .iter()
-            .filter(|(instance, _)| !current.contains_key(*instance))
+            .filter(|(instance, _)| {
+                !current.contains_key(*instance) && self.peers_fresh_this_run.contains(*instance)
+            })
             .map(|(instance, last_fresh)| (instance.clone(), *last_fresh))
             .collect();
         for (instance, last_fresh) in missing {
@@ -6735,35 +6743,8 @@ fn memory_split_lines(local: &Value, vm_held_mb: Option<u64>, peers: &[Value]) -
 pub fn admission_snapshot(local: &Value, peers: Option<Vec<Value>>, tick_s: f64) -> Value {
     let mut result = local.as_object().cloned().unwrap_or_default();
     let mut candidates = vec![local.clone()];
-    let mut peers = peers.unwrap_or_else(|| fresh_federated_states(10.0));
-    // New work in WSL that fits in memory its VM already holds takes nothing more from Windows,
-    // so Windows pressure holds WSL work only when the VM would have to grow.
-    let number = |key: &str| local.get(key).and_then(Value::as_f64);
-    let windows_vm_held = peers
-        .iter()
-        .find(|peer| {
-            peer.get("instance")
-                .and_then(Value::as_str)
-                .is_some_and(|instance| instance.starts_with("windows-"))
-        })
-        .and_then(|peer| peer.get("vm_held_mb")?.as_f64());
-    if local.get("platform").and_then(Value::as_str) == Some("wsl")
-        && let (Some(held), Some(capacity), Some(available)) = (
-            windows_vm_held,
-            number("memory_capacity_mb"),
-            number("mem_available_mb"),
-        )
-        && held - (capacity - available)
-            >= number("new_fanout_floor_mb").unwrap_or(512.0)
-                + number("expected_burst_mb").unwrap_or(0.0)
-    {
-        peers.retain(|peer| {
-            !peer
-                .get("instance")
-                .and_then(Value::as_str)
-                .is_some_and(|instance| instance.starts_with("windows-"))
-        });
-    }
+    let peers =
+        crate::gate::admission_peers(local, peers.unwrap_or_else(|| fresh_federated_states(10.0)));
     candidates.extend(peers);
     let mut worst_index = 0;
     for index in 1..candidates.len() {
@@ -8155,7 +8136,14 @@ mod tests {
             100.0
         );
 
+        // 2026-11-18: Windows booted a minute before WSL. A peer this run has not seen yet is
+        // not reported as lost; one it has seen and then loses is.
+        let mut booted = Supervisor::new(Some(runtime.clone()));
+        booted.track_peer_freshness_from(161.0, Vec::new());
+        assert!(booted.ledger.federation_peer_stale_since.is_empty());
+
         let mut restarted = Supervisor::new(Some(runtime.clone()));
+        restarted.track_peer_freshness_from(100.0, vec![peer(100.0)]);
         restarted.track_peer_freshness_from(161.0, Vec::new());
         assert_eq!(
             restarted.ledger.federation_peer_stale_since["peer-a"],
@@ -8174,8 +8162,7 @@ mod tests {
         assert!(recovered.ledger.federation_peer_stale_since.is_empty());
         assert_eq!(recovered.ledger.federation_peer_last_fresh["peer-a"], 162.0);
 
-        let mut failed_again = Supervisor::new(Some(runtime));
-        failed_again.track_peer_freshness_from(223.0, Vec::new());
+        recovered.track_peer_freshness_from(223.0, Vec::new());
         let events = pending_events(&root, &BTreeSet::new());
         assert_eq!(
             events

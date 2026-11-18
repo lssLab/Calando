@@ -67,6 +67,35 @@ fn level_json(level: Level) -> Value {
     serde_json::to_value(level).expect("level serializes")
 }
 
+/// The peers whose pressure counts for this environment's admission. New work in WSL that fits
+/// in memory its VM already holds takes nothing more from Windows, so Windows pressure holds WSL
+/// work only when the VM would have to grow. The daemon and every hook use this one rule.
+pub fn admission_peers(local: &Value, mut peers: Vec<Value>) -> Vec<Value> {
+    let number = |key: &str| local.get(key).and_then(Value::as_f64);
+    let is_windows = |peer: &Value| {
+        peer.get("instance")
+            .and_then(Value::as_str)
+            .is_some_and(|instance| instance.starts_with("windows-"))
+    };
+    let windows_vm_held = peers
+        .iter()
+        .find(|peer| is_windows(peer))
+        .and_then(|peer| peer.get("vm_held_mb")?.as_f64());
+    if local.get("platform").and_then(Value::as_str) == Some("wsl")
+        && let (Some(held), Some(capacity), Some(available)) = (
+            windows_vm_held,
+            number("memory_capacity_mb"),
+            number("mem_available_mb"),
+        )
+        && held - (capacity - available)
+            >= number("new_fanout_floor_mb").unwrap_or(512.0)
+                + number("expected_burst_mb").unwrap_or(0.0)
+    {
+        peers.retain(|peer| !is_windows(peer));
+    }
+    peers
+}
+
 pub fn effective_admission_state(local: &Value, peers: Option<Vec<Value>>) -> Value {
     let mut result = local.as_object().cloned().unwrap_or_default();
     let local_level = local
@@ -85,7 +114,10 @@ pub fn effective_admission_state(local: &Value, peers: Option<Vec<Value>>) -> Va
     result.insert("local_admission_level".to_owned(), level_json(local_level));
     result.insert("local_level".to_owned(), level_json(local_level));
     let mut candidates = vec![local.clone()];
-    candidates.extend(peers.unwrap_or_else(|| fresh_federated_states(10.0)));
+    candidates.extend(admission_peers(
+        local,
+        peers.unwrap_or_else(|| fresh_federated_states(10.0)),
+    ));
     let mut worst_index = 0;
     for index in 1..candidates.len() {
         if state_rank(&candidates[index], true)
@@ -2233,6 +2265,25 @@ mod tests {
             "admission_attribution":"external", "admission_cli_hard_cap_mb":4096,
             "admission_cli_memory_used_mb":4200, "admission_cli_hard_cap_status":"exceeded"
         });
+        // 2026-11-18: Windows RED with 1.1 GB free held WSL work although the WSL VM already
+        // held 8.6 GB and used 2.3 GB. Hooks apply the same WSL rule as the daemon.
+        let wsl = json!({
+            "level":"GREEN", "action":"allow", "local_admission_level":"GREEN",
+            "platform":"wsl", "memory_capacity_mb":9945, "mem_available_mb":7630,
+            "new_fanout_floor_mb":512.0
+        });
+        let windows_red = json!({
+            "level":"RED", "action":"drain", "instance":"windows-host", "platform":"windows",
+            "mem_available_mb":1098, "memory_capacity_mb":16108, "vm_held_mb":8607,
+            "ts": crate::platform::now_epoch()
+        });
+        let roomy = effective_admission_state(&wsl, Some(vec![windows_red.clone()]));
+        assert_eq!(roomy["admission_level"], "GREEN");
+        let mut full = windows_red;
+        full["vm_held_mb"] = json!(2500);
+        let growing = effective_admission_state(&wsl, Some(vec![full]));
+        assert_ne!(growing["admission_level"], "GREEN");
+
         let effective = effective_admission_state(&cached, Some(Vec::new()));
         assert_eq!(effective["local_admission_level"], "GREEN");
         assert_eq!(effective["admission_source"], "windows-host");
