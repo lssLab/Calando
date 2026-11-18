@@ -582,6 +582,10 @@ fn pressure_action_notice(
     )
 }
 
+/// Shortest clear stretch before a pressure episode is announced as over. 2026-11-18: Windows
+/// hovering near its RED line re-entered 12-33 s after each relax, giving an on/off pair each time.
+const EPISODE_SETTLE_MIN_S: f64 = 60.0;
+
 pub struct Supervisor {
     pub platform: String,
     pub instance: String,
@@ -1357,14 +1361,18 @@ impl Supervisor {
             || containment
             || hold_deferred_work
             || (previous_started_at.is_some() && assessment.action >= Action::Hold);
-        // Recovery is announced only after the clear state survives the same stability window that
-        // reopens admission; a boundary oscillation inside it stays one episode, not an alert pair.
+        // Recovery is announced only after the clear state survives a settle window; a boundary
+        // oscillation inside it stays one episode, not an alert pair.
         let active = if engaged {
             self.pressure_episode_clear_since = None;
             true
         } else if previous_started_at.is_some() {
             let clear_since = *self.pressure_episode_clear_since.get_or_insert(now);
-            now - clear_since < self.hysteresis_s.max(assessment.reaction_s * 2.0)
+            now - clear_since
+                < self
+                    .hysteresis_s
+                    .max(assessment.reaction_s * 2.0)
+                    .max(EPISODE_SETTLE_MIN_S)
         } else {
             false
         };
@@ -8043,7 +8051,10 @@ mod tests {
         let mut supervisor = Supervisor::new(Some(root.join("runtime.json")));
         let drain = assessment_for(Action::Drain, "external");
         let allow = assessment_for(Action::Allow, "external");
-        let window = supervisor.hysteresis_s.max(allow.reaction_s * 2.0);
+        let window = supervisor
+            .hysteresis_s
+            .max(allow.reaction_s * 2.0)
+            .max(EPISODE_SETTLE_MIN_S);
         // The 2026-10-28 Windows trace: DRAIN and ALLOW alternated every few seconds near 500 MiB.
         let mut now = 10.0;
         for _ in 0..6 {

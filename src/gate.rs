@@ -615,6 +615,42 @@ fn logical_notice(
     (!notices.is_empty()).then(|| notices.join(" "))
 }
 
+/// What a new session is still told about: anything addressed to it, and any state that still
+/// holds. Resolutions (recovered, resumed, cancelled) and edges superseded by a newer event about
+/// the same subject are history.
+fn still_current(event: &Value, events: &[Value], session: &str) -> bool {
+    let text = |event: &Value, key: &str| {
+        event
+            .get(key)
+            .map(|value| {
+                value
+                    .as_str()
+                    .map_or_else(|| value.to_string(), str::to_owned)
+            })
+            .unwrap_or_default()
+    };
+    if event
+        .get("audience_sessions")
+        .and_then(Value::as_array)
+        .is_some_and(|sessions| sessions.iter().any(|value| value.as_str() == Some(session)))
+    {
+        return true;
+    }
+    let subject = |event: &Value| (text(event, "type"), text(event, "peer"), text(event, "pid"));
+    let created = |event: &Value| {
+        event
+            .get("created_at")
+            .and_then(Value::as_f64)
+            .unwrap_or_default()
+    };
+    !matches!(
+        text(event, "status").as_str(),
+        "recovered" | "resumed" | "cancelled"
+    ) && !events
+        .iter()
+        .any(|other| subject(other) == subject(event) && created(other) > created(event))
+}
+
 /// Other sessions are described only by count and the agents' total memory.
 fn agents_summary(state: &Value, session: &str) -> String {
     let others: BTreeSet<&str> = state
@@ -865,6 +901,10 @@ fn consume_memory_notice(
         return None;
     }
     let marker = directory.join(format!("seen-{session}.json"));
+    // A session's first hook is its start: what happened before is history, so it sees only
+    // states that still hold, not the edges that led to them.
+    let new_session = !marker.exists();
+    let history = |event: &Value| new_session && !still_current(event, &events, &session);
     let previous = fs::read(&marker)
         .ok()
         .and_then(|source| serde_json::from_slice::<Value>(&source).ok())
@@ -896,7 +936,7 @@ fn consume_memory_notice(
         .collect();
     let visible_events: Vec<_> = all_unseen_events
         .iter()
-        .filter(|event| event_should_notify(event))
+        .filter(|event| event_should_notify(event) && !history(event))
         .cloned()
         .collect();
     let selected_events: Vec<_> = visible_events.iter().take(4).collect();
@@ -924,6 +964,7 @@ fn consume_memory_notice(
             .iter()
             .filter(|event| {
                 !event_should_notify(event)
+                    || history(event)
                     || event
                         .get("event_id")
                         .and_then(Value::as_str)
@@ -1994,6 +2035,59 @@ mod tests {
     }
 
     #[test]
+    fn a_new_session_sees_current_states_not_history() {
+        // 2026-11-18: a new Windows session opened with two on/off pairs from the last hour.
+        let directory = temp_directory();
+        let now = now_epoch();
+        let event = |id: &str, kind: &str, status: &str, peer: Option<&str>, age: f64| {
+            let mut event = json!({
+                "event_id":id, "type":kind, "status":status, "importance":"important",
+                "message":"[Calando] MEMORY PROTECTION", "created_at":now - age,
+                "source":"windows", "platform":"windows",
+                "memory_lines":["Windows free: 0.8 of 7.4 GB"]
+            });
+            if let Some(peer) = peer {
+                event["peer"] = json!(peer);
+                event["message"] = json!("[Calando] FEDERATION PEER");
+            }
+            event
+        };
+        let state = json!({"level":"RED", "notification_events":[
+            event("e1", "pressure-episode", "active", None, 300.0),
+            event("e2", "pressure-episode", "recovered", None, 260.0),
+            event("e3", "pressure-episode", "active", None, 200.0),
+            event("e4", "pressure-episode", "recovered", None, 170.0),
+            event("e5", "pressure-episode", "active", None, 100.0),
+            event("p1", "federation-peer", "stale", Some("wsl-a"), 90.0),
+            event("p2", "federation-peer", "recovered", Some("wsl-a"), 80.0),
+            event("p3", "federation-peer", "stale", Some("wsl-b"), 70.0),
+        ]});
+        let payload = json!({"session_id":"fresh"});
+        let first = consume_memory_notice(&directory, "claude", &payload, &state, true)
+            .unwrap()
+            .0;
+        assert_eq!(first.matches("Memory protection on").count(), 1, "{first}");
+        assert!(!first.contains("Memory protection off"), "{first}");
+        assert!(
+            !first.contains("WSL (a)") && !first.contains("wsl-a"),
+            "{first}"
+        );
+        assert!(consume_memory_notice(&directory, "claude", &payload, &state, true).is_none());
+
+        // An existing session is still told about what happens after its start.
+        let mut later = state.clone();
+        later["notification_events"]
+            .as_array_mut()
+            .unwrap()
+            .push(event("e6", "pressure-episode", "recovered", None, 5.0));
+        let next = consume_memory_notice(&directory, "claude", &payload, &later, true)
+            .unwrap()
+            .0;
+        assert!(next.contains("Memory protection off"), "{next}");
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
     fn delivered_notice_stays_seen_when_older_markers_sort_after_it() {
         let directory = temp_directory();
         let marker = directory.join("seen-long-session.json");
@@ -2223,6 +2317,8 @@ mod tests {
             .is_none()
         );
         assert!(!directory.join("seen-workflow-1.json").exists());
+        // The lead session was already running before these events.
+        fs::write(directory.join("seen-workflow-1.json"), b"{}").unwrap();
 
         let lead = decide(
             "claude",
