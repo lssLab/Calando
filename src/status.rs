@@ -220,7 +220,7 @@ pub fn read_status_at(path: &Path, peers: Vec<Value>, now: f64) -> Value {
 
     let mut candidates = Vec::with_capacity(peers.len() + 1);
     candidates.push(state.clone());
-    candidates.extend(peers);
+    candidates.extend(crate::gate::admission_peers(&state, peers));
     let worst_index = candidates
         .iter()
         .enumerate()
