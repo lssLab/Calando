@@ -932,11 +932,15 @@ pub fn tracked_processes(processes: &BTreeMap<u32, ProcessInfo>) -> Vec<TrackedP
     for pid in &targets {
         let mut target_ancestors = Vec::new();
         let mut current = processes[pid].ppid;
-        while current > 1 && processes.contains_key(&current) && target_ancestors.len() < 64 {
+        // Bounded by steps, not by targets found: Windows reuses PIDs, so parent links can form a
+        // cycle without a target in it (2026-11-25: the Windows daemon spun here at 100% CPU).
+        let mut steps = 0;
+        while current > 1 && processes.contains_key(&current) && steps < 64 {
             if targets.contains(&current) {
                 target_ancestors.push(current);
             }
             current = processes[&current].ppid;
+            steps += 1;
         }
         let root_pid = target_ancestors.last().copied().unwrap_or(*pid);
         tracked.insert(
@@ -1058,6 +1062,35 @@ pub fn apply_cli_hard_cap(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_parent_cycle_without_a_target_does_not_hang() {
+        // Windows PID reuse: 20 -> 30 -> 20 never reaches a target or PID 1.
+        let process = |pid, ppid, name: &str| {
+            (
+                pid,
+                ProcessInfo {
+                    pid,
+                    ppid,
+                    name: name.to_owned(),
+                    rss_mb: 100,
+                    anon_mb: 100,
+                    args: Vec::new(),
+                    start_token: format!("t{pid}"),
+                    terminal: String::new(),
+                    terminal_identity: String::new(),
+                },
+            )
+        };
+        let processes = BTreeMap::from([
+            process(10, 20, "claude.exe"),
+            process(20, 30, "cmd.exe"),
+            process(30, 20, "conhost.exe"),
+        ]);
+        let tracked = tracked_processes(&processes);
+        assert_eq!(tracked.len(), 1);
+        assert_eq!(tracked[0].via, "root");
+    }
     use std::fs;
     use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
